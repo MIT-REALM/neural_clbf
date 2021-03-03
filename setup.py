@@ -10,6 +10,6 @@ setup(
     author_email="cbd@mit.edu",
     # REPLACE WITH YOUR OWN GITHUB PROJECT LINK
     url="https://github.com/dawsonc/neural_clbf",
-    install_requires=["pytorch-lightning"],
+    install_requires=[],
     packages=find_packages(),
 )
