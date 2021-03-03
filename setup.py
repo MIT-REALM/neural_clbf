@@ -3,14 +3,13 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='project',
-    version='0.0.0',
-    description='Describe Your Cool Project',
-    author='',
-    author_email='',
+    name="neural-clbf",
+    version="0.0.0",
+    description="Toolkit for synthesizing neural CLBF controllers",
+    author="Charles Dawson",
+    author_email="cbd@mit.edu",
     # REPLACE WITH YOUR OWN GITHUB PROJECT LINK
-    url='https://github.com/PyTorchLightning/pytorch-lightning-conference-seed',
-    install_requires=['pytorch-lightning'],
+    url="https://github.com/dawsonc/neural_clbf",
+    install_requires=["pytorch-lightning"],
     packages=find_packages(),
 )
-

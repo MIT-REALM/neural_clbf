@@ -1,3 +1,19 @@
+# Standard
+numpy
+matplotlib
+seaborn
+pandas
+
+# Code quality
+mypy
+pytest
+flake8
+black
+
+# Learning libraries
 pytorch-lightning >= 1.0.0rc2
 torch >= 1.3.0
-torchvision >= 0.6.0
+
+# Optimization
+casadi >= 3.5.0
+cvxpylayers >= 0.1.0
