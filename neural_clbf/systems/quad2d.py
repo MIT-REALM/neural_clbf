@@ -28,6 +28,10 @@ class Quad2D(ControlAffineSystem):
         r: the distance from the center of mass to the rotors (assumed to be symmetric)
     """
 
+    # Number of states and controls
+    N_DIMS = 6
+    N_CONTROLS = 2
+
     # State indices
     PX = 0
     PZ = 1
@@ -61,11 +65,11 @@ class Quad2D(ControlAffineSystem):
 
     @property
     def n_dims(self) -> int:
-        return 6
+        return Quad2D.N_DIMS
 
     @property
     def n_controls(self) -> int:
-        return 2
+        return Quad2D.N_CONTROLS
 
     def _f(self, x: torch.Tensor):
         """
