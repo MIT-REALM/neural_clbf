@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch.autograd.functional import jacobian
 import pytorch_lightning as pl
 
-# import casadi
+import casadi
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
@@ -132,10 +132,43 @@ class NeuralrCLBFController(pl.LightningModule):
         returns:
             u_rclbf: bs x self.dynamics_model.n_controls tensor of control inputs
         """
-        # Get the Lie derivatives of the CLBF for each scenario
+        # Get the value of the CLBF...
+        V = self.V(x)
+        # and the Lie derivatives of the CLBF for each scenario
         Lf_V, Lg_V = self.V_lie_derivatives(x)
 
-        return torch.zeros_like(x)
+        # To find a control input, we need to solve an optimization problem.
+        # TODO @dawsonc review whether torch-native solvers are as good as casadi
+        # (cvxpylayers was pretty bad in terms of accuracy, but maybe qpth is better).
+        batch_size = x.shape[0]
+        u_batched = torch.zeros(batch_size, self.dynamics_model.n_controls)
+        for i in range(batch_size):
+            # Create an optimization problem to find a good input
+            opti = casadi.Opti()
+            # The decision variables will be the control inputs
+            u = opti.variable(self.dynamics_model.n_controls)
+
+            # The objective is simple: minimize the size of the control input
+            opti.minimize(casadi.sumsqr(u))
+
+            # Add a constraint for CLBF decrease in each scenario
+            for j in range(self.n_scenarios):
+                opti.subject_to(
+                    Lf_V[i, j, :] + Lg_V[i, j, :] @ u + self.clbf_lambda * V <= 0.0
+                )
+
+            # Set up the solver
+            p_opts = {"expand": True, "print_time": 0}
+            s_opts = {"max_iter": 1000, "print_level": 0, "sb": "yes"}
+            opti.solver("ipopt", p_opts, s_opts)
+
+            # Solve the QP
+            solution = opti.solve()
+
+            # Save the solution
+            u_batched[i, :] = solution.value(u)
+
+        return u_batched
 
     def training_step(self, batch, batch_idx):
         x, y = batch
