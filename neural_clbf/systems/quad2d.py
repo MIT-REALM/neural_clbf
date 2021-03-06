@@ -1,10 +1,8 @@
 """Define a dynamical system for a 2D quadrotor"""
-from typing import Dict
-
 import torch
 
 from .control_affine_system import ControlAffineSystem
-from .utils import grav
+from .utils import grav, Scenario
 
 
 class Quad2D(ControlAffineSystem):
@@ -43,7 +41,7 @@ class Quad2D(ControlAffineSystem):
     U_RIGHT = 0
     U_LEFT = 1
 
-    def __init__(self, params: Dict[str, float]):
+    def __init__(self, params: Scenario):
         """
         Initialize the quadrotor.
 
@@ -78,7 +76,7 @@ class Quad2D(ControlAffineSystem):
         args:
             x: bs x self.n_dims tensor of state
         returns:
-            f: bx x self.n_dims x 1 tensor
+            f: bs x self.n_dims x 1 tensor
         """
         # Extract batch size and set up a tensor for holding the result
         batch_size = x.shape[0]
@@ -105,7 +103,7 @@ class Quad2D(ControlAffineSystem):
         args:
             x: bs x self.n_dims tensor of state
         returns:
-            g: bx x self.n_dims x self.n_controls tensor
+            g: bs x self.n_dims x self.n_controls tensor
         """
         # Extract batch size and set up a tensor for holding the result
         batch_size = x.shape[0]

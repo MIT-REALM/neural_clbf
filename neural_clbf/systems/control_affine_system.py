@@ -4,12 +4,11 @@ from abc import (
     abstractmethod,
     abstractproperty,
 )
-from typing import (
-    Dict,
-    Tuple,
-)
+from typing import Tuple
 
 import torch
+
+from neural_clbf.systems.utils import Scenario
 
 
 class ControlAffineSystem(ABC):
@@ -25,7 +24,7 @@ class ControlAffineSystem(ABC):
     useful properties when it comes to designing controllers.
     """
 
-    def __init__(self, params: Dict[str, float]):
+    def __init__(self, params: Scenario):
         """
         Initialize a system.
 
@@ -73,7 +72,7 @@ class ControlAffineSystem(ABC):
 
         args:
             x: bs x self.n_dims tensor of state
-            x: bs x self.n_controls tensor of controls
+            u: bs x self.n_controls tensor of controls
         returns:
             xdot: bs x self.n_dims tensor of time derivatives of x
         """
@@ -81,7 +80,7 @@ class ControlAffineSystem(ABC):
         f, g = self.control_affine_dynamics(x)
         # Compute state derivatives using control-affine form
         xdot = f + torch.bmm(g, u.unsqueeze(-1))
-        return xdot
+        return xdot.view(x.shape)
 
     @abstractmethod
     def _f(self, x: torch.Tensor) -> torch.Tensor:
@@ -91,7 +90,7 @@ class ControlAffineSystem(ABC):
         args:
             x: bs x self.n_dims tensor of state
         returns:
-            f: bx x self.n_dims x 1 tensor
+            f: bs x self.n_dims x 1 tensor
         """
         pass
 
@@ -103,6 +102,6 @@ class ControlAffineSystem(ABC):
         args:
             x: bs x self.n_dims tensor of state
         returns:
-            g: bx x self.n_dims x self.n_controls tensor
+            g: bs x self.n_dims x self.n_controls tensor
         """
         pass
