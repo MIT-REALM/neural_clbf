@@ -30,7 +30,7 @@ def test_quad2d_init():
         {"I": 0.001, "r": 0.25},
     ]
     for incomplete_params in incomplete_params_list:
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             quad2d = Quad2D(incomplete_params)
 
     # Test instantiation with unphysical parameters
@@ -41,7 +41,7 @@ def test_quad2d_init():
         {"m": 0.0, "I": 0.0, "r": 0.0},
     ]
     for non_physical_params in non_physical_params_list:
-        with pytest.raises(AssertionError):
+        with pytest.raises(ValueError):
             quad2d = Quad2D(non_physical_params)
 
 

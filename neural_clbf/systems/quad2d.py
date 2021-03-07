@@ -41,25 +41,39 @@ class Quad2D(ControlAffineSystem):
     U_RIGHT = 0
     U_LEFT = 1
 
-    def __init__(self, params: Scenario):
+    def __init__(self, nominal_params: Scenario):
         """
         Initialize the quadrotor.
 
         args:
+            nominal_params: a dictionary giving the parameter values for the system.
+                            Requires keys ["m", "I", "r"]
+        raises:
+            ValueError if nominal_params are not valid for this system
+        """
+        super().__init__(nominal_params)
+
+    def validate_params(self, params: Scenario) -> bool:
+        """Check if a given set of parameters is valid
+
+        args:
             params: a dictionary giving the parameter values for the system.
                     Requires keys ["m", "I", "r"]
+        returns:
+            True if parameters are valid, False otherwise
         """
+        valid = True
         # Make sure all needed parameters were provided
-        assert "m" in params
-        assert "I" in params
-        assert "r" in params
+        valid = valid and "m" in params
+        valid = valid and "I" in params
+        valid = valid and "r" in params
 
         # Make sure all parameters are physically valid
-        assert params["m"] > 0
-        assert params["I"] > 0
-        assert params["r"] > 0
+        valid = valid and params["m"] > 0
+        valid = valid and params["I"] > 0
+        valid = valid and params["r"] > 0
 
-        super().__init__(params)
+        return valid
 
     @property
     def n_dims(self) -> int:
@@ -69,12 +83,14 @@ class Quad2D(ControlAffineSystem):
     def n_controls(self) -> int:
         return Quad2D.N_CONTROLS
 
-    def _f(self, x: torch.Tensor):
+    def _f(self, x: torch.Tensor, params: Scenario):
         """
         Return the control-independent part of the control-affine dynamics.
 
         args:
             x: bs x self.n_dims tensor of state
+            params: a dictionary giving the parameter values for the system. If None,
+                    default to the nominal parameters used at initialization
         returns:
             f: bs x self.n_dims x 1 tensor
         """
@@ -96,12 +112,14 @@ class Quad2D(ControlAffineSystem):
 
         return f
 
-    def _g(self, x: torch.Tensor):
+    def _g(self, x: torch.Tensor, params: Scenario):
         """
         Return the control-independent part of the control-affine dynamics.
 
         args:
             x: bs x self.n_dims tensor of state
+            params: a dictionary giving the parameter values for the system. If None,
+                    default to the nominal parameters used at initialization
         returns:
             g: bs x self.n_dims x self.n_controls tensor
         """
@@ -110,7 +128,7 @@ class Quad2D(ControlAffineSystem):
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
 
         # Extract the needed parameters
-        m, inertia, r = self.params["m"], self.params["I"], self.params["r"]
+        m, inertia, r = params["m"], params["I"], params["r"]
         # and state variables
         theta = x[:, Quad2D.THETA]
 

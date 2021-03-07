@@ -30,6 +30,7 @@ class NeuralrCLBFController(pl.LightningModule):
         u_nn_hidden_size: int = 48,
         clbf_lambda: float = 1.0,
         clbf_safety_level: float = 1.0,
+        clbf_timestep: float = 0.01,
     ):
         """Initialize the controller.
 
@@ -42,6 +43,7 @@ class NeuralrCLBFController(pl.LightningModule):
             u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             clbf_lambda: convergence rate for the CLBF
             clbf_safety_level: safety level set value for the CLBF
+            clbf_timestep: the timestep to use in simulating forward Vdot
         """
         super().__init__()
 
@@ -49,6 +51,11 @@ class NeuralrCLBFController(pl.LightningModule):
         self.dynamics_model = dynamics_model
         self.scenarios = scenarios
         self.n_scenarios = len(scenarios)
+
+        # Save the other parameters
+        self.clbf_lambda = clbf_lambda
+        self.clbf_safety_level = clbf_safety_level
+        self.clbf_timestep = clbf_timestep
 
         # Define the CLBF network, which we denote V
         self.clbf_hidden_layers = clbf_hidden_layers
@@ -114,8 +121,9 @@ class NeuralrCLBFController(pl.LightningModule):
         Lg_V = torch.zeros(batch_size, self.n_scenarios, self.dynamics_model.n_controls)
 
         for i in range(self.n_scenarios):
-            # Next, we need to dynamics f and g
-            f, g = self.dynamics_model.control_affine_dynamics(x)
+            # Get the dynamics f and g for this scenario
+            s = self.scenarios[i]
+            f, g = self.dynamics_model.control_affine_dynamics(x, params=s)
 
             # Multiply these with the Jacobian to get the Lie derivatives
             Lf_V[:, i, :] = torch.bmm(J_V_x, f).squeeze(1)
@@ -169,6 +177,92 @@ class NeuralrCLBFController(pl.LightningModule):
             u_batched[i, :] = solution.value(u)
 
         return u_batched
+
+    def lyapunov_loss(
+        self,
+        x: torch.Tensor,
+        x_goal: torch.Tensor,
+        safe_mask: torch.Tensor,
+        unsafe_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute a loss to train the CLBF
+
+        args:
+            x: the points at which to evaluate the loss
+            x_goal: the origin
+            safe_mask: the points in x marked safe
+            unsafe_mask: the points in x marked unsafe
+        returns:
+            loss: the loss for the CLBF network
+        """
+        eps = 1e-2
+        # Compute loss to encourage satisfaction of the following conditions...
+        loss = torch.tensor([0.0])
+        #   1.) CLBF value should be non-positive on the goal set.
+        V0 = self.V(x_goal)
+        goal_term = F.relu(V0)
+        loss += goal_term.mean()
+
+        #   3.) V <= safe_level in the safe region
+        V_safe = self.V(x[safe_mask])
+        safe_lyap_term = F.relu(eps + V_safe - self.clbf_safety_level)
+        if safe_lyap_term.nelement() > 0:
+            loss += safe_lyap_term.mean()
+
+        #   4.) V >= safe_level in the unsafe region
+        V_unsafe = self.V(x[unsafe_mask])
+        unsafe_lyap_term = F.relu(eps + self.clbf_safety_level - V_unsafe)
+        if unsafe_lyap_term.nelement() > 0:
+            loss += unsafe_lyap_term.mean()
+
+        #   5.) A term to encourage satisfaction of CLBF decrease condition
+        # We compute the change in V in two ways:
+        #       a) simulating x forward in time and checking if V decreases
+        #          in each scenario
+        #       b) Linearizing V along f.
+        # In both cases we use u_NN, but the second provides a stronger training signal
+        # on u_NN.
+
+        # Start with (5a): CLBF decrease in simulation
+        lyap_descent_term_sim = torch.tensor([0.0])
+        V = self.V(x)
+        u_nn = self.u_NN(x)
+        for s in self.scenarios:
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
+            x_next = x + self.clbf_timestep * xdot
+            V_next = self.V(x_next)
+            lyap_descent_term_sim += F.relu(
+                eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V.squeeze()
+            )
+
+        # Then do (5b): CLBF decrease from linearization in each scenario
+        Lf_V, Lg_V = self.V_lie_derivatives(x)
+        lyap_descent_term_lin = torch.tensor([0.0])
+        for i in range(self.n_scenarios):
+            Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :], u_nn)
+            lyap_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V)
+
+        # Combine both (5a) and (5b) into one term
+        loss += lyap_descent_term_sim.mean() + lyap_descent_term_lin.mean()
+
+        return loss
+
+    def controller_loss(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute a loss to train the proof controller
+
+        args:
+            x: the points at which to evaluate the loss
+        returns:
+            loss: the loss for the learned controller function
+        """
+        u_nn = self.u_NN(x)
+
+        controller_squared_magnitude = (u_nn ** 2).sum(dim=-1)
+        loss = controller_squared_magnitude.mean()
+
+        return loss
 
     def training_step(self, batch, batch_idx):
         x, y = batch
