@@ -14,15 +14,27 @@ class MockSystem(ControlAffineSystem):
     N_DIMS = 2
     N_CONTROLS = 2
 
-    def __init__(self, params: Scenario):
+    def __init__(self, nominal_params: Scenario):
         """
         Initialize the mock system.
 
         args:
-            params: a dictionary giving the parameter values for the system.
+            nominal_params: a dictionary giving the parameter values for the system.
                     Requires no keys
         """
-        super().__init__(params)
+        super().__init__(nominal_params)
+
+    def validate_params(self, params: Scenario) -> bool:
+        """Check if a given set of parameters is valid
+
+        args:
+            params: a dictionary giving the parameter values for the system.
+                    Requires keys ["m", "I", "r"]
+        returns:
+            True if parameters are valid, False otherwise
+        """
+        # Nothing to validate for the mock system
+        return True
 
     @property
     def n_dims(self) -> int:
@@ -32,12 +44,14 @@ class MockSystem(ControlAffineSystem):
     def n_controls(self) -> int:
         return MockSystem.N_CONTROLS
 
-    def _f(self, x: torch.Tensor):
+    def _f(self, x: torch.Tensor, params: Scenario):
         """
         Return the control-independent part of the control-affine dynamics.
 
         args:
             x: bs x self.n_dims tensor of state
+            params: a dictionary giving the parameter values for the system. If None,
+                    default to the nominal parameters used at initialization
         returns:
             f: bs x self.n_dims x 1 tensor
         """
@@ -51,12 +65,14 @@ class MockSystem(ControlAffineSystem):
 
         return f
 
-    def _g(self, x: torch.Tensor):
+    def _g(self, x: torch.Tensor, params: Scenario):
         """
         Return the control-independent part of the control-affine dynamics.
 
         args:
             x: bs x self.n_dims tensor of state
+            params: a dictionary giving the parameter values for the system. If None,
+                    default to the nominal parameters used at initialization
         returns:
             g: bs x self.n_dims x self.n_controls tensor
         """
