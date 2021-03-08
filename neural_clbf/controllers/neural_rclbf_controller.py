@@ -126,7 +126,7 @@ class NeuralrCLBFController(pl.LightningModule):
         # Get the Jacobian of V for each entry in the batch
         batch_size = x.shape[0]
         J_V_x = torch.zeros(batch_size, 1, x.shape[1])
-        J_V_x.type_as(x)
+        J_V_x = J_V_x.type_as(x)
         # Since this might be called in a no_grad environment, we use the
         # enable_grad environment to temporarily accumulate gradients
         with torch.enable_grad():
@@ -136,8 +136,8 @@ class NeuralrCLBFController(pl.LightningModule):
         # We need to compute Lie derivatives for each scenario
         Lf_V = torch.zeros(batch_size, self.n_scenarios, 1)
         Lg_V = torch.zeros(batch_size, self.n_scenarios, self.dynamics_model.n_controls)
-        Lf_V.type_as(x)
-        Lg_V.type_as(x)
+        Lf_V = Lf_V.type_as(x)
+        Lg_V = Lg_V.type_as(x)
 
         for i in range(self.n_scenarios):
             # Get the dynamics f and g for this scenario
@@ -169,7 +169,7 @@ class NeuralrCLBFController(pl.LightningModule):
         # (cvxpylayers was pretty bad in terms of accuracy, but maybe qpth is better).
         batch_size = x.shape[0]
         u_batched = torch.zeros(batch_size, self.dynamics_model.n_controls)
-        u_batched.type_as(x)
+        u_batched = u_batched.type_as(x)
         for i in range(batch_size):
             # Create an optimization problem to find a good input
             opti = casadi.Opti()
