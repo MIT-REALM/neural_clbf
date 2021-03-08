@@ -182,14 +182,15 @@ class NeuralrCLBFController(pl.LightningModule):
             # Add a constraint for CLBF decrease in each scenario
             for j in range(self.n_scenarios):
                 # We need to convert these tensors to numpy to make the constraint
-                Lf_V_np = Lf_V[i, j, :].squeeze().numpy().item()
+                Lf_V_np = Lf_V[i, j, :].squeeze().cpu().numpy().item()
                 Lg_V_np = (
                     Lg_V[i, j, :]
                     .squeeze()
+                    .cpu()
                     .numpy()
                     .reshape((1, self.dynamics_model.n_controls))
                 )
-                V_np = V[i].item()
+                V_np = V[i].cpu().item()
                 opti.subject_to(Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np <= 0.0)
 
             # Set up the solver
