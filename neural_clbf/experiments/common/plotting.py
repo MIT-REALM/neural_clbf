@@ -257,7 +257,6 @@ def rollout_CLBF(
 
             t_final = tstep
     except (Exception, RuntimeError):
-        raise
         controller_failed = True
 
     fig, axs = plt.subplots(2, 1)
@@ -267,7 +266,7 @@ def rollout_CLBF(
     for i_trace in range(len(plot_x_indices)):
         ax1.plot(
             t[:t_final],
-            x_sim[:t_final, :, plot_x_indices[i_trace]],
+            x_sim[:t_final, :, plot_x_indices[i_trace]].cpu(),
             label=plot_x_labels[i_trace],
         )
 
@@ -282,7 +281,7 @@ def rollout_CLBF(
     for i_trace in range(len(plot_u_indices)):
         ax2.plot(
             t[:t_final],
-            u_sim[:t_final, :, plot_u_indices[i_trace]],
+            u_sim[:t_final, :, plot_u_indices[i_trace]].cpu(),
             label=plot_u_labels[i_trace],
         )
 
