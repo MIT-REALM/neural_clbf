@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, Union, List, Optional
+from typing import Tuple, Dict, List, Optional, Callable
 from collections import OrderedDict
 
 import torch
@@ -6,10 +6,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd.functional import jacobian
 import pytorch_lightning as pl
+from matplotlib.pyplot import figure
 
 import casadi
 
-import neural_clbf.experiments.common.plotting as clbf_plotting
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
 
@@ -32,11 +32,8 @@ class NeuralrCLBFController(pl.LightningModule):
         clbf_timestep: float = 0.01,
         control_loss_weight: float = 1e-6,
         learning_rate: float = 1e-3,
-        V_plotting_options: Optional[
-            Dict[str, Union[int, str, torch.Tensor, List[Tuple[float, float]]]]
-        ] = None,
-        sim_plotting_options: Optional[
-            Dict[str, Union[int, float, List[int], List[str]]]
+        plotting_callbacks: Optional[
+            List[Callable[["NeuralrCLBFController"], Tuple[str, figure]]]
         ] = None,
     ):
         """Initialize the controller.
@@ -53,9 +50,9 @@ class NeuralrCLBFController(pl.LightningModule):
             clbf_timestep: the timestep to use in simulating forward Vdot
             control_loss_weight: the weight to apply to the control loss
             learning_rate: the learning rate for SGD
-            V_plotting_options: options to pass to the function for plotting V
-            sim_plotting_options: options to pass to the function for plotting the
-                                  simulation of controller performance
+            plotting_callbacks: a list of plotting functions that each take a
+                                NeuralrCLBFController and return a tuple of a string
+                                name and figure object to log
         """
         super().__init__()
 
@@ -71,13 +68,10 @@ class NeuralrCLBFController(pl.LightningModule):
         self.control_loss_weight = control_loss_weight
         self.learning_rate = learning_rate
 
-        # Get plotting parameters
-        self.V_plotting_options = V_plotting_options
-        if self.V_plotting_options is None:
-            self.V_plotting_options = {}
-        self.sim_plotting_options = sim_plotting_options
-        if self.sim_plotting_options is None:
-            self.sim_plotting_options = {}
+        # Get plotting callbacks
+        if plotting_callbacks is None:
+            plotting_callbacks = []
+        self.plotting_callbacks = plotting_callbacks
 
         # Define the CLBF network, which we denote V
         self.clbf_hidden_layers = clbf_hidden_layers
@@ -183,9 +177,16 @@ class NeuralrCLBFController(pl.LightningModule):
 
             # Add a constraint for CLBF decrease in each scenario
             for j in range(self.n_scenarios):
-                opti.subject_to(
-                    Lf_V[i, j, :] + Lg_V[i, j, :] @ u + self.clbf_lambda * V <= 0.0
+                # We need to convert these tensors to numpy to make the constraint
+                Lf_V_np = Lf_V[i, j, :].squeeze().numpy().item()
+                Lg_V_np = (
+                    Lg_V[i, j, :]
+                    .squeeze()
+                    .numpy()
+                    .reshape((1, self.dynamics_model.n_controls))
                 )
+                V_np = V[i].item()
+                opti.subject_to(Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np <= 0.0)
 
             # Set up the solver
             p_opts = {"expand": True, "print_time": 0}
@@ -196,7 +197,7 @@ class NeuralrCLBFController(pl.LightningModule):
             solution = opti.solve()
 
             # Save the solution
-            u_batched[i, :] = solution.value(u)
+            u_batched[i, :] = torch.tensor(solution.value(u))
 
         return u_batched
 
@@ -224,7 +225,10 @@ class NeuralrCLBFController(pl.LightningModule):
         #   1.) CLBF value should be non-positive on the goal set.
         V0 = self.V(x[goal_mask])
         goal_term = F.relu(V0)
-        loss["CLBF goal term"] = goal_term.mean()
+        if goal_term.nelement() > 0:
+            loss["CLBF goal term"] = goal_term.mean()
+        else:
+            loss["CLBF goal term"] = torch.tensor(0.0)
 
         #   3.) V <= safe_level in the safe region
         V_safe = self.V(x[safe_mask])
@@ -251,7 +255,7 @@ class NeuralrCLBFController(pl.LightningModule):
         # on u_NN.
 
         # Start with (5a): CLBF decrease in simulation
-        clbf_descent_term_sim = torch.tensor([0.0])
+        clbf_descent_term_sim = torch.tensor(0.0)
         V = self.V(x)
         u_nn = self.u_NN(x)
         for s in self.scenarios:
@@ -259,18 +263,18 @@ class NeuralrCLBFController(pl.LightningModule):
             x_next = x + self.clbf_timestep * xdot
             V_next = self.V(x_next)
             clbf_descent_term_sim += F.relu(
-                eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V.squeeze()
-            )
-        loss["CLBF descent term (simulated)"] = clbf_descent_term_sim.mean()
+                eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
+            ).mean()
+        loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
 
         # Then do (5b): CLBF decrease from linearization in each scenario
         Lf_V, Lg_V = self.V_lie_derivatives(x)
-        clbf_descent_term_lin = torch.tensor([0.0])
+        clbf_descent_term_lin = torch.tensor(0.0)
         for i in range(self.n_scenarios):
-            Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :], u_nn)
-            clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V)
+            Vdot = Lf_V[:, i, :] + torch.sum(Lg_V[:, i, :] * u_nn, dim=-1).unsqueeze(-1)
+            clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
 
-        loss["CLBF descent term (linearized)"] = clbf_descent_term_lin.mean()
+        loss["CLBF descent term (linearized)"] = clbf_descent_term_lin
 
         return loss
 
@@ -308,7 +312,7 @@ class NeuralrCLBFController(pl.LightningModule):
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0)
-        for _, loss_value in component_losses:
+        for _, loss_value in component_losses.items():
             total_loss += loss_value
 
         batch_dict = {"loss": total_loss, **component_losses}
@@ -332,13 +336,6 @@ class NeuralrCLBFController(pl.LightningModule):
             # Log the other losses
             self.log(loss_key + " / train", avg_losses[loss_key])
 
-        epoch_dict = {
-            # required
-            "loss": avg_losses["loss"]
-        }
-
-        return epoch_dict
-
     def validation_step(self, batch, batch_idx):
         """Conduct the validation step for the given batch"""
         # Extract the input and masks from the batch
@@ -353,7 +350,7 @@ class NeuralrCLBFController(pl.LightningModule):
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0)
-        for _, loss_value in component_losses:
+        for _, loss_value in component_losses.items():
             total_loss += loss_value
 
         batch_dict = {"val_loss": total_loss, **component_losses}
@@ -377,20 +374,19 @@ class NeuralrCLBFController(pl.LightningModule):
             # Log the other losses
             self.log(loss_key + " / val", avg_losses[loss_key])
 
-        epoch_dict = {
-            # required
-            "loss": avg_losses["loss"]
-        }
+        epoch_dict = {"val_loss": avg_losses["val_loss"]}
 
         # **Now entering spicetacular automation zone**
         # We automatically plot and save the CLBF and some simulated rollouts
-        # at the end of every validation epoch
+        # at the end of every validation epoch, using arbitrary plotting callbacks!
 
-        # First plot the value and derivatives of the CLBF
-        clbf_plot = clbf_plotting.plot_CLBF(self, **self.V_plotting_options)
-        self.logger.experiment.add_figure("CLBF plot", clbf_plot)
-        sim_plot = clbf_plotting.rollout_CLBF(self, **self.sim_plotting_options)
-        self.logger.experiment.add_figure("CLBF simulation", sim_plot)
+        for plot_fn in self.plotting_callbacks:
+            plot_name, plot = plot_fn(self)
+            self.logger.experiment.add_figure(
+                plot_name, plot, global_step=self.current_epoch
+            )
+        self.logger.experiment.close()
+        self.logger.experiment.flush()
 
         return epoch_dict
 

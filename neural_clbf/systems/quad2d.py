@@ -99,16 +99,16 @@ class Quad2D(ControlAffineSystem):
         f = torch.zeros((batch_size, self.n_dims, 1))
 
         # The derivatives of px, pz, and theta are just the velocities
-        f[:, Quad2D.PX] = x[:, Quad2D.VX]
-        f[:, Quad2D.PZ] = x[:, Quad2D.VZ]
-        f[:, Quad2D.THETA] = x[:, Quad2D.THETA_DOT]
+        f[:, Quad2D.PX, 0] = x[:, Quad2D.VX]
+        f[:, Quad2D.PZ, 0] = x[:, Quad2D.VZ]
+        f[:, Quad2D.THETA, 0] = x[:, Quad2D.THETA_DOT]
 
         # Acceleration in x has no control-independent part
-        f[:, 3] = 0.0
+        f[:, 3, 0] = 0.0
         # Acceleration in z is affected by the relentless pull of gravity
-        f[:, 4] = -grav
+        f[:, 4, 0] = -grav
         # Acceleration in theta has no control-independent part
-        f[:, 5] = 0.0
+        f[:, 5, 0] = 0.0
 
         return f
 

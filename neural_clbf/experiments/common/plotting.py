@@ -8,11 +8,13 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import seaborn as sns
+import tqdm
 
-# We only need these imports if type checking
+from neural_clbf.systems.utils import ScenarioList
+
+# We only need these imports if type checking, to avoid circular imports
 if TYPE_CHECKING:
     from neural_clbf.controllers import NeuralrCLBFController
-    from neural_clbf.systems.utils import ScenarioList
 
 
 # Beautify plots
@@ -22,7 +24,7 @@ sim_color = sns.color_palette("pastel")[1]
 
 @torch.no_grad()
 def plot_CLBF(
-    clbf_net: 'NeuralrCLBFController',
+    clbf_net: "NeuralrCLBFController",
     domain: Optional[List[Tuple[float, float]]] = None,
     n_grid: int = 50,
     x_axis_index: int = 0,
@@ -30,7 +32,7 @@ def plot_CLBF(
     x_axis_label: str = "$x$",
     y_axis_label: str = "$y$",
     default_state: Optional[torch.Tensor] = None,
-):
+) -> Tuple[str, plt.figure]:
     """Plot the value of the CLBF, V, and dV/dt.
 
     Instead of actually plotting dV/dt, we plot relu(dV/dt + clbf_net.clbf_lambda * V)
@@ -70,8 +72,9 @@ def plot_CLBF(
         default_state = torch.zeros(1, clbf_net.dynamics_model.n_dims)
 
     # Make a copy of the default state, which we'll modify on every loop
-    x = torch.tensor(default_state).reshape(1, clbf_net.dynamics_model.n_dims)
-    for i in range(n_grid):
+    x = default_state.clone().detach().reshape(1, clbf_net.dynamics_model.n_dims)
+    prog_bar_range = tqdm.trange(n_grid, desc="Plotting CLBF", leave=True)
+    for i in prog_bar_range:
         for j in range(n_grid):
             # Adjust x to be at the current grid point
             x[0, x_axis_index] = x_vals[i]
@@ -89,12 +92,16 @@ def plot_CLBF(
                 u = torch.zeros(1, clbf_net.dynamics_model.n_controls)
             # Accumulate violation across all scenarios
             for i in range(clbf_net.n_scenarios):
-                Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :], u)
-                V_dot_grid[j, i] += F.relu(Vdot + clbf_net.clbf_lambda * V_grid[j, i])
+                Vdot = Lf_V[:, i, :] + torch.sum(Lg_V[:, i, :] * u, dim=-1).unsqueeze(
+                    -1
+                )
+                V_dot_grid[j, i] += F.relu(
+                    Vdot + clbf_net.clbf_lambda * V_grid[j, i]
+                ).squeeze()
 
     # Make the plots
     fig, axs = plt.subplots(1, 2)
-    fig.set_size_inches(8, 8)
+    fig.set_size_inches(16, 16)
 
     # First for V
     contours = axs[0].contourf(x_vals, y_vals, V_grid, cmap="magma", levels=20)
@@ -126,28 +133,30 @@ def plot_CLBF(
 
     fig.tight_layout()
 
-    return fig
+    # Return the figure along with its name
+    return "CLBF Plot", fig
 
 
 @torch.no_grad()
 def rollout_CLBF(
-    clbf_net: 'NeuralrCLBFController',
-    scenarios: 'ScenarioList',
+    clbf_net: "NeuralrCLBFController",
+    scenarios: Optional[ScenarioList] = None,
     start_x: Optional[torch.Tensor] = None,
     plot_x_indices: Optional[List[int]] = None,
     plot_x_labels: Optional[List[str]] = None,
     plot_u_indices: Optional[List[int]] = None,
     plot_u_labels: Optional[List[str]] = None,
     n_sims_per_start: int = 5,
-    t_sim: float = 10.0,
-    delta_t: float = 0.001,
-):
+    t_sim: float = 5.0,
+    delta_t: float = 0.01,
+) -> Tuple[str, plt.figure]:
     """Simulate the performance of the controller over time
 
     args:
         clbf_net: the CLBF network
         start_x: n x clbf_net.dynamics_model.n_dims tensor of starting states
-        scenarios: a list of parameter scenarios to sample from.
+        scenarios: a list of parameter scenarios to sample from. If None, defaults to
+                   the clbf_net's scenarios
         plot_x_indices: a list of the indices of the state variables to plot
         plot_x_labels: a list of the labels for each state variable trace
         plot_indices: a list of the indices of the control inputs to plot
@@ -161,6 +170,9 @@ def rollout_CLBF(
         over time.
     """
     # Deal with optional parameters
+    # Default to clbf_net scenarios
+    if scenarios is None:
+        scenarios = clbf_net.scenarios
     # Default to starting from all state variables = 1.0
     if start_x is None:
         start_x = torch.ones(1, clbf_net.dynamics_model.n_dims)
@@ -187,13 +199,14 @@ def rollout_CLBF(
         param_min = min([s[param_name] for s in scenarios])
         parameter_ranges[param_name] = (param_min, param_max)
 
-    # Generate a tensor of start states and corresponding scenarios
+    # Generate a tensor of start states
     x_sim_start = torch.zeros(n_sims, clbf_net.dynamics_model.n_dims)
-    random_scenarios = []
     for i in range(0, n_sims, n_sims_per_start):
         x_sim_start[i : i + n_sims_per_start, :] = start_x
 
-        # Generate a random scenario from the given scenarios
+    # Generate a random scenario for each rollout from the given scenarios
+    random_scenarios = []
+    for i in range(n_sims):
         random_scenario = {}
         for param_name in scenarios[0].keys():
             param_min = parameter_ranges[param_name][0]
@@ -205,11 +218,13 @@ def rollout_CLBF(
     # (but first make somewhere to save the results)
     num_timesteps = int(t_sim // delta_t)
     x_sim = torch.zeros(num_timesteps, n_sims, clbf_net.dynamics_model.n_dims)
+    x_sim[0, :, :] = x_sim_start
     u_sim = torch.zeros(num_timesteps, n_sims, clbf_net.dynamics_model.n_controls)
     t_final = 0
     controller_failed = False
     try:
-        for tstep in range(1, num_timesteps):
+        prog_bar_range = tqdm.trange(1, num_timesteps, desc="CLBF Rollout", leave=True)
+        for tstep in prog_bar_range:
             # Get the current state
             x_current = x_sim[tstep - 1, :, :]
             # Get the control input at the current state
@@ -219,18 +234,20 @@ def rollout_CLBF(
             # Simulate forward using the dynamics
             for i in range(n_sims):
                 xdot = clbf_net.dynamics_model.closed_loop_dynamics(
-                    x_current[i, :].unsqueeze(0), u, random_scenarios[i]
+                    x_current[i, :].unsqueeze(0),
+                    u[i, :].unsqueeze(0),
+                    random_scenarios[i],
                 )
                 x_sim[tstep, i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
             t_final = tstep
-    except (Exception):
-        raise
+    except (Exception, RuntimeError):
         controller_failed = True
 
     fig, axs = plt.subplots(2, 1)
+    fig.set_size_inches(16, 16)
     t = np.linspace(0, t_sim, num_timesteps)
-    ax1 = axs[0, 0]
+    ax1 = axs[0]
     for i_trace in range(len(plot_x_indices)):
         ax1.plot(
             t[:t_final],
@@ -245,7 +262,7 @@ def rollout_CLBF(
     ax1.set_xlabel("$t$")
     ax1.legend()
 
-    ax2 = axs[1, 0]
+    ax2 = axs[1]
     for i_trace in range(len(plot_u_indices)):
         ax2.plot(
             t[:t_final],
@@ -255,3 +272,8 @@ def rollout_CLBF(
 
     ax2.set_xlabel("$t$")
     ax2.legend()
+
+    fig.tight_layout()
+
+    # Return the figure along with its name
+    return "Rollout Plot", fig
