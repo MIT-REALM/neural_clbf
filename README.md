@@ -40,6 +40,10 @@ cd neural_clbf
 python TODO.py    
 ```
 
+Training:
+To setup port forwarding for TensorBoard:
+`ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
+
 ## Imports
 This project is setup as a package which means you can now easily import any file into any other file like so:
 ```python
