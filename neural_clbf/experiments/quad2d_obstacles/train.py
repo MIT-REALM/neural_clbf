@@ -41,7 +41,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Initialize the DataModule
-    data_module = Quad2DObstaclesDataModule(split=0.01)
+    data_module = Quad2DObstaclesDataModule(N_samples=1000, split=0.01)
 
     # ## Setup trainer parameters ##
     # Define the dynamics model
