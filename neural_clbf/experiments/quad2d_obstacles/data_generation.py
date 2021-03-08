@@ -9,6 +9,21 @@ from torch.utils.data import TensorDataset, DataLoader
 from neural_clbf.systems.quad2d import Quad2D
 
 
+# Define a custom collate_fn for the DataLoaders to deal with
+# different-sized inputs
+def custom_collate(batch):
+    # Extract sample points from the batch
+    x = batch[0]
+    # Extract goal mask
+    goal_mask = batch[1]
+    # Extract safe mask
+    safe_mask = batch[2]
+    # Extract goal mask
+    unsafe_mask = batch[3]
+
+    return x, goal_mask, safe_mask, unsafe_mask
+
+
 class Quad2DObstaclesDataModule(pl.LightningDataModule):
     """
     DataModule for generating sample points (and a corresponding safe/unsafe mask) for
@@ -193,20 +208,6 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         # Combine all of these into a single dataset and save it
         self.dataset = TensorDataset(x, goal_mask, safe_mask, unsafe_mask)
 
-        # Also define a custom collate_fn for the DataLoaders to deal with
-        # different-sized inputs
-        def custom_collate(batch):
-            # Extract sample points from the batch
-            x = batch[0]
-            # Extract goal mask
-            goal_mask = batch[1]
-            # Extract safe mask
-            safe_mask = batch[2]
-            # Extract goal mask
-            unsafe_mask = batch[3]
-
-            return x, goal_mask, safe_mask, unsafe_mask
-
         self.collate_fn = custom_collate
 
     def setup(self, stage=None):
@@ -221,7 +222,7 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         return DataLoader(
             self.train_data,
             batch_size=self.batch_size,
-            num_workers=2,
+            num_workers=8,
             collate_fn=self.collate_fn,
         )
 
@@ -230,6 +231,6 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         return DataLoader(
             self.validation_data,
             batch_size=self.batch_size,
-            num_workers=2,
+            num_workers=8,
             collate_fn=self.collate_fn,
         )
