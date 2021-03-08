@@ -232,7 +232,7 @@ class NeuralrCLBFController(pl.LightningModule):
         if goal_term.nelement() > 0:
             loss["CLBF goal term"] = goal_term.mean()
         else:
-            loss["CLBF goal term"] = torch.tensor(0.0)
+            loss["CLBF goal term"] = torch.tensor(0.0).type_as(x)
 
         #   3.) V <= safe_level in the safe region
         V_safe = self.V(x[safe_mask])
@@ -240,7 +240,7 @@ class NeuralrCLBFController(pl.LightningModule):
         if safe_clbf_term.nelement() > 0:
             loss["CLBF safe region term"] = safe_clbf_term.mean()
         else:
-            loss["CLBF safe region term"] = torch.tensor(0.0)
+            loss["CLBF safe region term"] = torch.tensor(0.0).type_as(x)
 
         #   4.) V >= safe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
@@ -248,7 +248,7 @@ class NeuralrCLBFController(pl.LightningModule):
         if unsafe_clbf_term.nelement() > 0:
             loss["CLBF unsafe region term"] = unsafe_clbf_term.mean()
         else:
-            loss["CLBF unsafe region term"] = torch.tensor(0.0)
+            loss["CLBF unsafe region term"] = torch.tensor(0.0).type_as(x)
 
         #   5.) A term to encourage satisfaction of CLBF decrease condition
         # We compute the change in V in two ways:
@@ -259,7 +259,7 @@ class NeuralrCLBFController(pl.LightningModule):
         # on u_NN.
 
         # Start with (5a): CLBF decrease in simulation
-        clbf_descent_term_sim = torch.tensor(0.0)
+        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         V = self.V(x)
         u_nn = self.u_NN(x)
         for s in self.scenarios:
@@ -273,7 +273,7 @@ class NeuralrCLBFController(pl.LightningModule):
 
         # Then do (5b): CLBF decrease from linearization in each scenario
         Lf_V, Lg_V = self.V_lie_derivatives(x)
-        clbf_descent_term_lin = torch.tensor(0.0)
+        clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
         for i in range(self.n_scenarios):
             Vdot = Lf_V[:, i, :] + torch.sum(Lg_V[:, i, :] * u_nn, dim=-1).unsqueeze(-1)
             clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
