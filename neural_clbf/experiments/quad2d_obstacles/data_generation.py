@@ -20,6 +20,7 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         N_samples: int = 1000000,
         domains: Optional[List[List[Tuple[float, float]]]] = None,
         split: float = 0.1,
+        batch_size: int = 64,
     ):
         """Initialize the DataModule
 
@@ -28,13 +29,14 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
             domains: a list of domains to sample from, where a domain is a list of
                      tuples denoting the min/max range for each dimension
             split: the fraction of sampled data to reserve for validation
+            batch_size: the batch size
         """
         super().__init__()
 
         # Define the sample and batch sizes
         self.N_samples = N_samples
         self.split = split
-        self.batch_size = 64
+        self.batch_size = batch_size
 
         # Define the sampling intervals
         # (we allow for multiple domains in case you need to sample extra around
@@ -191,6 +193,22 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         # Combine all of these into a single dataset and save it
         self.dataset = TensorDataset(x, goal_mask, safe_mask, unsafe_mask)
 
+        # Also define a custom collate_fn for the DataLoaders to deal with
+        # different-sized inputs
+        def custom_collate(batch):
+            # Extract sample points from the batch
+            x = batch[0]
+            # Extract goal mask
+            goal_mask = batch[1]
+            # Extract safe mask
+            safe_mask = batch[2]
+            # Extract goal mask
+            unsafe_mask = batch[3]
+
+            return x, goal_mask, safe_mask, unsafe_mask
+
+        self.collate_fn = custom_collate
+
     def setup(self, stage=None):
         """Setup the data for training and validation"""
         # The data were generated randomly, so no need to do a random split
@@ -200,8 +218,18 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         """Make the DataLoader for training data"""
-        return DataLoader(self.train_data, batch_size=self.batch_size)
+        return DataLoader(
+            self.train_data,
+            batch_size=self.batch_size,
+            num_workers=2,
+            collate_fn=self.collate_fn,
+        )
 
     def val_dataloader(self):
         """Make the DataLoader for validation data"""
-        return DataLoader(self.validation_data, batch_size=self.batch_size)
+        return DataLoader(
+            self.validation_data,
+            batch_size=self.batch_size,
+            num_workers=2,
+            collate_fn=self.collate_fn,
+        )
