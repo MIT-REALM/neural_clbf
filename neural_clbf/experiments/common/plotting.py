@@ -90,7 +90,7 @@ def plot_CLBF(
             try:
                 u = clbf_net(x)
             except (Exception):
-                u = torch.zeros(1, clbf_net.dynamics_model.n_controls)
+                u = torch.zeros(1, clbf_net.dynamics_model.n_controls).type_as(x_vals)
             # Accumulate violation across all scenarios
             for i in range(clbf_net.n_scenarios):
                 Vdot = Lf_V[:, i, :] + torch.sum(Lg_V[:, i, :] * u, dim=-1).unsqueeze(
