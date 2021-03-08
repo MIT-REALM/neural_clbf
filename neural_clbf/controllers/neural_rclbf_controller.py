@@ -1,6 +1,4 @@
-from typing import (
-    Tuple,
-)
+from typing import Tuple, Dict, Union, List, Optional
 from collections import OrderedDict
 
 import torch
@@ -11,6 +9,7 @@ import pytorch_lightning as pl
 
 import casadi
 
+import neural_clbf.experiments.common.plotting as clbf_plotting
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
 
@@ -31,6 +30,14 @@ class NeuralrCLBFController(pl.LightningModule):
         clbf_lambda: float = 1.0,
         clbf_safety_level: float = 1.0,
         clbf_timestep: float = 0.01,
+        control_loss_weight: float = 1e-6,
+        learning_rate: float = 1e-3,
+        V_plotting_options: Optional[
+            Dict[str, Union[int, str, torch.Tensor, List[Tuple[float, float]]]]
+        ] = None,
+        sim_plotting_options: Optional[
+            Dict[str, Union[int, float, List[int], List[str]]]
+        ] = None,
     ):
         """Initialize the controller.
 
@@ -44,6 +51,11 @@ class NeuralrCLBFController(pl.LightningModule):
             clbf_lambda: convergence rate for the CLBF
             clbf_safety_level: safety level set value for the CLBF
             clbf_timestep: the timestep to use in simulating forward Vdot
+            control_loss_weight: the weight to apply to the control loss
+            learning_rate: the learning rate for SGD
+            V_plotting_options: options to pass to the function for plotting V
+            sim_plotting_options: options to pass to the function for plotting the
+                                  simulation of controller performance
         """
         super().__init__()
 
@@ -56,6 +68,16 @@ class NeuralrCLBFController(pl.LightningModule):
         self.clbf_lambda = clbf_lambda
         self.clbf_safety_level = clbf_safety_level
         self.clbf_timestep = clbf_timestep
+        self.control_loss_weight = control_loss_weight
+        self.learning_rate = learning_rate
+
+        # Get plotting parameters
+        self.V_plotting_options = V_plotting_options
+        if self.V_plotting_options is None:
+            self.V_plotting_options = {}
+        self.sim_plotting_options = sim_plotting_options
+        if self.sim_plotting_options is None:
+            self.sim_plotting_options = {}
 
         # Define the CLBF network, which we denote V
         self.clbf_hidden_layers = clbf_hidden_layers
@@ -178,43 +200,47 @@ class NeuralrCLBFController(pl.LightningModule):
 
         return u_batched
 
-    def lyapunov_loss(
+    def clbf_loss(
         self,
         x: torch.Tensor,
-        x_goal: torch.Tensor,
+        goal_mask: torch.Tensor,
         safe_mask: torch.Tensor,
         unsafe_mask: torch.Tensor,
-    ) -> torch.Tensor:
+    ) -> Dict[str, torch.Tensor]:
         """
         Compute a loss to train the CLBF
 
         args:
             x: the points at which to evaluate the loss
-            x_goal: the origin
+            x_goal: the points in x markes as part of the goal
             safe_mask: the points in x marked safe
             unsafe_mask: the points in x marked unsafe
         returns:
-            loss: the loss for the CLBF network
+            loss: a dictionary containing the losses in each category
         """
         eps = 1e-2
         # Compute loss to encourage satisfaction of the following conditions...
-        loss = torch.tensor([0.0])
+        loss = {}
         #   1.) CLBF value should be non-positive on the goal set.
-        V0 = self.V(x_goal)
+        V0 = self.V(x[goal_mask])
         goal_term = F.relu(V0)
-        loss += goal_term.mean()
+        loss["CLBF goal term"] = goal_term.mean()
 
         #   3.) V <= safe_level in the safe region
         V_safe = self.V(x[safe_mask])
-        safe_lyap_term = F.relu(eps + V_safe - self.clbf_safety_level)
-        if safe_lyap_term.nelement() > 0:
-            loss += safe_lyap_term.mean()
+        safe_clbf_term = F.relu(eps + V_safe - self.clbf_safety_level)
+        if safe_clbf_term.nelement() > 0:
+            loss["CLBF safe region term"] = safe_clbf_term.mean()
+        else:
+            loss["CLBF safe region term"] = torch.tensor(0.0)
 
         #   4.) V >= safe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
-        unsafe_lyap_term = F.relu(eps + self.clbf_safety_level - V_unsafe)
-        if unsafe_lyap_term.nelement() > 0:
-            loss += unsafe_lyap_term.mean()
+        unsafe_clbf_term = F.relu(eps + self.clbf_safety_level - V_unsafe)
+        if unsafe_clbf_term.nelement() > 0:
+            loss["CLBF unsafe region term"] = unsafe_clbf_term.mean()
+        else:
+            loss["CLBF unsafe region term"] = torch.tensor(0.0)
 
         #   5.) A term to encourage satisfaction of CLBF decrease condition
         # We compute the change in V in two ways:
@@ -225,50 +251,150 @@ class NeuralrCLBFController(pl.LightningModule):
         # on u_NN.
 
         # Start with (5a): CLBF decrease in simulation
-        lyap_descent_term_sim = torch.tensor([0.0])
+        clbf_descent_term_sim = torch.tensor([0.0])
         V = self.V(x)
         u_nn = self.u_NN(x)
         for s in self.scenarios:
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
             x_next = x + self.clbf_timestep * xdot
             V_next = self.V(x_next)
-            lyap_descent_term_sim += F.relu(
+            clbf_descent_term_sim += F.relu(
                 eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V.squeeze()
             )
+        loss["CLBF descent term (simulated)"] = clbf_descent_term_sim.mean()
 
         # Then do (5b): CLBF decrease from linearization in each scenario
         Lf_V, Lg_V = self.V_lie_derivatives(x)
-        lyap_descent_term_lin = torch.tensor([0.0])
+        clbf_descent_term_lin = torch.tensor([0.0])
         for i in range(self.n_scenarios):
             Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :], u_nn)
-            lyap_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V)
+            clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V)
 
-        # Combine both (5a) and (5b) into one term
-        loss += lyap_descent_term_sim.mean() + lyap_descent_term_lin.mean()
+        loss["CLBF descent term (linearized)"] = clbf_descent_term_lin.mean()
 
         return loss
 
-    def controller_loss(self, x: torch.Tensor) -> torch.Tensor:
+    def controller_loss(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
         Compute a loss to train the proof controller
 
         args:
             x: the points at which to evaluate the loss
         returns:
-            loss: the loss for the learned controller function
+            loss: a dictionary containing the losses in each category
         """
-        u_nn = self.u_NN(x)
+        loss = {}
 
+        # Add a loss term for the control input magnitude
+        u_nn = self.u_NN(x)
         controller_squared_magnitude = (u_nn ** 2).sum(dim=-1)
-        loss = controller_squared_magnitude.mean()
+        loss["Control effort magnitude"] = (
+            self.control_loss_weight * controller_squared_magnitude.mean()
+        )
 
         return loss
 
     def training_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x)
-        loss = F.cross_entropy(y_hat, y)
-        return {"loss": loss}
+        """Conduct the training step for the given batch"""
+        # Extract the input and masks from the batch
+        x, goal_mask, safe_mask, unsafe_mask = batch
+
+        # Get the various losses
+        component_losses = {}
+        clbf_loss_dict = self.clbf_loss(x, goal_mask, safe_mask, unsafe_mask)
+        component_losses.update(clbf_loss_dict)
+        controller_loss_dict = self.controller_loss(x)
+        component_losses.update(controller_loss_dict)
+
+        # Compute the overall loss by summing up the individual losses
+        total_loss = torch.tensor(0.0)
+        for _, loss_value in component_losses:
+            total_loss += loss_value
+
+        batch_dict = {"loss": total_loss, **component_losses}
+
+        return batch_dict
+
+    def training_epoch_end(self, outputs):
+        """This function is called after every epoch is completed."""
+        # Compute the average loss over all batches for each component
+        avg_losses = {}
+        for loss_key in outputs[0].keys():
+            avg_losses[loss_key] = torch.stack([x[loss_key] for x in outputs]).mean()
+
+        # Log the overall loss...
+        self.log("Total loss / train", avg_losses["loss"])
+        # And all component losses
+        for loss_key in avg_losses.keys():
+            # We already logged overall loss, so skip that here
+            if loss_key == "loss":
+                continue
+            # Log the other losses
+            self.log(loss_key + " / train", avg_losses[loss_key])
+
+        epoch_dict = {
+            # required
+            "loss": avg_losses["loss"]
+        }
+
+        return epoch_dict
+
+    def validation_step(self, batch, batch_idx):
+        """Conduct the validation step for the given batch"""
+        # Extract the input and masks from the batch
+        x, goal_mask, safe_mask, unsafe_mask = batch
+
+        # Get the various losses
+        component_losses = {}
+        clbf_loss_dict = self.clbf_loss(x, goal_mask, safe_mask, unsafe_mask)
+        component_losses.update(clbf_loss_dict)
+        controller_loss_dict = self.controller_loss(x)
+        component_losses.update(controller_loss_dict)
+
+        # Compute the overall loss by summing up the individual losses
+        total_loss = torch.tensor(0.0)
+        for _, loss_value in component_losses:
+            total_loss += loss_value
+
+        batch_dict = {"val_loss": total_loss, **component_losses}
+
+        return batch_dict
+
+    def validation_epoch_end(self, outputs):
+        """This function is called after every epoch is completed."""
+        # Compute the average loss over all batches for each component
+        avg_losses = {}
+        for loss_key in outputs[0].keys():
+            avg_losses[loss_key] = torch.stack([x[loss_key] for x in outputs]).mean()
+
+        # Log the overall loss...
+        self.log("Total loss / val", avg_losses["val_loss"])
+        # And all component losses
+        for loss_key in avg_losses.keys():
+            # We already logged overall loss, so skip that here
+            if loss_key == "val_loss":
+                continue
+            # Log the other losses
+            self.log(loss_key + " / val", avg_losses[loss_key])
+
+        epoch_dict = {
+            # required
+            "loss": avg_losses["loss"]
+        }
+
+        # **Now entering spicetacular automation zone**
+        # We automatically plot and save the CLBF and some simulated rollouts
+        # at the end of every validation epoch
+
+        # First plot the value and derivatives of the CLBF
+        clbf_plot = clbf_plotting.plot_CLBF(self, **self.V_plotting_options)
+        self.logger.experiment.add_figure("CLBF plot", clbf_plot)
+        sim_plot = clbf_plotting.rollout_CLBF(self, **self.sim_plotting_options)
+        self.logger.experiment.add_figure("CLBF simulation", sim_plot)
+
+        return epoch_dict
 
     def configure_optimizers(self):
-        return torch.optim.SGD(self.parameters(), lr=1e-3, weight_decay=1e-6)
+        return torch.optim.SGD(
+            self.parameters(), lr=self.learning_rate, weight_decay=1e-6
+        )

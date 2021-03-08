@@ -3,14 +3,13 @@ import torch
 import numpy as np
 
 from neural_clbf.experiments.quad2d_obstacles.data_generation import (
-    safe_mask_fn,
-    unsafe_mask_fn,
     Quad2DObstaclesDataModule,
 )
 
 
-def test_quad2d_obstacles_safe_mask():
-    """Test the safe mask for the 2D quadrotor with obstacles"""
+def test_quad2d_obstacles_safe_unsafe_mask():
+    """Test the safe and unsafe mask for the 2D quadrotor with obstacles"""
+    dm = Quad2DObstaclesDataModule()
     # These points should all be safe
     safe_x = torch.tensor(
         [
@@ -21,7 +20,7 @@ def test_quad2d_obstacles_safe_mask():
             [0.5, 1.6, 0.0, 0.0, 0.0, 0.0],  # above obstacle 2
         ]
     )
-    assert torch.all(safe_mask_fn(safe_x))
+    assert torch.all(dm.safe_mask_fn(safe_x))
 
     # These points should all be unsafe
     unsafe_x = torch.tensor(
@@ -31,7 +30,38 @@ def test_quad2d_obstacles_safe_mask():
             [0.5, 1.0, 0.0, 0.0, 0.0, 0.0],  # inside obstacle 2
         ]
     )
-    assert torch.all(unsafe_mask_fn(unsafe_x))
+    assert torch.all(dm.unsafe_mask_fn(unsafe_x))
+
+
+def test_quad2d_obstacles_goal_mask():
+    """Test the goal mask for the 2D quadrotor with obstacles"""
+    dm = Quad2DObstaclesDataModule()
+    # These points should all be in the goal
+    in_goal = torch.tensor(
+        [
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # origin
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1],  # near origin
+            [0.2, 0.0, 0.0, 0.0, 0.0, 0.0],  # near origin in x
+            [0.0, 0.2, 0.0, 0.0, 0.0, 0.0],  # near origin in z
+            [0.0, 0.0, 0.2, 0.0, 0.0, 0.0],  # near origin in theta
+            [0.0, 0.0, 0.0, 0.2, 0.0, 0.0],  # slow enough in x
+            [0.0, 0.0, 0.0, 0.0, 0.2, 0.0],  # slow enough in z
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.2],  # slow enough in theta dot
+        ]
+    )
+    assert torch.all(dm.goal_mask_fn(in_goal))
+
+    # These points should all be unsafe
+    out_of_goal_mask = torch.tensor(
+        [
+            [0.2, 0.1, 0.0, 0.0, 0.0, 0.0],  # too far in xz
+            [0.1, 0.2, 0.0, 0.0, 0.0, 0.0],  # too far in xz
+            [0.0, 0.0, 0.0, 0.2, 0.1, 0.0],  # too fast in xz
+            [0.0, 0.0, 0.0, 0.1, 0.2, 0.0],  # too fast in xz
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.3],  # too fast in theta dot
+        ]
+    )
+    assert torch.all(torch.logical_not(dm.goal_mask_fn(out_of_goal_mask)))
 
 
 def test_quad2d_obstacles_datamodule():
@@ -66,9 +96,10 @@ def test_quad2d_obstacles_datamodule():
 
     # After setup, the data should be structured and split into DataLoaders
     dm.setup()
-    # Each DataLoader should have three things in it (x, safe_mask, and unsafe_mask)
-    assert len(dm.train_data) == 3
-    assert len(dm.validation_data) == 3
+    # Each DataLoader should have three things in it (x, goal_mask, safe_mask,
+    # and unsafe_mask)
+    assert len(dm.train_data) == 4
+    assert len(dm.validation_data) == 4
     # Each of those things should have the appropriate split length
     num_validation_pts = int(split * total_samples)
     num_train_pts = total_samples - num_validation_pts
