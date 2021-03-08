@@ -221,7 +221,7 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         return DataLoader(
             self.train_data,
             batch_size=self.batch_size,
-            num_workers=2,
+            num_workers=8,
             collate_fn=self.collate_fn,
         )
 
@@ -230,6 +230,6 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         return DataLoader(
             self.validation_data,
             batch_size=self.batch_size,
-            num_workers=2,
+            num_workers=8,
             collate_fn=self.collate_fn,
         )

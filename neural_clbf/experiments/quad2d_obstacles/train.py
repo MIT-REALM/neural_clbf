@@ -15,9 +15,33 @@ from neural_clbf.experiments.common.plotting import (
 from neural_clbf.systems import Quad2D
 
 
+def rollout_plotting_cb(clbf_net):
+    return rollout_CLBF(
+        clbf_net,
+        start_x=torch.tensor([[-1.5, 0.1, 0.0, 0.0, 0.0, 0.0]]),
+        plot_x_indices=[Quad2D.PX, Quad2D.PZ],
+        plot_x_labels=["$x$", "$z$"],
+        plot_u_indices=[Quad2D.U_RIGHT, Quad2D.U_LEFT],
+        plot_u_labels=["$u_r$", "$u_l$"],
+        t_sim=1.0,
+    )
+
+
+def clbf_plotting_cb(clbf_net):
+    return plot_CLBF(
+        clbf_net,
+        domain=[(-2.0, 1.0), (-0.5, 1.5)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
+        n_grid=5,
+        x_axis_index=Quad2D.PX,
+        y_axis_index=Quad2D.PZ,
+        x_axis_label="$x$",
+        y_axis_label="$z$",
+    )
+
+
 def main(args):
     # Initialize the DataModule
-    data_module = Quad2DObstaclesDataModule()
+    data_module = Quad2DObstaclesDataModule(split=0.01)
 
     # ## Setup trainer parameters ##
     # Define the dynamics model
@@ -35,25 +59,9 @@ def main(args):
     # Define the plotting callbacks
     plotting_callbacks = [
         # This plotting function plots V and dV/dt violation on a grid
-        lambda clbf_net: plot_CLBF(
-            clbf_net,
-            domain=[(-2.0, 1.0), (-0.5, 1.5)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
-            n_grid=5,
-            x_axis_index=Quad2D.PX,
-            y_axis_index=Quad2D.PZ,
-            x_axis_label="$x$",
-            y_axis_label="$z$",
-        ),
+        clbf_plotting_cb,
         # This plotting function simulates rollouts of the controller
-        lambda clbf_net: rollout_CLBF(
-            clbf_net,
-            start_x=torch.tensor([[-1.5, 0.1, 0.0, 0.0, 0.0, 0.0]]),
-            plot_x_indices=[Quad2D.PX, Quad2D.PZ],
-            plot_x_labels=["$x$", "$z$"],
-            plot_u_indices=[Quad2D.U_RIGHT, Quad2D.U_LEFT],
-            plot_u_labels=["$u_r$", "$u_l$"],
-            t_sim=1.0,
-        ),
+        rollout_plotting_cb,
     ]
 
     # Initialize the controller
