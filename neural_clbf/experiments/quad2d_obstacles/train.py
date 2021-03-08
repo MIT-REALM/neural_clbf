@@ -92,6 +92,12 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         learning_rate=suggested_lr,
     )
+    # Add the DataModule hooks
+    rclbf_controller.prepare_data = data_module.prepare_data
+    rclbf_controller.setup = data_module.setup
+    rclbf_controller.train_dataloader = data_module.train_dataloader
+    rclbf_controller.val_dataloader = data_module.val_dataloader
+    rclbf_controller.test_dataloader = data_module.test_dataloader
 
     # Train
     trainer.fit(rclbf_controller)
