@@ -97,6 +97,7 @@ class Quad2D(ControlAffineSystem):
         # Extract batch size and set up a tensor for holding the result
         batch_size = x.shape[0]
         f = torch.zeros((batch_size, self.n_dims, 1))
+        f = f.type_as(x)
 
         # The derivatives of px, pz, and theta are just the velocities
         f[:, Quad2D.PX, 0] = x[:, Quad2D.VX]
@@ -126,6 +127,7 @@ class Quad2D(ControlAffineSystem):
         # Extract batch size and set up a tensor for holding the result
         batch_size = x.shape[0]
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
+        g = g.type_as(x)
 
         # Extract the needed parameters
         m, inertia, r = params["m"], params["I"], params["r"]
