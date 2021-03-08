@@ -4,24 +4,9 @@ from typing import List, Optional, Tuple
 import numpy as np
 import torch
 import pytorch_lightning as pl
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, random_split
 
 from neural_clbf.systems.quad2d import Quad2D
-
-
-# Define a custom collate_fn for the DataLoaders to deal with
-# different-sized inputs
-def custom_collate(batch):
-    # Extract sample points from the batch
-    x = batch[0]
-    # Extract goal mask
-    goal_mask = batch[1]
-    # Extract safe mask
-    safe_mask = batch[2]
-    # Extract goal mask
-    unsafe_mask = batch[3]
-
-    return x, goal_mask, safe_mask, unsafe_mask
 
 
 class Quad2DObstaclesDataModule(pl.LightningDataModule):
@@ -208,22 +193,20 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         # Combine all of these into a single dataset and save it
         self.dataset = TensorDataset(x, goal_mask, safe_mask, unsafe_mask)
 
-        self.collate_fn = custom_collate
-
     def setup(self, stage=None):
         """Setup the data for training and validation"""
         # The data were generated randomly, so no need to do a random split
-        split_pt = int(self.N * self.split)
-        self.train_data = self.dataset[split_pt:]
-        self.validation_data = self.dataset[:split_pt]
+        val_pts = int(self.N * self.split)
+        split_lens = [self.N - val_pts, val_pts]
+        self.train_data, self.validation_data = random_split(self.dataset, split_lens)
 
     def train_dataloader(self):
         """Make the DataLoader for training data"""
         return DataLoader(
             self.train_data,
             batch_size=self.batch_size,
+            shuffle=True,
             num_workers=8,
-            collate_fn=self.collate_fn,
         )
 
     def val_dataloader(self):
@@ -231,6 +214,6 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         return DataLoader(
             self.validation_data,
             batch_size=self.batch_size,
+            shuffle=True,
             num_workers=8,
-            collate_fn=self.collate_fn,
         )
