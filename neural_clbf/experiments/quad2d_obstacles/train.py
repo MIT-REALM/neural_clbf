@@ -41,7 +41,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Initialize the DataModule
-    data_module = Quad2DObstaclesDataModule(N_samples=5000000, split=0.01)
+    data_module = Quad2DObstaclesDataModule(N_samples=500000, split=0.01)
 
     # ## Setup trainer parameters ##
     # Define the dynamics model
@@ -79,6 +79,19 @@ def main(args):
     tb_logger = pl_loggers.TensorBoardLogger("logs/quad2d_obstacles/")
     trainer = pl.Trainer.from_argparse_args(args)
     trainer.logger = tb_logger
+    trainer.auto_lr_find = True
+
+    # Run lr finder
+    lr_finder = trainer.tuner.lr_find(rclbf_controller)
+    suggested_lr = lr_finder.suggestion()
+
+    # Make a new model with the suggested learning rate
+    rclbf_controller = NeuralrCLBFController(
+        dynamics_model,
+        scenarios,
+        plotting_callbacks=plotting_callbacks,
+        learning_rate=suggested_lr,
+    )
 
     # Train
     trainer.fit(rclbf_controller)
