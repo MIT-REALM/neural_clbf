@@ -131,7 +131,9 @@ def test_quad2d_obstacles_datamodule_dataloaders():
     N_samples = 1000
     split = 0.1
     batch_size = 10
-    dm = Quad2DObstaclesDataModule(N_samples=N_samples, domains=domains, split=split, batch_size=batch_size)
+    dm = Quad2DObstaclesDataModule(
+        N_samples=N_samples, domains=domains, split=split, batch_size=batch_size
+    )
     dm.prepare_data()
     dm.setup()
 
