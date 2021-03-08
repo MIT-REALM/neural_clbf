@@ -17,7 +17,7 @@ from neural_clbf.systems import Quad2D
 
 def main(args):
     # Initialize the DataModule
-    data_module = Quad2DObstaclesDataModule(N_samples=1000)
+    data_module = Quad2DObstaclesDataModule()
 
     # ## Setup trainer parameters ##
     # Define the dynamics model

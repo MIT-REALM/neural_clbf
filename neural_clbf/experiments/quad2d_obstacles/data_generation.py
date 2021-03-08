@@ -17,7 +17,7 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        N_samples: int = 1000000,
+        N_samples: int = 5000000,
         domains: Optional[List[List[Tuple[float, float]]]] = None,
         split: float = 0.1,
         batch_size: int = 64,
