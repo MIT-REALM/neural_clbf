@@ -201,7 +201,7 @@ class NeuralrCLBFController(pl.LightningModule):
             solution = opti.solve()
 
             # Save the solution
-            u_batched[i, :] = torch.tensor(solution.value(u))
+            u_batched[i, :] = torch.tensor(solution.value(u)).type_as(x)
 
         return u_batched
 
@@ -315,7 +315,7 @@ class NeuralrCLBFController(pl.LightningModule):
         component_losses.update(controller_loss_dict)
 
         # Compute the overall loss by summing up the individual losses
-        total_loss = torch.tensor(0.0)
+        total_loss = torch.tensor(0.0).type_as(x)
         for _, loss_value in component_losses.items():
             total_loss += loss_value
 
@@ -353,7 +353,7 @@ class NeuralrCLBFController(pl.LightningModule):
         component_losses.update(controller_loss_dict)
 
         # Compute the overall loss by summing up the individual losses
-        total_loss = torch.tensor(0.0)
+        total_loss = torch.tensor(0.0).type_as(x)
         for _, loss_value in component_losses.items():
             total_loss += loss_value
 
