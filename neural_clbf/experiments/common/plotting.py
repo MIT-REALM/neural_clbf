@@ -123,7 +123,9 @@ def plot_CLBF(
     axs[0].legend()
 
     # Then for dV/dt
-    contours = axs[1].contourf(x_vals.cpu(), y_vals.cpu(), V_dot_grid.cpu(), cmap="Greys", levels=20)
+    contours = axs[1].contourf(
+        x_vals.cpu(), y_vals.cpu(), V_dot_grid.cpu(), cmap="Greys", levels=20
+    )
 
     def fmt(x, pos):
         a, b = "{:.2e}".format(x).split("e")
@@ -255,6 +257,7 @@ def rollout_CLBF(
 
             t_final = tstep
     except (Exception, RuntimeError):
+        raise
         controller_failed = True
 
     fig, axs = plt.subplots(2, 1)
