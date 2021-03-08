@@ -9,70 +9,6 @@ from torch.utils.data import TensorDataset, DataLoader
 from neural_clbf.systems.quad2d import Quad2D
 
 
-def safe_mask_fn(x):
-    """Return the mask of x indicating safe regions for the obstacle task"""
-    safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
-
-    # We have a floor that we need to avoid
-    safe_z = -0.1
-    floor_mask = x[:, 1] >= safe_z
-    safe_mask.logical_and_(floor_mask)
-
-    # We also have a block obstacle to the left at ground level
-    obs1_min_x, obs1_max_x = (-1.1, -0.4)
-    obs1_min_z, obs1_max_z = (-0.5, 0.6)
-    obs1_mask_x = torch.logical_or(x[:, 0] <= obs1_min_x, x[:, 0] >= obs1_max_x)
-    obs1_mask_z = torch.logical_or(x[:, 1] <= obs1_min_z, x[:, 1] >= obs1_max_z)
-    obs1_mask = torch.logical_or(obs1_mask_x, obs1_mask_z)
-    safe_mask.logical_and_(obs1_mask)
-
-    # We also have a block obstacle to the right in the air
-    obs2_min_x, obs2_max_x = (-0.1, 1.1)
-    obs2_min_z, obs2_max_z = (0.7, 1.5)
-    obs2_mask_x = torch.logical_or(x[:, 0] <= obs2_min_x, x[:, 0] >= obs2_max_x)
-    obs2_mask_z = torch.logical_or(x[:, 1] <= obs2_min_z, x[:, 1] >= obs2_max_z)
-    obs2_mask = torch.logical_or(obs2_mask_x, obs2_mask_z)
-    safe_mask.logical_and_(obs2_mask)
-
-    # Also constrain to be within a norm bound
-    norm_mask = x.norm(dim=-1) <= 4.5
-    safe_mask.logical_and_(norm_mask)
-
-    return safe_mask
-
-
-def unsafe_mask_fn(x):
-    """Return the mask of x indicating unsafe regions for the obstacle task"""
-    unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
-
-    # We have a floor that we need to avoid
-    unsafe_z = -0.3
-    floor_mask = x[:, 1] <= unsafe_z
-    unsafe_mask.logical_or_(floor_mask)
-
-    # We also have a block obstacle to the left at ground level
-    obs1_min_x, obs1_max_x = (-1.0, -0.5)
-    obs1_min_z, obs1_max_z = (-0.4, 0.5)
-    obs1_mask_x = torch.logical_and(x[:, 0] >= obs1_min_x, x[:, 0] <= obs1_max_x)
-    obs1_mask_z = torch.logical_and(x[:, 1] >= obs1_min_z, x[:, 1] <= obs1_max_z)
-    obs1_mask = torch.logical_and(obs1_mask_x, obs1_mask_z)
-    unsafe_mask.logical_or_(obs1_mask)
-
-    # We also have a block obstacle to the right in the air
-    obs2_min_x, obs2_max_x = (0.0, 1.0)
-    obs2_min_z, obs2_max_z = (0.8, 1.4)
-    obs2_mask_x = torch.logical_and(x[:, 0] >= obs2_min_x, x[:, 0] <= obs2_max_x)
-    obs2_mask_z = torch.logical_and(x[:, 1] >= obs2_min_z, x[:, 1] <= obs2_max_z)
-    obs2_mask = torch.logical_and(obs2_mask_x, obs2_mask_z)
-    unsafe_mask.logical_or_(obs2_mask)
-
-    # Also constrain with a norm bound
-    norm_mask = x.norm(dim=-1) >= 5.0
-    unsafe_mask.logical_or_(norm_mask)
-
-    return unsafe_mask
-
-
 class Quad2DObstaclesDataModule(pl.LightningDataModule):
     """
     DataModule for generating sample points (and a corresponding safe/unsafe mask) for
@@ -132,6 +68,102 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         # might be more than just N_samples
         self.N = len(self.domains) * N_samples
 
+    def safe_mask_fn(self, x):
+        """Return the mask of x indicating safe regions for the obstacle task
+
+        args:
+            x: a tensor of points in the state space
+        """
+        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        # We have a floor that we need to avoid
+        safe_z = -0.1
+        floor_mask = x[:, 1] >= safe_z
+        safe_mask.logical_and_(floor_mask)
+
+        # We also have a block obstacle to the left at ground level
+        obs1_min_x, obs1_max_x = (-1.1, -0.4)
+        obs1_min_z, obs1_max_z = (-0.5, 0.6)
+        obs1_mask_x = torch.logical_or(x[:, 0] <= obs1_min_x, x[:, 0] >= obs1_max_x)
+        obs1_mask_z = torch.logical_or(x[:, 1] <= obs1_min_z, x[:, 1] >= obs1_max_z)
+        obs1_mask = torch.logical_or(obs1_mask_x, obs1_mask_z)
+        safe_mask.logical_and_(obs1_mask)
+
+        # We also have a block obstacle to the right in the air
+        obs2_min_x, obs2_max_x = (-0.1, 1.1)
+        obs2_min_z, obs2_max_z = (0.7, 1.5)
+        obs2_mask_x = torch.logical_or(x[:, 0] <= obs2_min_x, x[:, 0] >= obs2_max_x)
+        obs2_mask_z = torch.logical_or(x[:, 1] <= obs2_min_z, x[:, 1] >= obs2_max_z)
+        obs2_mask = torch.logical_or(obs2_mask_x, obs2_mask_z)
+        safe_mask.logical_and_(obs2_mask)
+
+        # Also constrain to be within a norm bound
+        norm_mask = x.norm(dim=-1) <= 4.5
+        safe_mask.logical_and_(norm_mask)
+
+        return safe_mask
+
+    def unsafe_mask_fn(self, x):
+        """Return the mask of x indicating unsafe regions for the obstacle task
+
+        args:
+            x: a tensor of points in the state space
+        """
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        # We have a floor that we need to avoid
+        unsafe_z = -0.3
+        floor_mask = x[:, 1] <= unsafe_z
+        unsafe_mask.logical_or_(floor_mask)
+
+        # We also have a block obstacle to the left at ground level
+        obs1_min_x, obs1_max_x = (-1.0, -0.5)
+        obs1_min_z, obs1_max_z = (-0.4, 0.5)
+        obs1_mask_x = torch.logical_and(x[:, 0] >= obs1_min_x, x[:, 0] <= obs1_max_x)
+        obs1_mask_z = torch.logical_and(x[:, 1] >= obs1_min_z, x[:, 1] <= obs1_max_z)
+        obs1_mask = torch.logical_and(obs1_mask_x, obs1_mask_z)
+        unsafe_mask.logical_or_(obs1_mask)
+
+        # We also have a block obstacle to the right in the air
+        obs2_min_x, obs2_max_x = (0.0, 1.0)
+        obs2_min_z, obs2_max_z = (0.8, 1.4)
+        obs2_mask_x = torch.logical_and(x[:, 0] >= obs2_min_x, x[:, 0] <= obs2_max_x)
+        obs2_mask_z = torch.logical_and(x[:, 1] >= obs2_min_z, x[:, 1] <= obs2_max_z)
+        obs2_mask = torch.logical_and(obs2_mask_x, obs2_mask_z)
+        unsafe_mask.logical_or_(obs2_mask)
+
+        # Also constrain with a norm bound
+        norm_mask = x.norm(dim=-1) >= 5.0
+        unsafe_mask.logical_or_(norm_mask)
+
+        return unsafe_mask
+
+    def goal_mask_fn(self, x):
+        """Return the mask of x indicating points in the goal set (within 0.2 m of the
+        goal).
+
+        args:
+            x: a tensor of points in the state space
+        """
+        goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        # Define the goal region as being within 0.2 m of the goal, with an angle
+        # less than 0.2 radians, with linear velocity less than 0.2 m/s and angular
+        # velocity less than 0.2 rad/s (in absolute value)
+        near_goal_xz = x[:, : Quad2D.PZ + 1].norm(dim=-1) <= 0.2
+        goal_mask.logical_and_(near_goal_xz)
+        near_goal_theta = x[:, Quad2D.THETA].abs() <= 0.2
+        goal_mask.logical_and_(near_goal_theta)
+        near_goal_xz_velocity = x[:, Quad2D.VX : Quad2D.VZ + 1].norm(dim=-1) <= 0.2
+        goal_mask.logical_and_(near_goal_xz_velocity)
+        near_goal_theta_velocity = x[:, Quad2D.THETA_DOT].abs() <= 0.2
+        goal_mask.logical_and_(near_goal_theta_velocity)
+
+        # The goal set has to be a subset of the safe set
+        goal_mask.logical_and_(self.safe_mask_fn(x))
+
+        return goal_mask
+
     def prepare_data(self):
         """Create the dataset by randomly sampling from the domains"""
         # Loop through each domain, sample from it, and store the samples in this list
@@ -149,12 +181,15 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         # Concatenate all the samples into one big tensor
         x = torch.vstack(x_samples)
 
+        # Create the goal mask for the sampled points
+        goal_mask = self.goal_mask_fn(x)
+
         # Create the safe/unsafe masks for the sampled points
-        safe_mask = safe_mask_fn(x)
-        unsafe_mask = unsafe_mask_fn(x)
+        safe_mask = self.safe_mask_fn(x)
+        unsafe_mask = self.unsafe_mask_fn(x)
 
         # Combine all of these into a single dataset and save it
-        self.dataset = TensorDataset(x, safe_mask, unsafe_mask)
+        self.dataset = TensorDataset(x, goal_mask, safe_mask, unsafe_mask)
 
     def setup(self, stage=None):
         """Setup the data for training and validation"""
