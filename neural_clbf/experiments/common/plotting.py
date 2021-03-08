@@ -56,13 +56,12 @@ def plot_CLBF(
     if domain is None:
         domain = [(-1.0, 1.0), (-1.0, 1.0)]
     # Set up the plotting grid
-    x_vals = torch.linspace(domain[0][0], domain[0][1], n_grid)
-    y_vals = torch.linspace(domain[1][0], domain[1][1], n_grid)
-    grid_x, grid_y = torch.meshgrid(x_vals, y_vals)
+    x_vals = torch.linspace(domain[0][0], domain[0][1], n_grid, device=clbf_net.device)
+    y_vals = torch.linspace(domain[1][0], domain[1][1], n_grid, device=clbf_net.device)
 
     # Set up tensors to store the results
-    V_grid = torch.zeros(n_grid, n_grid)
-    V_dot_grid = torch.zeros(n_grid, n_grid)
+    V_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
 
     # If the default state is not provided, use zeros
     if (
@@ -70,6 +69,8 @@ def plot_CLBF(
         or default_state.nelement() != clbf_net.dynamics_model.n_dims
     ):
         default_state = torch.zeros(1, clbf_net.dynamics_model.n_dims)
+
+    default_state = default_state.type_as(x_vals)
 
     # Make a copy of the default state, which we'll modify on every loop
     x = default_state.clone().detach().reshape(1, clbf_net.dynamics_model.n_dims)
@@ -175,7 +176,9 @@ def rollout_CLBF(
         scenarios = clbf_net.scenarios
     # Default to starting from all state variables = 1.0
     if start_x is None:
-        start_x = torch.ones(1, clbf_net.dynamics_model.n_dims)
+        start_x = torch.ones(1, clbf_net.dynamics_model.n_dims, device=clbf_net.device)
+    else:
+        start_x = start_x.to(device=clbf_net.device)
     # Default to just plotting the first state variable
     if plot_x_indices is None:
         plot_x_indices = [0]
@@ -200,7 +203,7 @@ def rollout_CLBF(
         parameter_ranges[param_name] = (param_min, param_max)
 
     # Generate a tensor of start states
-    x_sim_start = torch.zeros(n_sims, clbf_net.dynamics_model.n_dims)
+    x_sim_start = torch.zeros(n_sims, clbf_net.dynamics_model.n_dims).type_as(start_x)
     for i in range(0, n_sims, n_sims_per_start):
         x_sim_start[i : i + n_sims_per_start, :] = start_x
 
@@ -217,9 +220,13 @@ def rollout_CLBF(
     # Simulate!
     # (but first make somewhere to save the results)
     num_timesteps = int(t_sim // delta_t)
-    x_sim = torch.zeros(num_timesteps, n_sims, clbf_net.dynamics_model.n_dims)
+    x_sim = torch.zeros(num_timesteps, n_sims, clbf_net.dynamics_model.n_dims).type_as(
+        start_x
+    )
     x_sim[0, :, :] = x_sim_start
-    u_sim = torch.zeros(num_timesteps, n_sims, clbf_net.dynamics_model.n_controls)
+    u_sim = torch.zeros(
+        num_timesteps, n_sims, clbf_net.dynamics_model.n_controls
+    ).type_as(start_x)
     t_final = 0
     controller_failed = False
     try:
