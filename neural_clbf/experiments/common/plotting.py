@@ -105,10 +105,16 @@ def plot_CLBF(
     fig.set_size_inches(16, 16)
 
     # First for V
-    contours = axs[0].contourf(x_vals, y_vals, V_grid, cmap="magma", levels=20)
+    contours = axs[0].contourf(
+        x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
+    )
     plt.colorbar(contours, ax=axs[0], orientation="horizontal")
     contours = axs[0].contour(
-        x_vals, y_vals, V_grid, colors=["blue"], levels=[clbf_net.clbf_safety_level]
+        x_vals.cpu(),
+        y_vals.cpu(),
+        V_grid.cpu(),
+        colors=["blue"],
+        levels=[clbf_net.clbf_safety_level],
     )
     axs[0].set_xlabel(x_axis_label)
     axs[0].set_ylabel(y_axis_label)
