@@ -272,7 +272,7 @@ def rollout_CLBF(
 
     # If the controller fails, mark that on the plot
     if controller_failed:
-        ax1.title("Controller failure!")
+        ax1.set_title("Controller failure!")
 
     ax1.set_xlabel("$t$")
     ax1.legend()
