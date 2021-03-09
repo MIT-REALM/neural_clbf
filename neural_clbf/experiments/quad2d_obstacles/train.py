@@ -46,9 +46,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Initialize the DataModule
-    data_module = Quad2DObstaclesDataModule(
-        N_samples=1000000, split=0.1, batch_size=256
-    )
+    data_module = Quad2DObstaclesDataModule(N_samples=500000, split=0.1, batch_size=256)
 
     # ## Setup trainer parameters ##
     # Define the dynamics model
@@ -76,8 +74,8 @@ def main(args):
         dynamics_model,
         scenarios,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=2,
-        clbf_hidden_size=48,
+        clbf_hidden_layers=5,
+        clbf_hidden_size=32,
         learning_rate=1e-3,
     )
     # Add the DataModule hooks
