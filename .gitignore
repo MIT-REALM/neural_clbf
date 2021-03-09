@@ -123,7 +123,6 @@ venv.bak/
 .idea
 .vscode
 
-# seed project
-lightning_logs/
-MNIST
-.DS_Store
+# Project-specific
+logs/
+neural_clbf/systems/aerobench

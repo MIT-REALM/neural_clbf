@@ -30,7 +30,16 @@ conda create --name neural_clbf python=3.9
 conda activate neural_clbf
 pip install -e .   
 pip install -r requirements.txt
-```   
+```
+To install the F16 simulator (which is a GPL-licensed component and thus not distributed along with this code), you should also run
+```
+cd ..  # or wherever you want to put it
+git clone git@github.com:dawsonc/AeroBenchVVPython.git
+cd AeroBenchVVPython
+pwd
+```
+Then go to `neural_clbf/setup/aerobench.py` and modify it to point to the path to the aerobench package.
+
 Next, navigate to any file and run it.   
 ```bash
 # module folder

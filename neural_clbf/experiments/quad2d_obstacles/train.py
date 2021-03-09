@@ -31,7 +31,7 @@ def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
         domain=[(-2.0, 1.0), (-0.5, 1.5)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
-        n_grid=5,
+        n_grid=50,
         x_axis_index=Quad2D.PX,
         y_axis_index=Quad2D.PZ,
         x_axis_label="$x$",
