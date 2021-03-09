@@ -75,6 +75,7 @@ def plot_CLBF(
     # Make a copy of the default state, which we'll modify on every loop
     x = default_state.clone().detach().reshape(1, clbf_net.dynamics_model.n_dims)
     prog_bar_range = tqdm.trange(n_grid, desc="Plotting CLBF", leave=True)
+    print("Plotting CLBF on grid...")
     for i in prog_bar_range:
         for j in range(n_grid):
             # Adjust x to be at the current grid point
@@ -238,6 +239,7 @@ def rollout_CLBF(
     t_final = 0
     controller_failed = False
     try:
+        print("Simulating CLBF rollout...")
         prog_bar_range = tqdm.trange(1, num_timesteps, desc="CLBF Rollout", leave=True)
         for tstep in prog_bar_range:
             # Get the current state

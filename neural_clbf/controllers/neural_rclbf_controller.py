@@ -379,8 +379,6 @@ class NeuralrCLBFController(pl.LightningModule):
             # Log the other losses
             self.log(loss_key + " / val", avg_losses[loss_key], sync_dist=True)
 
-        epoch_dict = {"val_loss": avg_losses["val_loss"]}
-
         # **Now entering spicetacular automation zone**
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of every validation epoch, using arbitrary plotting callbacks!
@@ -392,8 +390,6 @@ class NeuralrCLBFController(pl.LightningModule):
             )
         self.logger.experiment.close()
         self.logger.experiment.flush()
-
-        return epoch_dict
 
     def configure_optimizers(self):
         return torch.optim.SGD(
