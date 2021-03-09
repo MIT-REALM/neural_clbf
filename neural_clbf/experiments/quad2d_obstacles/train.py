@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 
 import torch
+import torch.multiprocessing
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 
@@ -13,6 +14,9 @@ from neural_clbf.experiments.common.plotting import (
     rollout_CLBF,
 )
 from neural_clbf.systems import Quad2D
+
+
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 def rollout_plotting_cb(clbf_net):
@@ -32,7 +36,7 @@ def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
         domain=[(-2.0, 1.0), (-0.5, 1.5)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
-        n_grid=50,
+        n_grid=25,
         x_axis_index=Quad2D.PX,
         y_axis_index=Quad2D.PZ,
         x_axis_label="$x$",
@@ -43,7 +47,7 @@ def clbf_plotting_cb(clbf_net):
 def main(args):
     # Initialize the DataModule
     data_module = Quad2DObstaclesDataModule(
-        N_samples=1000000, split=0.1, batch_size=64
+        N_samples=1000000, split=0.1, batch_size=256
     )
 
     # ## Setup trainer parameters ##
@@ -74,6 +78,7 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=5,
         clbf_hidden_size=48,
+        learning_rate=0.01,
     )
     # Add the DataModule hooks
     rclbf_controller.prepare_data = data_module.prepare_data
