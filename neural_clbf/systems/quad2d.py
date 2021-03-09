@@ -1,8 +1,9 @@
 """Define a dynamical system for a 2D quadrotor"""
 import torch
+import numpy as np
 
 from .control_affine_system import ControlAffineSystem
-from .utils import grav, Scenario
+from .utils import grav, Scenario, lqr
 
 
 class Quad2D(ControlAffineSystem):
@@ -52,6 +53,27 @@ class Quad2D(ControlAffineSystem):
             ValueError if nominal_params are not valid for this system
         """
         super().__init__(nominal_params)
+
+        # Compute the LQR gain matrix for the nominal parameters
+        # Linearize the system about the x = 0, u1 = u2 = mg / 2
+        A = np.zeros((self.n_dims, self.n_dims))
+        A[0, 3] = 1.0
+        A[1, 4] = 1.0
+        A[2, 5] = 1.0
+        A[3, 2] = -grav
+
+        B = np.zeros((self.n_dims, self.n_controls))
+        B[4, 0] = 1.0 / self.nominal_params["m"]
+        B[4, 1] = 1.0 / self.nominal_params["m"]
+        B[5, 0] = self.nominal_params["r"] / self.nominal_params["I"]
+        B[5, 1] = -self.nominal_params["r"] / self.nominal_params["I"]
+
+        # Define cost matrices as identity
+        Q = np.eye(self.n_dims)
+        R = np.eye(self.n_controls)
+
+        # Get feedback matrix
+        self.K = torch.tensor(lqr(A, B, Q, R))
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -147,3 +169,19 @@ class Quad2D(ControlAffineSystem):
         g[:, Quad2D.THETA_DOT, Quad2D.U_LEFT] = -r / inertia
 
         return g
+
+    def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the nominal control for the nominal parameters. For Quad2D, the nominal
+        controller is LQR
+
+        args:
+            x: bs x self.n_dims tensor of state
+        returns:
+            u_nominal: bs x self.n_controls tensor of controls
+        """
+        # Compute nominal control from feedback + equilibrium control
+        u_nominal = -(self.K.type_as(x) @ x.T).T
+        u_eq = torch.zeros_like(u_nominal) + self.nominal_params["m"] * grav / 2.0
+
+        return u_nominal + u_eq

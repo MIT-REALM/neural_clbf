@@ -1,2 +1,1 @@
-1. Add tests for F16
-2. Train F16
+1. Finish tests for the F16 GCAS datamodule
