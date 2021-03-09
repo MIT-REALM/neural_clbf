@@ -43,7 +43,7 @@ def clbf_plotting_cb(clbf_net):
 def main(args):
     # Initialize the DataModule
     data_module = Quad2DObstaclesDataModule(
-        N_samples=1000000, split=0.1, batch_size=256
+        N_samples=1000000, split=0.1, batch_size=512
     )
 
     # ## Setup trainer parameters ##
@@ -61,10 +61,10 @@ def main(args):
 
     # Define the plotting callbacks
     plotting_callbacks = [
-        # This plotting function plots V and dV/dt violation on a grid
-        clbf_plotting_cb,
-        # This plotting function simulates rollouts of the controller
-        rollout_plotting_cb,
+        # # This plotting function plots V and dV/dt violation on a grid
+        # clbf_plotting_cb,
+        # # This plotting function simulates rollouts of the controller
+        # rollout_plotting_cb,
     ]
 
     # Initialize the controller
@@ -74,7 +74,6 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=5,
         clbf_hidden_size=48,
-        learning_rate=0.1,
     )
     # Add the DataModule hooks
     rclbf_controller.prepare_data = data_module.prepare_data
