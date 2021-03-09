@@ -16,7 +16,7 @@ from neural_clbf.experiments.common.plotting import (
 from neural_clbf.systems import Quad2D
 
 
-torch.multiprocessing.set_sharing_strategy('file_system')
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 def rollout_plotting_cb(clbf_net):
@@ -78,7 +78,7 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=5,
         clbf_hidden_size=48,
-        learning_rate=0.01,
+        learning_rate=1e-3,
     )
     # Add the DataModule hooks
     rclbf_controller.prepare_data = data_module.prepare_data
