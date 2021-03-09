@@ -262,13 +262,13 @@ class NeuralrCLBFController(pl.LightningModule):
         else:
             loss["CLBF unsafe region term"] = torch.tensor(0.0).type_as(x)
 
-        #   5.) A term to encourage satisfaction of CLBF decrease condition
-        # We compute the change in V in two ways:
-        #       a) simulating x forward in time and checking if V decreases
-        #          in each scenario
-        #       b) Linearizing V along f.
-        # In both cases we use u_NN, but the second provides a stronger training signal
-        # on u_NN.
+        # #   5.) A term to encourage satisfaction of CLBF decrease condition
+        # # We compute the change in V in two ways:
+        # #       a) simulating x forward in time and checking if V decreases
+        # #          in each scenario
+        # #       b) Linearizing V along f.
+        # # In both cases we use u_NN, but (b) provides a stronger training signal
+        # # on u_NN.
 
         # Start with (5a): CLBF decrease in simulation
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
@@ -283,14 +283,16 @@ class NeuralrCLBFController(pl.LightningModule):
             ).mean()
         loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
 
-        # Then do (5b): CLBF decrease from linearization in each scenario
-        Lf_V, Lg_V = self.V_lie_derivatives(x)
-        clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
-        for i in range(self.n_scenarios):
-            Vdot = Lf_V[:, i, :] + torch.sum(Lg_V[:, i, :] * u_nn, dim=-1).unsqueeze(-1)
-            clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
+        # # Then do (5b): CLBF decrease from linearization in each scenario
+        # Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
+        # for i in range(self.n_scenarios):
+        #     Vdot = Lf_V[:, i, :] + torch.sum(
+        #         Lg_V[:, i, :] * u_nn, dim=-1
+        #     ).unsqueeze(-1)
+        #     clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
 
-        loss["CLBF descent term (linearized)"] = clbf_descent_term_lin
+        # loss["CLBF descent term (linearized)"] = clbf_descent_term_lin
 
         return loss
 
