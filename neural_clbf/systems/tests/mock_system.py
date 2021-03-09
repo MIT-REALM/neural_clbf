@@ -44,6 +44,21 @@ class MockSystem(ControlAffineSystem):
     def n_controls(self) -> int:
         return MockSystem.N_CONTROLS
 
+    def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the nominal (e.g. LQR or proportional) control for the nominal
+        parameters. MockSystem just returns a zero input
+
+        args:
+            x: bs x self.n_dims tensor of state
+        returns:
+            u_nominal: bs x self.n_controls tensor of controls
+        """
+        batch_size = x.shape[0]
+        u_nominal = torch.zeros((batch_size, self.n_controls)).type_as(x)
+
+        return u_nominal
+
     def _f(self, x: torch.Tensor, params: Scenario):
         """
         Return the control-independent part of the control-affine dynamics.
