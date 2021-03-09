@@ -24,6 +24,7 @@ def rollout_plotting_cb(clbf_net):
         plot_u_indices=[Quad2D.U_RIGHT, Quad2D.U_LEFT],
         plot_u_labels=["$u_r$", "$u_l$"],
         t_sim=1.0,
+        n_sims_per_start=1,
     )
 
 
@@ -41,7 +42,9 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Initialize the DataModule
-    data_module = Quad2DObstaclesDataModule(N_samples=500000, split=0.1, batch_size=256)
+    data_module = Quad2DObstaclesDataModule(
+        N_samples=1000000, split=0.1, batch_size=256
+    )
 
     # ## Setup trainer parameters ##
     # Define the dynamics model
@@ -66,7 +69,12 @@ def main(args):
 
     # Initialize the controller
     rclbf_controller = NeuralrCLBFController(
-        dynamics_model, scenarios, plotting_callbacks=plotting_callbacks
+        dynamics_model,
+        scenarios,
+        plotting_callbacks=plotting_callbacks,
+        clbf_hidden_layers=5,
+        clbf_hidden_size=48,
+        learning_rate=0.1,
     )
     # Add the DataModule hooks
     rclbf_controller.prepare_data = data_module.prepare_data

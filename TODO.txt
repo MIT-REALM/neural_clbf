@@ -1,3 +1,2 @@
-1. Debug plotting
-2. Add tests for F16
-3. Train F16
+1. Add tests for F16
+2. Train F16

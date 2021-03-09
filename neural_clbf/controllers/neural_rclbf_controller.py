@@ -87,10 +87,10 @@ class NeuralrCLBFController(pl.LightningModule):
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
             self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
-        # TODO: currently experimenting with a network that does not have to be PSD
-        # (as V = V_hidden.T * V_hidden would be). Keep in mind that this might change
-        self.V_layers["output_layer"] = nn.Linear(self.clbf_hidden_size, 1)
-        self.V = nn.Sequential(self.V_layers)
+        self.V_layers["output_layer"] = nn.Linear(
+            self.clbf_hidden_size, self.clbf_hidden_size
+        )
+        self.V_net = nn.Sequential(self.V_layers)
 
         # Also define the proof controller network, denoted u_nn
         self.clbf_hidden_layers = clbf_hidden_layers
@@ -111,6 +111,17 @@ class NeuralrCLBFController(pl.LightningModule):
             self.clbf_hidden_size, self.dynamics_model.n_controls
         )
         self.u_NN = nn.Sequential(self.u_NN_layers)
+
+    def V(self, x: torch.Tensor) -> torch.Tensor:
+        """Computes the CLBF value from the output layer of V_net
+
+        args:
+            x: bs x sellf.dynamics_model.n_dims the points at which to evaluate the CLBF
+        """
+        # Compute the CLBF as the sum-squares of the output layer activations
+        V_output = self.V_net(x)
+        V = 0.5 * (V_output * V_output).sum(-1)
+        return V
 
     def V_lie_derivatives(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute the Lie derivatives of the CLBF V along the control-affine dynamics

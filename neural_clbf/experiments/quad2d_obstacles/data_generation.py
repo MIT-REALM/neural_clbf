@@ -45,11 +45,11 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         if domains is None:
             self.domains = [
                 [
-                    (-4.0, 4.0),  # x
-                    (-4.0, 4.0),  # z
+                    (-2.0, 2.0),  # x
+                    (-2.0, 2.0),  # z
                     (-np.pi, np.pi),  # theta
-                    (-10.0, 10.0),  # vx
-                    (-10.0, 10.0),  # vz
+                    (-5.0, 5.0),  # vx
+                    (-5.0, 5.0),  # vz
                     (-np.pi, np.pi),  # roll
                 ],
                 [
@@ -59,6 +59,14 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
                     (-1.0, 1.0),
                     (-1.0, 1.0),
                     (-np.pi, np.pi),
+                ],
+                [
+                    (-0.2, 0.2),
+                    (-0.2, 0.2),
+                    (-0.5, 0.5),
+                    (-0.5, 0.5),
+                    (-0.5, 0.5),
+                    (-0.5, 0.5),
                 ],
             ]
         else:
@@ -135,7 +143,7 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         unsafe_mask.logical_or_(obs2_mask)
 
         # Also constrain with a norm bound
-        norm_mask = x.norm(dim=-1) >= 5.0
+        norm_mask = x.norm(dim=-1) >= 7.0
         unsafe_mask.logical_or_(norm_mask)
 
         return unsafe_mask
@@ -149,16 +157,14 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         """
         goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
-        # Define the goal region as being within 0.2 m of the goal, with an angle
-        # less than 0.2 radians, with linear velocity less than 0.2 m/s and angular
-        # velocity less than 0.2 rad/s (in absolute value)
+        # Define the goal region as being near the goal
         near_goal_xz = x[:, : Quad2D.PZ + 1].norm(dim=-1) <= 0.2
         goal_mask.logical_and_(near_goal_xz)
-        near_goal_theta = x[:, Quad2D.THETA].abs() <= 0.2
+        near_goal_theta = x[:, Quad2D.THETA].abs() <= 0.5
         goal_mask.logical_and_(near_goal_theta)
-        near_goal_xz_velocity = x[:, Quad2D.VX : Quad2D.VZ + 1].norm(dim=-1) <= 0.2
+        near_goal_xz_velocity = x[:, Quad2D.VX : Quad2D.VZ + 1].norm(dim=-1) <= 0.5
         goal_mask.logical_and_(near_goal_xz_velocity)
-        near_goal_theta_velocity = x[:, Quad2D.THETA_DOT].abs() <= 0.2
+        near_goal_theta_velocity = x[:, Quad2D.THETA_DOT].abs() <= 0.5
         goal_mask.logical_and_(near_goal_theta_velocity)
 
         # The goal set has to be a subset of the safe set

@@ -103,7 +103,7 @@ def plot_CLBF(
 
     # Make the plots
     fig, axs = plt.subplots(1, 2)
-    fig.set_size_inches(16, 16)
+    fig.set_size_inches(14, 8)
 
     # First for V
     contours = axs[0].contourf(
