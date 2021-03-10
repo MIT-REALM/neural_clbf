@@ -42,13 +42,14 @@ class Quad2D(ControlAffineSystem):
     U_RIGHT = 0
     U_LEFT = 1
 
-    def __init__(self, nominal_params: Scenario):
+    def __init__(self, nominal_params: Scenario, dt: float = 0.01):
         """
         Initialize the quadrotor.
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
                             Requires keys ["m", "I", "r"]
+            dt: the timestep to use for the LQR discretization
         raises:
             ValueError if nominal_params are not valid for this system
         """
@@ -67,6 +68,10 @@ class Quad2D(ControlAffineSystem):
         B[4, 1] = 1.0 / self.nominal_params["m"]
         B[5, 0] = self.nominal_params["r"] / self.nominal_params["I"]
         B[5, 1] = -self.nominal_params["r"] / self.nominal_params["I"]
+
+        # Adapt for discrete time
+        A = np.eye(self.n_dims) + dt * A
+        B = dt * B
 
         # Define cost matrices as identity
         Q = np.eye(self.n_dims)

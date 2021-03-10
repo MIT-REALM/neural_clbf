@@ -53,8 +53,8 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
                     (-np.pi, np.pi),  # roll
                 ],
                 [
-                    (-0.5, 0.5),
-                    (-0.5, 0.5),
+                    (-1.0, 1.0),
+                    (-1.0, 1.0),
                     (-0.4 * np.pi, 0.4 * np.pi),
                     (-1.0, 1.0),
                     (-1.0, 1.0),
@@ -160,11 +160,11 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
         # Define the goal region as being near the goal
         near_goal_xz = x[:, : Quad2D.PZ + 1].norm(dim=-1) <= 0.2
         goal_mask.logical_and_(near_goal_xz)
-        near_goal_theta = x[:, Quad2D.THETA].abs() <= 0.5
+        near_goal_theta = x[:, Quad2D.THETA].abs() <= 1.0
         goal_mask.logical_and_(near_goal_theta)
-        near_goal_xz_velocity = x[:, Quad2D.VX : Quad2D.VZ + 1].norm(dim=-1) <= 0.5
+        near_goal_xz_velocity = x[:, Quad2D.VX : Quad2D.VZ + 1].norm(dim=-1) <= 1.0
         goal_mask.logical_and_(near_goal_xz_velocity)
-        near_goal_theta_velocity = x[:, Quad2D.THETA_DOT].abs() <= 0.5
+        near_goal_theta_velocity = x[:, Quad2D.THETA_DOT].abs() <= 1.0
         goal_mask.logical_and_(near_goal_theta_velocity)
 
         # The goal set has to be a subset of the safe set

@@ -181,6 +181,8 @@ class NeuralrCLBFController(pl.LightningModule):
         batch_size = x.shape[0]
         u_batched = torch.zeros(batch_size, self.dynamics_model.n_controls)
         u_batched = u_batched.type_as(x)
+        # Get nominal control to compare with
+        u_nominal = self.dynamics_model.u_nominal(x)
         for i in range(batch_size):
             # Create an optimization problem to find a good input
             opti = casadi.Opti()
@@ -188,7 +190,8 @@ class NeuralrCLBFController(pl.LightningModule):
             u = opti.variable(self.dynamics_model.n_controls)
 
             # The objective is simple: minimize the size of the control input
-            opti.minimize(casadi.sumsqr(u))
+            u_nominal_np = u_nominal[i, :].squeeze().cpu().numpy()
+            opti.minimize(casadi.sumsqr(u - u_nominal_np))
 
             # Add a constraint for CLBF decrease in each scenario
             for j in range(self.n_scenarios):
@@ -246,12 +249,12 @@ class NeuralrCLBFController(pl.LightningModule):
         #   3.) V <= safe_level in the safe region
         V_safe = self.V(x[safe_mask])
         safe_clbf_term = F.relu(eps + V_safe - self.clbf_safety_level)
-        loss["CLBF safe region term"] = 100.0 * safe_clbf_term.mean()
+        loss["CLBF safe region term"] = safe_clbf_term.mean()
 
         #   4.) V >= safe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
         unsafe_clbf_term = F.relu(eps + self.clbf_safety_level - V_unsafe)
-        loss["CLBF unsafe region term"] = 100.0 * unsafe_clbf_term.mean()
+        loss["CLBF unsafe region term"] = unsafe_clbf_term.mean()
 
         # #   5.) A term to encourage satisfaction of CLBF decrease condition
         # # We compute the change in V in two ways:
@@ -261,18 +264,18 @@ class NeuralrCLBFController(pl.LightningModule):
         # # In both cases we use u_NN, but (b) provides a stronger training signal
         # # on u_NN.
 
-        # Start with (5a): CLBF decrease in simulation
-        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        V = self.V(x)
-        u_nn = self.u_NN(x)
-        for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
-            x_next = x + self.clbf_timestep * xdot
-            V_next = self.V(x_next)
-            clbf_descent_term_sim += F.relu(
-                eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
-            ).mean()
-        loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
+        # # Start with (5a): CLBF decrease in simulation
+        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        # V = self.V(x)
+        # u_nn = self.u_NN(x)
+        # for s in self.scenarios:
+        #     xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
+        #     x_next = x + self.clbf_timestep * xdot
+        #     V_next = self.V(x_next)
+        #     clbf_descent_term_sim += F.relu(
+        #         eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
+        #     ).mean()
+        # loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
 
         # # Then do (5b): CLBF decrease from linearization in each scenario
         # Lf_V, Lg_V = self.V_lie_derivatives(x)
@@ -300,9 +303,10 @@ class NeuralrCLBFController(pl.LightningModule):
 
         # Add a loss term for the control input magnitude
         u_nn = self.u_NN(x)
-        controller_squared_magnitude = (u_nn ** 2).sum(dim=-1)
-        loss["Control effort magnitude"] = (
-            self.control_loss_weight * controller_squared_magnitude.mean()
+        u_nominal = self.dynamics_model.u_nominal(x)
+        controller_squared_difference = ((u_nn - u_nominal) ** 2).sum(dim=-1)
+        loss["Control effort difference from nominal"] = (
+            self.control_loss_weight * controller_squared_difference.mean()
         )
 
         return loss

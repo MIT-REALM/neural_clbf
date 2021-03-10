@@ -158,7 +158,8 @@ def rollout_CLBF(
     plot_u_labels: Optional[List[str]] = None,
     n_sims_per_start: int = 5,
     t_sim: float = 5.0,
-    delta_t: float = 0.01,
+    delta_t: float = 0.001,
+    controller_period: float = 0.01,
 ) -> Tuple[str, plt.figure]:
     """Simulate the performance of the controller over time
 
@@ -174,7 +175,8 @@ def rollout_CLBF(
         n_sims_per_start: the number of simulations to run (with random parameters),
                           per row in start_x
         t_sim: the amount of time to simulate for
-        delta_t: the simulation timestep
+        delta_t: the simulation timestep,
+        controller_period: the period determining how often the controller is run
     returns:
         a matplotlib.pyplot.figure containing the plots of state and control input
         over time.
@@ -238,15 +240,20 @@ def rollout_CLBF(
     ).type_as(start_x)
     t_final = 0
     controller_failed = False
+    controller_update_freq = int(controller_period / delta_t)
     try:
         print("Simulating CLBF rollout...")
         prog_bar_range = tqdm.trange(1, num_timesteps, desc="CLBF Rollout", leave=True)
         for tstep in prog_bar_range:
             # Get the current state
             x_current = x_sim[tstep - 1, :, :]
-            # Get the control input at the current state
-            u = clbf_net(x_current)
-            u_sim[tstep, :, :] = u
+            # Get the control input at the current state if it's time
+            if tstep == 1 or tstep % controller_update_freq == 0:
+                u = clbf_net(x_current)
+                u_sim[tstep, :, :] = u
+            else:
+                u = u_sim[tstep - 1, :, :]
+                u_sim[tstep, :, :] = u
 
             # Simulate forward using the dynamics
             for i in range(n_sims):
@@ -282,8 +289,8 @@ def rollout_CLBF(
     ax2 = axs[1]
     for i_trace in range(len(plot_u_indices)):
         ax2.plot(
-            t[:t_final],
-            u_sim[:t_final, :, plot_u_indices[i_trace]].cpu(),
+            t[1:t_final],
+            u_sim[1:t_final, :, plot_u_indices[i_trace]].cpu(),
             label=plot_u_labels[i_trace],
         )
 
