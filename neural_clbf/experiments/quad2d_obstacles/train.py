@@ -19,7 +19,7 @@ from neural_clbf.systems import Quad2D
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-controller_period = 0.1
+controller_period = 0.01
 
 
 def rollout_plotting_cb(clbf_net):
