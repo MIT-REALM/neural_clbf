@@ -57,8 +57,11 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-2.0, 1.0), (-0.5, 1.5)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
-        n_grid=25,
+        domain=[(400.0, 600.0), (0.0, 1500)],
+        default_state=torch.tensor(
+            [[500.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 500, 5, 0, 0, 0]]
+        ),
+        n_grid=30,
         x_axis_index=F16.VT,
         y_axis_index=F16.H,
         x_axis_label="$h$",
