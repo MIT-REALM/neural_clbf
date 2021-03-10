@@ -48,10 +48,10 @@ class F16GcasDataModule(pl.LightningDataModule):
             self.domains = [
                 [
                     (400, 600),  # vt
-                    (-np.pi, np.pi),  # alpha
-                    (-np.pi, np.pi),  # beta
-                    (-np.pi, np.pi),  # phi
-                    (-np.pi, np.pi),  # theta
+                    (-1.0, 1.0),  # alpha
+                    (-1.0, 1.0),  # beta
+                    (-np.pi / 2.0, np.pi / 2.0),  # phi
+                    (-np.pi / 2.0, np.pi / 2.0),  # theta
                     (-np.pi, np.pi),  # psi
                     (-2 * np.pi, 2 * np.pi),  # P
                     (-2 * np.pi, 2 * np.pi),  # Q

@@ -246,7 +246,7 @@ class F16(ControlAffineSystem):
             # mapping from state to control
 
             # If the plane is not hurtling towards the ground, no need to do anything.
-            if gcas.is_nose_high_enough(x[batch, :]) or gcas.is_above_flight_deck(
+            if gcas.is_nose_high_enough(x_np[batch, :]) or gcas.is_above_flight_deck(
                 x_np[batch, :]
             ):
                 continue
