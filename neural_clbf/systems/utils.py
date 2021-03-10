@@ -20,13 +20,14 @@ def lqr(
     R: np.ndarray,
     return_eigs: bool = False,
 ):
-    """Solve the continuous time lqr controller.
+    """Solve the discrete time lqr controller.
 
-    dx/dt = A x + B u
+    x_{t+1} = A x_t + B u_t
 
-    cost = integral x.T*Q*x + u.T*R*u
+    cost = sum x.T*Q*x + u.T*R*u
 
-    Code from Mark Wilfred Mueller at http://www.mwm.im/lqr-controllers-with-python/
+    Code adapted from Mark Wilfred Mueller's continuous LQR code at
+    http://www.mwm.im/lqr-controllers-with-python/
 
     Based on Bertsekas, p.151
 
@@ -34,10 +35,10 @@ def lqr(
     """
 
     # first, try to solve the ricatti equation
-    X = scipy.linalg.solve_continuous_are(A, B, Q, R)
+    X = scipy.linalg.solve_discrete_are(A, B, Q, R)
 
     # compute the LQR gain
-    K = scipy.linalg.inv(R) @ (B.T @ X)
+    K = scipy.linalg.inv(B.T @ X @ B + R) @ (B.T @ X @ A)
 
     if not return_eigs:
         return K

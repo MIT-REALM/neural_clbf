@@ -56,9 +56,9 @@ def test_quad2d_obstacles_goal_mask():
         [
             [0.2, 0.1, 0.0, 0.0, 0.0, 0.0],  # too far in xz
             [0.1, 0.2, 0.0, 0.0, 0.0, 0.0],  # too far in xz
-            [0.0, 0.0, 0.0, 0.5, 0.1, 0.0],  # too fast in xz
-            [0.0, 0.0, 0.0, 0.1, 0.5, 0.0],  # too fast in xz
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.6],  # too fast in theta dot
+            [0.0, 0.0, 0.0, 1.0, 0.1, 0.0],  # too fast in xz
+            [0.0, 0.0, 0.0, 0.1, 1.0, 0.0],  # too fast in xz
+            [0.0, 0.0, 0.0, 0.0, 0.0, 1.1],  # too fast in theta dot
         ]
     )
     assert torch.all(torch.logical_not(dm.goal_mask_fn(out_of_goal_mask)))
