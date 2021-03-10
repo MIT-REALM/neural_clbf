@@ -103,7 +103,7 @@ def plot_CLBF(
 
     # Make the plots
     fig, axs = plt.subplots(1, 2)
-    fig.set_size_inches(14, 8)
+    fig.set_size_inches(10, 6)
 
     # First for V
     contours = axs[0].contourf(
@@ -269,7 +269,7 @@ def rollout_CLBF(
         controller_failed = True
 
     fig, axs = plt.subplots(2, 1)
-    fig.set_size_inches(16, 16)
+    fig.set_size_inches(10, 6)
     t = np.linspace(0, t_sim, num_timesteps)
     ax1 = axs[0]
     for i_trace in range(len(plot_x_indices)):
