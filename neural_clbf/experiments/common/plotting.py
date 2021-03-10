@@ -1,5 +1,5 @@
 """Functions for plotting experimental results"""
-from typing import List, Tuple, Optional, TYPE_CHECKING
+from typing import Callable, List, Tuple, Optional, TYPE_CHECKING
 import random
 
 import numpy as np
@@ -160,6 +160,7 @@ def rollout_CLBF(
     t_sim: float = 5.0,
     delta_t: float = 0.001,
     controller_period: float = 0.01,
+    goal_check_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
 ) -> Tuple[str, plt.figure]:
     """Simulate the performance of the controller over time
 
@@ -177,6 +178,8 @@ def rollout_CLBF(
         t_sim: the amount of time to simulate for
         delta_t: the simulation timestep,
         controller_period: the period determining how often the controller is run
+        goal_check_fn: a function that takes a tensor and returns a tensor of booleans
+                       indicating whether a state is in the goal
     returns:
         a matplotlib.pyplot.figure containing the plots of state and control input
         over time.
@@ -265,6 +268,11 @@ def rollout_CLBF(
                 x_sim[tstep, i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
             t_final = tstep
+            # If we've reached the goal, then stop the rollout
+            if goal_check_fn is not None:
+                if goal_check_fn(x_sim[tstep, :, :]).all():
+                    break
+
     except (Exception, RuntimeError):
         controller_failed = True
 
