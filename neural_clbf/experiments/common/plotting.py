@@ -243,6 +243,7 @@ def rollout_CLBF(
     ).type_as(start_x)
     t_final = 0
     controller_failed = False
+    goal_reached = False
     controller_update_freq = int(controller_period / delta_t)
     try:
         print("Simulating CLBF rollout...")
@@ -271,6 +272,7 @@ def rollout_CLBF(
             # If we've reached the goal, then stop the rollout
             if goal_check_fn is not None:
                 if goal_check_fn(x_sim[tstep, :, :]).all():
+                    goal_reached = True
                     break
 
     except (Exception, RuntimeError):
@@ -288,6 +290,8 @@ def rollout_CLBF(
         )
 
     # If the controller fails, mark that on the plot
+    if goal_reached:
+        ax1.set_title("Goal reached!")
     if controller_failed:
         ax1.set_title("Controller failure!")
 
