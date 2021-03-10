@@ -19,40 +19,13 @@ from neural_clbf.systems import Quad2D
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-controller_period = 0.01
-
-
-def rollout_plotting_cb(clbf_net):
-    return rollout_CLBF(
-        clbf_net,
-        start_x=torch.tensor([[-1.5, 0.1, 0.0, 0.0, 0.0, 0.0]]),
-        plot_x_indices=[Quad2D.PX, Quad2D.PZ],
-        plot_x_labels=["$x$", "$z$"],
-        plot_u_indices=[Quad2D.U_RIGHT, Quad2D.U_LEFT],
-        plot_u_labels=["$u_r$", "$u_l$"],
-        t_sim=6.0,
-        n_sims_per_start=1,
-        controller_period=controller_period,
-    )
-
-
-def clbf_plotting_cb(clbf_net):
-    return plot_CLBF(
-        clbf_net,
-        domain=[(-2.0, 1.0), (-0.5, 1.5)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
-        n_grid=15,
-        x_axis_index=Quad2D.PX,
-        y_axis_index=Quad2D.PZ,
-        x_axis_label="$x$",
-        y_axis_label="$z$",
-    )
-
-
 def main(args):
     # Initialize the DataModule
     data_module = Quad2DObstaclesDataModule(N_samples=500000, split=0.1, batch_size=256)
 
     # ## Setup trainer parameters ##
+    controller_period = 0.01
+
     # Define the dynamics model
     nominal_params = {"m": 1.0, "I": 0.001, "r": 0.25}
     dynamics_model = Quad2D(nominal_params, dt=controller_period)
@@ -66,6 +39,30 @@ def main(args):
     ]
 
     # Define the plotting callbacks
+    def rollout_plotting_cb(clbf_net):
+        return rollout_CLBF(
+            clbf_net,
+            start_x=torch.tensor([[-1.5, 0.1, 0.0, 0.0, 0.0, 0.0]]),
+            plot_x_indices=[Quad2D.PX, Quad2D.PZ],
+            plot_x_labels=["$x$", "$z$"],
+            plot_u_indices=[Quad2D.U_RIGHT, Quad2D.U_LEFT],
+            plot_u_labels=["$u_r$", "$u_l$"],
+            t_sim=6.0,
+            n_sims_per_start=1,
+            controller_period=controller_period,
+            goal_check_fn=data_module.goal_mask_fn,
+        )
+
+    def clbf_plotting_cb(clbf_net):
+        return plot_CLBF(
+            clbf_net,
+            domain=[(-2.0, 1.0), (-0.5, 1.5)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
+            n_grid=15,
+            x_axis_index=Quad2D.PX,
+            y_axis_index=Quad2D.PZ,
+            x_axis_label="$x$",
+            y_axis_label="$z$",
+        )
     plotting_callbacks = [
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
