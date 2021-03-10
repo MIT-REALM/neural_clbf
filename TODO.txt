@@ -1,1 +1,2 @@
-1. Finish tests for the F16 GCAS datamodule
+1. Fix issue with safe/unsafe/goal terms getting washed out with zeros
+2. Finish tests for the F16 GCAS datamodule

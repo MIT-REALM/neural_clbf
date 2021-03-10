@@ -58,7 +58,7 @@ class F16GcasDataModule(pl.LightningDataModule):
                     (-2 * np.pi, 2 * np.pi),  # R
                     (-1000, 1000),  # pos_n
                     (-1000, 1000),  # pos_e
-                    (-500, 1500),  # alt
+                    (0.0, 1500),  # alt
                     (0, 10),  # pow
                     (-20, 20),  # nz_int
                     (-20, 20),  # ps_int
