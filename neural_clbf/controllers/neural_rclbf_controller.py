@@ -241,26 +241,17 @@ class NeuralrCLBFController(pl.LightningModule):
         #   1.) CLBF value should be non-positive on the goal set.
         V0 = self.V(x[goal_mask])
         goal_term = F.relu(V0)
-        if goal_term.nelement() > 0:
-            loss["CLBF goal term"] = goal_term.mean()
-        else:
-            loss["CLBF goal term"] = torch.tensor(0.0).type_as(x)
+        loss["CLBF goal term"] = goal_term.mean()
 
         #   3.) V <= safe_level in the safe region
         V_safe = self.V(x[safe_mask])
         safe_clbf_term = F.relu(eps + V_safe - self.clbf_safety_level)
-        if safe_clbf_term.nelement() > 0:
-            loss["CLBF safe region term"] = safe_clbf_term.mean()
-        else:
-            loss["CLBF safe region term"] = torch.tensor(0.0).type_as(x)
+        loss["CLBF safe region term"] = 100.0 * safe_clbf_term.mean()
 
         #   4.) V >= safe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
         unsafe_clbf_term = F.relu(eps + self.clbf_safety_level - V_unsafe)
-        if unsafe_clbf_term.nelement() > 0:
-            loss["CLBF unsafe region term"] = unsafe_clbf_term.mean()
-        else:
-            loss["CLBF unsafe region term"] = torch.tensor(0.0).type_as(x)
+        loss["CLBF unsafe region term"] = 100.0 * unsafe_clbf_term.mean()
 
         # #   5.) A term to encourage satisfaction of CLBF decrease condition
         # # We compute the change in V in two ways:
@@ -331,7 +322,8 @@ class NeuralrCLBFController(pl.LightningModule):
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
         for _, loss_value in component_losses.items():
-            total_loss += loss_value
+            if not torch.isnan(loss_value):
+                total_loss += loss_value
 
         batch_dict = {"loss": total_loss, **component_losses}
 
@@ -342,7 +334,9 @@ class NeuralrCLBFController(pl.LightningModule):
         # Compute the average loss over all batches for each component
         avg_losses = {}
         for loss_key in outputs[0].keys():
-            avg_losses[loss_key] = torch.stack([x[loss_key] for x in outputs]).mean()
+            avg_losses[loss_key] = torch.stack(
+                [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
+            ).mean()
 
         # Log the overall loss...
         self.log("Total loss / train", avg_losses["loss"], sync_dist=True)
@@ -369,7 +363,8 @@ class NeuralrCLBFController(pl.LightningModule):
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
         for _, loss_value in component_losses.items():
-            total_loss += loss_value
+            if not torch.isnan(loss_value):
+                total_loss += loss_value
 
         batch_dict = {"val_loss": total_loss, **component_losses}
 
@@ -380,7 +375,9 @@ class NeuralrCLBFController(pl.LightningModule):
         # Compute the average loss over all batches for each component
         avg_losses = {}
         for loss_key in outputs[0].keys():
-            avg_losses[loss_key] = torch.stack([x[loss_key] for x in outputs]).mean()
+            avg_losses[loss_key] = torch.stack(
+                [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
+            ).mean()
 
         # Log the overall loss...
         self.log("Total loss / val", avg_losses["val_loss"], sync_dist=True)

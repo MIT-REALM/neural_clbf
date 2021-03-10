@@ -64,8 +64,8 @@ def clbf_plotting_cb(clbf_net):
         n_grid=30,
         x_axis_index=F16.VT,
         y_axis_index=F16.H,
-        x_axis_label="$h$",
-        y_axis_label="$v$",
+        x_axis_label="$v$",
+        y_axis_label="$h$",
     )
 
 

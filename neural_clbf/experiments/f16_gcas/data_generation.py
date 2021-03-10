@@ -82,8 +82,8 @@ class F16GcasDataModule(pl.LightningDataModule):
         """
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
-        # We have a floor that we need to avoid
-        safe_height = 400
+        # GCAS activates under 1000 feet
+        safe_height = 1000
         floor_mask = x[:, F16.H] >= safe_height
         safe_mask.logical_and_(floor_mask)
 
@@ -98,7 +98,7 @@ class F16GcasDataModule(pl.LightningDataModule):
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
 
         # We have a floor that we need to avoid
-        unsafe_height = 200
+        unsafe_height = 500
         floor_mask = x[:, F16.H] <= unsafe_height
         unsafe_mask.logical_or_(floor_mask)
 
