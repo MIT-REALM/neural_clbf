@@ -24,7 +24,7 @@ def main(args):
     data_module = Quad2DObstaclesDataModule(N_samples=500000, split=0.1, batch_size=256)
 
     # ## Setup trainer parameters ##
-    controller_period = 0.01
+    controller_period = 0.001
 
     # Define the dynamics model
     nominal_params = {"m": 1.0, "I": 0.001, "r": 0.25}
@@ -63,6 +63,7 @@ def main(args):
             x_axis_label="$x$",
             y_axis_label="$z$",
         )
+
     plotting_callbacks = [
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
