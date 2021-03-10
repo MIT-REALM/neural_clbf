@@ -61,7 +61,7 @@ def clbf_plotting_cb(clbf_net):
         default_state=torch.tensor(
             [[500.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 500, 5, 0, 0, 0]]
         ),
-        n_grid=30,
+        n_grid=20,
         x_axis_index=F16.VT,
         y_axis_index=F16.H,
         x_axis_label="$v$",
@@ -71,7 +71,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Initialize the DataModule
-    data_module = F16GcasDataModule(N_samples=50000, split=0.1, batch_size=256)
+    data_module = F16GcasDataModule(N_samples=500000, split=0.1, batch_size=256)
 
     # ## Setup trainer parameters ##
     # Define the dynamics model

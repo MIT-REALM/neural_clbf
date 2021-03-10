@@ -256,26 +256,26 @@ class NeuralrCLBFController(pl.LightningModule):
         unsafe_clbf_term = F.relu(eps + self.clbf_safety_level - V_unsafe)
         loss["CLBF unsafe region term"] = unsafe_clbf_term.mean()
 
-        # #   5.) A term to encourage satisfaction of CLBF decrease condition
-        # # We compute the change in V in two ways:
-        # #       a) simulating x forward in time and checking if V decreases
-        # #          in each scenario
-        # #       b) Linearizing V along f.
-        # # In both cases we use u_NN, but (b) provides a stronger training signal
-        # # on u_NN.
+        #   5.) A term to encourage satisfaction of CLBF decrease condition
+        # We compute the change in V in two ways:
+        #       a) simulating x forward in time and checking if V decreases
+        #          in each scenario
+        #       b) Linearizing V along f.
+        # In both cases we use u_NN, but (b) provides a stronger training signal
+        # on u_NN.
 
-        # # Start with (5a): CLBF decrease in simulation
-        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        # V = self.V(x)
-        # u_nn = self.u_NN(x)
-        # for s in self.scenarios:
-        #     xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
-        #     x_next = x + self.clbf_timestep * xdot
-        #     V_next = self.V(x_next)
-        #     clbf_descent_term_sim += F.relu(
-        #         eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
-        #     ).mean()
-        # loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
+        # Start with (5a): CLBF decrease in simulation
+        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        V = self.V(x)
+        u_nn = self.u_NN(x)
+        for s in self.scenarios:
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
+            x_next = x + self.clbf_timestep * xdot
+            V_next = self.V(x_next)
+            clbf_descent_term_sim += F.relu(
+                eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
+            ).mean()
+        loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
 
         # # Then do (5b): CLBF decrease from linearization in each scenario
         # Lf_V, Lg_V = self.V_lie_derivatives(x)
@@ -379,9 +379,9 @@ class NeuralrCLBFController(pl.LightningModule):
         # Compute the average loss over all batches for each component
         avg_losses = {}
         for loss_key in outputs[0].keys():
-            avg_losses[loss_key] = torch.stack(
-                [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
-            ).mean()
+            losses = [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
+            if len(losses) > 0:
+                avg_losses[loss_key] = torch.stack(losses).mean()
 
         # Log the overall loss...
         self.log("Total loss / val", avg_losses["val_loss"], sync_dist=True)
