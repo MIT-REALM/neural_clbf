@@ -1,2 +1,2 @@
-1. Fix issue with safe/unsafe/goal terms getting washed out with zeros
+1. Add nominal controller
 2. Finish tests for the F16 GCAS datamodule
