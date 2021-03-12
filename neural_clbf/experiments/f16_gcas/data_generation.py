@@ -114,8 +114,8 @@ class F16GcasDataModule(pl.LightningDataModule):
         """
         goal_dist = (
             F.relu(-x[:, F16.THETA] - x[:, F16.ALPHA])
-            + F.relu(x[:, F16.P].abs() - 0.1745)
-            + F.relu(x[:, F16.PHI].abs() - 0.0873)
+            + F.relu(x[:, F16.P].abs() - 0.25)
+            + F.relu(x[:, F16.PHI].abs() - 0.1)
             + F.relu(1000.0 - x[:, F16.H])
         )
 
@@ -132,11 +132,11 @@ class F16GcasDataModule(pl.LightningDataModule):
 
         # Define the goal region as anywhere where the aircraft is near level and above
         # the deck
-        nose_high_enough = x[:, F16.THETA] + x[:, F16.ALPHA] >= 0.0
+        nose_high_enough = x[:, F16.THETA] + x[:, F16.ALPHA] <= 0.0
         goal_mask.logical_and_(nose_high_enough)
-        roll_rate_low = x[:, F16.P].abs() <= 0.1745  # 10 degrees to radians
+        roll_rate_low = x[:, F16.P].abs() <= 0.25
         goal_mask.logical_and_(roll_rate_low)
-        wings_near_level = x[:, F16.PHI].abs() <= 0.0873  # 5 degrees to radians
+        wings_near_level = x[:, F16.PHI].abs() <= 0.1
         goal_mask.logical_and_(wings_near_level)
         above_deck = x[:, F16.H] >= 1000.0
         goal_mask.logical_and_(above_deck)
