@@ -122,9 +122,9 @@ def test_f16_datamodule():
     assert len(dm.validation_data) == num_validation_pts
     # Each of those things should have the appropriate number of items
     for data in dm.train_data:
-        assert len(data) == 5
+        assert len(data) == 4
     for data in dm.validation_data:
-        assert len(data) == 5
+        assert len(data) == 4
 
 
 def test_f16_datamodule_dataloaders():
