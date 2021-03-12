@@ -256,8 +256,10 @@ class NeuralrCLBFController(pl.LightningModule):
         loss["CLBF goal term"] = goal_term.mean()
 
         #   2.) In the safe region, V should be agree with distance from the goal region
+        # exclude the goal region from this calculation
+        safe_mask = torch.logical_and(safe_mask, torch.logical_not(goal_mask))
         V_safe = self.V(x[safe_mask])
-        goal_distance_term = F.relu(0.1 * goal_dist[safe_mask] - V_safe)
+        goal_distance_term = 0.1 * F.relu(0.1 * goal_dist[safe_mask] - V_safe)
         loss["CLBF goal distance term"] = goal_distance_term.mean()
 
         #   3.) V <= safe_level in the safe region
