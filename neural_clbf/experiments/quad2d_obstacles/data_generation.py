@@ -3,7 +3,6 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.utils.data import TensorDataset, DataLoader, random_split
 
@@ -173,22 +172,6 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
 
         return goal_mask
 
-    def goal_dist_fn(self, x):
-        """Return the distance from each row in x to the goal state. Points within the
-        goal state should have distance 0.
-
-        args:
-            x: a tensor of points in the state space
-        """
-        goal_dist = (
-            F.relu(x[:, : Quad2D.PZ + 1].norm(dim=-1) - 0.2)
-            + F.relu(x[:, Quad2D.THETA].abs() - 1.0)
-            + F.relu(x[:, Quad2D.VX : Quad2D.VZ + 1].norm(dim=-1) - 1.0)
-            + F.relu(x[:, Quad2D.THETA_DOT].abs() - 1.0)
-        )
-
-        return goal_dist
-
     def prepare_data(self):
         """Create the dataset by randomly sampling from the domains"""
         # Loop through each domain, sample from it, and store the samples in this list
@@ -208,15 +191,13 @@ class Quad2DObstaclesDataModule(pl.LightningDataModule):
 
         # Create the goal mask for the sampled points
         goal_mask = self.goal_mask_fn(x)
-        # and get the distance to the goal for each point
-        goal_dist = self.goal_dist_fn(x)
 
         # Create the safe/unsafe masks for the sampled points
         safe_mask = self.safe_mask_fn(x)
         unsafe_mask = self.unsafe_mask_fn(x)
 
         # Combine all of these into a single dataset and save it
-        self.dataset = TensorDataset(x, goal_mask, goal_dist, safe_mask, unsafe_mask)
+        self.dataset = TensorDataset(x, goal_mask, safe_mask, unsafe_mask)
 
     def setup(self, stage=None):
         """Setup the data for training and validation"""

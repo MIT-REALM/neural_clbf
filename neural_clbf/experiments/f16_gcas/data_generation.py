@@ -3,7 +3,6 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.utils.data import TensorDataset, DataLoader, random_split
 
@@ -105,22 +104,6 @@ class F16GcasDataModule(pl.LightningDataModule):
 
         return unsafe_mask
 
-    def goal_dist_fn(self, x):
-        """Return the distance from each row in x to the goal state. Points within the
-        goal state should have distance 0.
-
-        args:
-            x: a tensor of points in the state space
-        """
-        goal_dist = (
-            F.relu(-x[:, F16.THETA] - x[:, F16.ALPHA])
-            + F.relu(x[:, F16.P].abs() - 0.25)
-            + F.relu(x[:, F16.PHI].abs() - 0.1)
-            + F.relu(1000.0 - x[:, F16.H])
-        )
-
-        return goal_dist
-
     def goal_mask_fn(self, x):
         """Return the mask of x indicating points in the goal set (within 0.2 m of the
         goal).
@@ -162,15 +145,13 @@ class F16GcasDataModule(pl.LightningDataModule):
 
         # Create the goal mask for the sampled points
         goal_mask = self.goal_mask_fn(x)
-        # Get the distance from each point in x to the goal
-        goal_dist = self.goal_dist_fn(x)
 
         # Create the safe/unsafe masks for the sampled points
         safe_mask = self.safe_mask_fn(x)
         unsafe_mask = self.unsafe_mask_fn(x)
 
         # Combine all of these into a single dataset and save it
-        self.dataset = TensorDataset(x, goal_mask, goal_dist, safe_mask, unsafe_mask)
+        self.dataset = TensorDataset(x, goal_mask, safe_mask, unsafe_mask)
 
     def setup(self, stage=None):
         """Setup the data for training and validation"""
