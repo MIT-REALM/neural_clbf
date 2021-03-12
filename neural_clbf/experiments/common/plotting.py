@@ -241,6 +241,7 @@ def rollout_CLBF(
     u_sim = torch.zeros(
         num_timesteps, n_sims, clbf_net.dynamics_model.n_controls
     ).type_as(start_x)
+    V_sim = torch.zeros(num_timesteps, n_sims, 1).type_as(start_x)
     t_final = 0
     controller_failed = False
     goal_reached = False
@@ -268,6 +269,9 @@ def rollout_CLBF(
                 )
                 x_sim[tstep, i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
+            # Compute the CLBF value
+            V_sim[tstep, :, :] = clbf_net.V(x_sim[tstep, :, :])
+
             t_final = tstep
             # If we've reached the goal, then stop the rollout
             if goal_check_fn is not None:
@@ -278,8 +282,8 @@ def rollout_CLBF(
     except (Exception, RuntimeError):
         controller_failed = True
 
-    fig, axs = plt.subplots(2, 1)
-    fig.set_size_inches(10, 6)
+    fig, axs = plt.subplots(3, 1)
+    fig.set_size_inches(10, 12)
     t = np.linspace(0, t_sim, num_timesteps)
     ax1 = axs[0]
     for i_trace in range(len(plot_x_indices)):
@@ -308,6 +312,15 @@ def rollout_CLBF(
 
     ax2.set_xlabel("$t$")
     ax2.legend()
+
+    ax3 = axs[2]
+    ax3.plot(
+        t[1:t_final],
+        V_sim[1:t_final, :, 0].cpu(),
+    )
+
+    ax3.set_xlabel("$t$")
+    ax3.set_ylabel("$V$")
 
     fig.tight_layout()
 
