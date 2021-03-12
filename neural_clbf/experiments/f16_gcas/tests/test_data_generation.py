@@ -1,5 +1,5 @@
 """Test the data generation for the 2D quadrotor with obstacles"""
-# import torch
+import torch
 import numpy as np
 
 from neural_clbf.experiments.f16_gcas.data_generation import (
@@ -7,24 +7,58 @@ from neural_clbf.experiments.f16_gcas.data_generation import (
 )
 
 
-# def test_f16_safe_unsafe_mask():
-#     """Test the safe and unsafe mask for the F16"""
-#     dm = F16GcasDataModule()
-#     # These points should all be safe
-#     safe_x = torch.tensor(
-#         [
-#             # TODO
-#         ]
-#     )
-#     assert torch.all(dm.safe_mask_fn(safe_x))
+def test_f16_safe_unsafe_mask():
+    """Test the safe and unsafe mask for the F16"""
+    dm = F16GcasDataModule()
+    # This point should be safe
+    safe_x = torch.tensor(
+        [
+            [
+                540.0,
+                0.035,
+                0.0,
+                -np.pi / 8,
+                -0.15 * np.pi,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1000.0,
+                9.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        ]
+    )
+    assert torch.all(dm.safe_mask_fn(safe_x))
 
-#     # These points should all be unsafe
-#     unsafe_x = torch.tensor(
-#         [
-#             # TODO
-#         ]
-#     )
-#     assert torch.all(dm.unsafe_mask_fn(unsafe_x))
+    # Thise point should be unsafe
+    unsafe_x = torch.tensor(
+        [
+            [
+                540.0,
+                0.035,
+                0.0,
+                -np.pi / 8,
+                -0.15 * np.pi,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                100.0,
+                9.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        ]
+    )
+    assert torch.all(dm.unsafe_mask_fn(unsafe_x))
 
 
 # def test_f16_goal_mask():
@@ -88,9 +122,9 @@ def test_f16_datamodule():
     assert len(dm.validation_data) == num_validation_pts
     # Each of those things should have the appropriate number of items
     for data in dm.train_data:
-        assert len(data) == 4
+        assert len(data) == 5
     for data in dm.validation_data:
-        assert len(data) == 4
+        assert len(data) == 5
 
 
 def test_f16_datamodule_dataloaders():

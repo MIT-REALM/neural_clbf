@@ -51,7 +51,7 @@ def test_quad2d_obstacles_goal_mask():
     )
     assert torch.all(dm.goal_mask_fn(in_goal))
 
-    # These points should all be unsafe
+    # These points should all be outside the goal
     out_of_goal_mask = torch.tensor(
         [
             [0.2, 0.1, 0.0, 0.0, 0.0, 0.0],  # too far in xz
@@ -62,6 +62,37 @@ def test_quad2d_obstacles_goal_mask():
         ]
     )
     assert torch.all(torch.logical_not(dm.goal_mask_fn(out_of_goal_mask)))
+
+
+def test_quad2d_obstacles_goal_dist():
+    """Test the goal distance function for the 2D quadrotor with obstacles"""
+    dm = Quad2DObstaclesDataModule()
+    # These points should all be in the goal, so distance should be zero
+    in_goal = torch.tensor(
+        [
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # origin
+            [0.1, 0.1, 0.1, 0.1, 0.1, 0.1],  # near origin
+            [0.2, 0.0, 0.0, 0.0, 0.0, 0.0],  # near origin in x
+            [0.0, 0.2, 0.0, 0.0, 0.0, 0.0],  # near origin in z
+            [0.0, 0.0, 0.2, 0.0, 0.0, 0.0],  # near origin in theta
+            [0.0, 0.0, 0.0, 0.2, 0.0, 0.0],  # slow enough in x
+            [0.0, 0.0, 0.0, 0.0, 0.2, 0.0],  # slow enough in z
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.2],  # slow enough in theta dot
+        ]
+    )
+    assert torch.allclose(dm.goal_dist_fn(in_goal), torch.zeros(in_goal.shape[0], 1))
+
+    # These points should all be outside the goal
+    out_of_goal_mask = torch.tensor(
+        [
+            [0.2, 0.1, 0.0, 0.0, 0.0, 0.0],
+            [0.1, 0.2, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0, 0.1, 0.0],
+            [0.0, 0.0, 0.0, 0.1, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 1.1],
+        ]
+    )
+    assert torch.all(dm.goal_dist_fn(out_of_goal_mask) > 0)
 
 
 def test_quad2d_obstacles_datamodule():
@@ -103,9 +134,9 @@ def test_quad2d_obstacles_datamodule():
     assert len(dm.validation_data) == num_validation_pts
     # Each of those things should have the appropriate number of items
     for data in dm.train_data:
-        assert len(data) == 4
+        assert len(data) == 5
     for data in dm.validation_data:
-        assert len(data) == 4
+        assert len(data) == 5
 
 
 def test_quad2d_obstacles_datamodule_dataloaders():

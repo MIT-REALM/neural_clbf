@@ -28,7 +28,7 @@ class NeuralrCLBFController(pl.LightningModule):
         u_nn_hidden_layers: int = 3,
         u_nn_hidden_size: int = 48,
         clbf_lambda: float = 1.0,
-        clbf_safety_level: float = 1.0,
+        clbf_safety_level: float = 10.0,
         clbf_timestep: float = 0.01,
         control_loss_weight: float = 1e-6,
         learning_rate: float = 1e-3,
@@ -91,6 +91,8 @@ class NeuralrCLBFController(pl.LightningModule):
             self.clbf_hidden_size, self.clbf_hidden_size
         )
         self.V_net = nn.Sequential(self.V_layers)
+        # We also want to be able to add a bias to V as needed
+        self.V_bias = nn.Linear(1, 1)
 
         # Also define the proof controller network, denoted u_nn
         self.clbf_hidden_layers = clbf_hidden_layers
@@ -120,7 +122,10 @@ class NeuralrCLBFController(pl.LightningModule):
         """
         # Compute the CLBF as the sum-squares of the output layer activations
         V_output = self.V_net(x)
-        V = 0.5 * (V_output * V_output).sum(-1)
+        V = 0.5 * (V_output * V_output).sum(-1).reshape(x.shape[0], 1)
+        # and add the bias
+        V = self.V_bias(V)
+
         return V
 
     def V_lie_derivatives(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -142,7 +147,9 @@ class NeuralrCLBFController(pl.LightningModule):
         # enable_grad environment to temporarily accumulate gradients
         with torch.enable_grad():
             for i in range(batch_size):
-                J_V_x[i, :, :] = jacobian(self.V, x[i, :], create_graph=True)
+                J_V_x[i, :, :] = jacobian(
+                    self.V, x[i, :].unsqueeze(0), create_graph=True
+                )
 
         # We need to compute Lie derivatives for each scenario
         Lf_V = torch.zeros(batch_size, self.n_scenarios, 1)
@@ -224,6 +231,7 @@ class NeuralrCLBFController(pl.LightningModule):
         self,
         x: torch.Tensor,
         goal_mask: torch.Tensor,
+        goal_dist: torch.Tensor,
         safe_mask: torch.Tensor,
         unsafe_mask: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
@@ -232,7 +240,8 @@ class NeuralrCLBFController(pl.LightningModule):
 
         args:
             x: the points at which to evaluate the loss
-            x_goal: the points in x markes as part of the goal
+            goal_mask: the points in x marked as part of the goal
+            goal_dist: the distance from each point in x to the goal region
             safe_mask: the points in x marked safe
             unsafe_mask: the points in x marked unsafe
         returns:
@@ -246,8 +255,12 @@ class NeuralrCLBFController(pl.LightningModule):
         goal_term = F.relu(V0)
         loss["CLBF goal term"] = goal_term.mean()
 
-        #   3.) V <= safe_level in the safe region
+        #   2.) In the safe region, V should be agree with distance from the goal region
         V_safe = self.V(x[safe_mask])
+        goal_distance_term = F.relu(0.1 * goal_dist[safe_mask] - V_safe)
+        loss["CLBF goal distance term"] = goal_distance_term.mean()
+
+        #   3.) V <= safe_level in the safe region
         safe_clbf_term = F.relu(eps + V_safe - self.clbf_safety_level)
         loss["CLBF safe region term"] = safe_clbf_term.mean()
 
@@ -278,6 +291,7 @@ class NeuralrCLBFController(pl.LightningModule):
         loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
 
         # # Then do (5b): CLBF decrease from linearization in each scenario
+        # # (this is pretty slow to compute in practice)
         # Lf_V, Lg_V = self.V_lie_derivatives(x)
         # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
         # for i in range(self.n_scenarios):
@@ -314,11 +328,11 @@ class NeuralrCLBFController(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
-        x, goal_mask, safe_mask, unsafe_mask = batch
+        x, goal_mask, goal_dist, safe_mask, unsafe_mask = batch
 
         # Get the various losses
         component_losses = {}
-        clbf_loss_dict = self.clbf_loss(x, goal_mask, safe_mask, unsafe_mask)
+        clbf_loss_dict = self.clbf_loss(x, goal_mask, goal_dist, safe_mask, unsafe_mask)
         component_losses.update(clbf_loss_dict)
         controller_loss_dict = self.controller_loss(x)
         component_losses.update(controller_loss_dict)
@@ -355,11 +369,11 @@ class NeuralrCLBFController(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         """Conduct the validation step for the given batch"""
         # Extract the input and masks from the batch
-        x, goal_mask, safe_mask, unsafe_mask = batch
+        x, goal_mask, goal_dist, safe_mask, unsafe_mask = batch
 
         # Get the various losses
         component_losses = {}
-        clbf_loss_dict = self.clbf_loss(x, goal_mask, safe_mask, unsafe_mask)
+        clbf_loss_dict = self.clbf_loss(x, goal_mask, goal_dist, safe_mask, unsafe_mask)
         component_losses.update(clbf_loss_dict)
         controller_loss_dict = self.controller_loss(x)
         component_losses.update(controller_loss_dict)
