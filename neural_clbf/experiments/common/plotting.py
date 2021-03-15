@@ -280,6 +280,7 @@ def rollout_CLBF(
                     break
 
     except (Exception, RuntimeError):
+        raise
         controller_failed = True
 
     fig, axs = plt.subplots(3, 1)

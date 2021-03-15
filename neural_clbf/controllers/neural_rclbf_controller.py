@@ -25,12 +25,13 @@ class NeuralrCLBFController(pl.LightningModule):
         scenarios: ScenarioList,
         clbf_hidden_layers: int = 1,
         clbf_hidden_size: int = 8,
-        u_nn_hidden_layers: int = 2,
+        u_nn_hidden_layers: int = 1,
         u_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
         clbf_safety_level: float = 1.0,
         clbf_timestep: float = 0.01,
         control_loss_weight: float = 1e-6,
+        qp_clbf_relaxation_penalty: float = 1e4,
         learning_rate: float = 1e-3,
         x_center: Optional[torch.Tensor] = None,
         x_range: Optional[torch.Tensor] = None,
@@ -51,6 +52,9 @@ class NeuralrCLBFController(pl.LightningModule):
             clbf_safety_level: safety level set value for the CLBF
             clbf_timestep: the timestep to use in simulating forward Vdot
             control_loss_weight: the weight to apply to the control loss
+            qp_clbf_relaxation_penalty: the penalty coefficient applied to the
+                                        relaxation of the CLBF decrease conditions in
+                                        the QP controller.
             learning_rate: the learning rate for SGD
             x_center: a dynamics_model.n_dims length tensor representing the center
                       point of the data
@@ -72,6 +76,7 @@ class NeuralrCLBFController(pl.LightningModule):
         self.clbf_safety_level = clbf_safety_level
         self.clbf_timestep = clbf_timestep
         self.control_loss_weight = control_loss_weight
+        self.qp_clbf_relaxation_penalty = qp_clbf_relaxation_penalty
         self.learning_rate = learning_rate
 
         # Save the center and range if provided
@@ -125,10 +130,11 @@ class NeuralrCLBFController(pl.LightningModule):
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
             self.u_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
-        # Finally, add the output layer
+        # No output layer, so the control saturates at [-1, 1]
         self.u_NN_layers["output_layer"] = nn.Linear(
             self.clbf_hidden_size, self.dynamics_model.n_controls
         )
+        self.u_NN_layers["output_layer_activation"] = nn.Tanh()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
@@ -169,7 +175,14 @@ class NeuralrCLBFController(pl.LightningModule):
         # Compute the control effort using the neural network
         u = self.u_NN(x)
 
-        return u
+        # Scale to reflect plant actuator limits
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
+        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
+
+        u_scaled = u * u_semi_range + u_center
+
+        return u_scaled
 
     def V_lie_derivatives(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute the Lie derivatives of the CLBF V along the control-affine dynamics
@@ -238,10 +251,15 @@ class NeuralrCLBFController(pl.LightningModule):
             opti = casadi.Opti()
             # The decision variables will be the control inputs
             u = opti.variable(self.dynamics_model.n_controls)
+            # and the relaxation of the CLBF condition
+            r = opti.variable(1)
+            opti.subject_to(r >= 0.0)
 
             # The objective is simple: minimize the size of the control input
             u_nominal_np = u_nominal[i, :].squeeze().cpu().numpy()
-            opti.minimize(casadi.sumsqr(u - u_nominal_np))
+            opti.minimize(
+                casadi.sumsqr(u - u_nominal_np) + self.qp_clbf_relaxation_penalty * r
+            )
 
             # Add a constraint for CLBF decrease in each scenario
             for j in range(self.n_scenarios):
@@ -255,7 +273,13 @@ class NeuralrCLBFController(pl.LightningModule):
                     .reshape((1, self.dynamics_model.n_controls))
                 )
                 V_np = V[i].cpu().item()
-                opti.subject_to(Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np <= 0.0)
+                opti.subject_to(Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np <= r)
+
+            # Add constraints for the actuator limits
+            upper_lim, lower_lim = self.dynamics_model.control_limits
+            for j in range(self.dynamics_model.n_controls):
+                opti.subject_to(u[j] <= upper_lim[j].cpu().numpy().item())
+                opti.subject_to(u[j] >= lower_lim[j].cpu().numpy().item())
 
             # Set up the solver
             p_opts = {"expand": True, "print_time": 0}

@@ -19,6 +19,13 @@ def test_quad2d_init():
     assert quad2d.n_dims == 6
     assert quad2d.n_controls == 2
 
+    # Make sure control limits are OK
+    upper_lim, lower_lim = quad2d.control_limits
+    expected_upper = valid_params["m"] * 9.81 / 2 + 20 * torch.ones(2)
+    expected_lower = valid_params["m"] * 9.81 / 2 - 20 * torch.ones(2)
+    assert torch.allclose(upper_lim, expected_upper, atol=0.01)
+    assert torch.allclose(lower_lim, expected_lower, atol=0.01)
+
     # Test instantiation without all needed parameters
     incomplete_params_list = [
         {},
