@@ -96,9 +96,11 @@ def main(args):
         dynamics_model,
         scenarios,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=2,
-        clbf_hidden_size=32,
+        clbf_hidden_layers=1,
+        clbf_hidden_size=8,
         learning_rate=1e-3,
+        x_center=data_module.x_center,
+        x_range=data_module.x_range,
     )
     # Add the DataModule hooks
     rclbf_controller.prepare_data = data_module.prepare_data

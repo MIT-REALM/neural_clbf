@@ -23,15 +23,17 @@ class NeuralrCLBFController(pl.LightningModule):
         self,
         dynamics_model: ControlAffineSystem,
         scenarios: ScenarioList,
-        clbf_hidden_layers: int = 2,
-        clbf_hidden_size: int = 48,
-        u_nn_hidden_layers: int = 3,
-        u_nn_hidden_size: int = 48,
+        clbf_hidden_layers: int = 1,
+        clbf_hidden_size: int = 8,
+        u_nn_hidden_layers: int = 2,
+        u_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
-        clbf_safety_level: float = 10.0,
+        clbf_safety_level: float = 1.0,
         clbf_timestep: float = 0.01,
         control_loss_weight: float = 1e-6,
         learning_rate: float = 1e-3,
+        x_center: Optional[torch.Tensor] = None,
+        x_range: Optional[torch.Tensor] = None,
         plotting_callbacks: Optional[
             List[Callable[["NeuralrCLBFController"], Tuple[str, figure]]]
         ] = None,
@@ -50,6 +52,10 @@ class NeuralrCLBFController(pl.LightningModule):
             clbf_timestep: the timestep to use in simulating forward Vdot
             control_loss_weight: the weight to apply to the control loss
             learning_rate: the learning rate for SGD
+            x_center: a dynamics_model.n_dims length tensor representing the center
+                      point of the data
+            x_range: a dynamics_model.n_dims length tensor representing the range of the
+                     data
             plotting_callbacks: a list of plotting functions that each take a
                                 NeuralrCLBFController and return a tuple of a string
                                 name and figure object to log
@@ -67,6 +73,17 @@ class NeuralrCLBFController(pl.LightningModule):
         self.clbf_timestep = clbf_timestep
         self.control_loss_weight = control_loss_weight
         self.learning_rate = learning_rate
+
+        # Save the center and range if provided
+        if x_center is not None:
+            self.x_center = x_center
+        else:
+            self.x_center = torch.zeros(self.dynamics_model.n_dims)
+
+        if x_range is not None:
+            self.x_range = x_range
+        else:
+            self.x_range = torch.ones(self.dynamics_model.n_dims)
 
         # Get plotting callbacks
         if plotting_callbacks is None:
@@ -114,12 +131,23 @@ class NeuralrCLBFController(pl.LightningModule):
         )
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
+    def normalize(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize the input using the stored center point and range
+
+        args:
+            x: bs x self.dynamics_model.n_dims the points to normalize
+        """
+        return (x - self.x_center.type_as(x)) / self.x_range.type_as(x)
+
     def V(self, x: torch.Tensor) -> torch.Tensor:
         """Computes the CLBF value from the output layer of V_net
 
         args:
             x: bs x sellf.dynamics_model.n_dims the points at which to evaluate the CLBF
         """
+        # Apply the offset and range to normalize about zero
+        x = self.normalize(x)
+
         # Compute the CLBF as the sum-squares of the output layer activations
         V_output = self.V_net(x)
         V = 0.5 * (V_output * V_output).sum(-1).reshape(x.shape[0], 1)
@@ -127,6 +155,21 @@ class NeuralrCLBFController(pl.LightningModule):
         V = self.V_bias(V)
 
         return V
+
+    def u(self, x: torch.Tensor) -> torch.Tensor:
+        """Computes the learned controller input from the state x
+
+        args:
+            x: bs x sellf.dynamics_model.n_dims the points at which to evaluate the
+               controller
+        """
+        # Apply the offset and range to normalize about zero
+        x = self.normalize(x)
+
+        # Compute the CLBF as the sum-squares of the output layer activations
+        u = self.u_NN(x)
+
+        return u
 
     def V_lie_derivatives(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute the Lie derivatives of the CLBF V along the control-affine dynamics
@@ -258,19 +301,12 @@ class NeuralrCLBFController(pl.LightningModule):
         safe_clbf_term = F.relu(eps + V_safe - self.clbf_safety_level)
         loss["CLBF safe region term"] = safe_clbf_term.mean()
 
-        #   3.) We still want V(safe) to be maximized (as much as possible given the
-        # level and descent conditions)
-        safe_mask = torch.logical_and(safe_mask, torch.logical_not(goal_mask))
-        V_safe = self.V(x[safe_mask])
-        safe_max_term = -0.1 * V_safe
-        loss["CLBF safe region maximization term"] = safe_max_term.mean()
-
-        #   4.) V >= safe_level in the unsafe region
+        #   3.) V >= safe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
         unsafe_clbf_term = F.relu(eps + self.clbf_safety_level - V_unsafe)
         loss["CLBF unsafe region term"] = unsafe_clbf_term.mean()
 
-        #   5.) A term to encourage satisfaction of CLBF decrease condition
+        #   4.) A term to encourage satisfaction of CLBF decrease condition
         # We compute the change in V in two ways:
         #       a) simulating x forward in time and checking if V decreases
         #          in each scenario
@@ -278,10 +314,10 @@ class NeuralrCLBFController(pl.LightningModule):
         # In both cases we use u_NN, but (b) provides a stronger training signal
         # on u_NN.
 
-        # Start with (5a): CLBF decrease in simulation
+        # Start with (4a): CLBF decrease in simulation
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         V = self.V(x)
-        u_nn = self.u_NN(x)
+        u_nn = self.u(x)
         for s in self.scenarios:
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
             x_next = x + self.clbf_timestep * xdot
@@ -291,7 +327,7 @@ class NeuralrCLBFController(pl.LightningModule):
             ).mean()
         loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
 
-        # # Then do (5b): CLBF decrease from linearization in each scenario
+        # # Then do (4b): CLBF decrease from linearization in each scenario
         # # (this is pretty slow to compute in practice)
         # Lf_V, Lg_V = self.V_lie_derivatives(x)
         # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
@@ -317,7 +353,7 @@ class NeuralrCLBFController(pl.LightningModule):
         loss = {}
 
         # Add a loss term for the control input magnitude
-        u_nn = self.u_NN(x)
+        u_nn = self.u(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         controller_squared_difference = ((u_nn - u_nominal) ** 2).sum(dim=-1)
         loss["Control effort difference from nominal"] = (
