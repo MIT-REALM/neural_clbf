@@ -74,6 +74,24 @@ class F16GcasDataModule(pl.LightningDataModule):
         # might be more than just N_samples
         self.N = len(self.domains) * N_samples
 
+        # Compute the min and max value for each dimension
+        x_min = [np.inf] * self.n_dims
+        x_max = [-np.inf] * self.n_dims
+        for domain in self.domains:
+            for i in range(self.n_dims):
+                min_val, max_val = domain[i]
+                if min_val < x_min[i]:
+                    x_min[i] = min_val
+                if max_val > x_max[i]:
+                    x_max[i] = max_val
+
+        # Save the min, max, central point, and range tensors
+        self.x_min = torch.tensor(x_min)
+        self.x_max = torch.tensor(x_max)
+        self.x_center = (self.x_max + self.x_min) / 2.0
+        self.x_center = (self.x_max + self.x_min) / 2.0
+        self.x_range = self.x_max - self.x_min
+
     def safe_mask_fn(self, x):
         """Return the mask of x indicating safe regions for the GCAS
 

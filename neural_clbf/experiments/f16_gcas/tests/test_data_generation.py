@@ -108,6 +108,50 @@ def test_f16_datamodule():
     dm = F16GcasDataModule(N_samples=N_samples, domains=domains, split=split)
     assert dm is not None
 
+    # And the center point and range should be set correctly
+    x_center = torch.tensor(
+        [
+            500.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            500.0,
+            5.0,
+            0.0,
+            0.0,
+            0.0,
+        ]
+    )
+    x_range = torch.tensor(
+        [
+            600 - 400,
+            np.pi + np.pi,
+            np.pi + np.pi,
+            np.pi + np.pi,
+            np.pi + np.pi,
+            np.pi + np.pi,
+            2 * np.pi + 2 * np.pi,
+            2 * np.pi + 2 * np.pi,
+            2 * np.pi + 2 * np.pi,
+            1000 + 1000,
+            1000 + 1000,
+            1500 + 500,
+            10 - 0,
+            20 + 20,
+            20 + 20,
+            20 + 20,
+        ]
+    )
+    assert torch.allclose(x_center, dm.x_center)
+    assert torch.allclose(x_range, dm.x_range)
+
     # After preparing data, there should be 2 * N_samples points
     dm.prepare_data()
     total_samples = len(domains) * N_samples
