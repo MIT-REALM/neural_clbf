@@ -61,6 +61,14 @@ class ControlAffineSystem(ABC):
     def n_controls(self) -> int:
         pass
 
+    @abstractproperty
+    def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the range of allowable control
+        limits for this system
+        """
+        pass
+
     def control_affine_dynamics(
         self, x: torch.Tensor, params: Optional[Scenario] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:

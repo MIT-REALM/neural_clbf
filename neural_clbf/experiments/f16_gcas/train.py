@@ -98,6 +98,7 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=1,
         clbf_hidden_size=8,
+        qp_clbf_relaxation_penalty=1e4,
         learning_rate=1e-3,
         x_center=data_module.x_center,
         x_range=data_module.x_range,

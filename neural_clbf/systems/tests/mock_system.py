@@ -1,4 +1,6 @@
 """Define a mock ControlAffineSystem for testing use"""
+from typing import Tuple
+
 import torch
 
 from neural_clbf.systems import ControlAffineSystem
@@ -43,6 +45,18 @@ class MockSystem(ControlAffineSystem):
     @property
     def n_controls(self) -> int:
         return MockSystem.N_CONTROLS
+
+    @property
+    def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the range of allowable control
+        limits for this system
+        """
+        # define upper and lower limits based around the nominal equilibrium input
+        upper_limit = torch.tensor([1.0, 1.0])
+        lower_limit = torch.tensor([-1.0, -1.0])
+
+        return (upper_limit, lower_limit)
 
     def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
         """

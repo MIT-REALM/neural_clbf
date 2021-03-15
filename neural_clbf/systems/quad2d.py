@@ -1,4 +1,6 @@
 """Define a dynamical system for a 2D quadrotor"""
+from typing import Tuple
+
 import torch
 import numpy as np
 
@@ -109,6 +111,18 @@ class Quad2D(ControlAffineSystem):
     @property
     def n_controls(self) -> int:
         return Quad2D.N_CONTROLS
+
+    @property
+    def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the range of allowable control
+        limits for this system
+        """
+        # define upper and lower limits based around the nominal equilibrium input
+        upper_limit = self.nominal_params["m"] * grav / 2.0 + torch.tensor([20.0, 20.0])
+        lower_limit = self.nominal_params["m"] * grav / 2.0 - torch.tensor([20.0, 20.0])
+
+        return (upper_limit, lower_limit)
 
     def _f(self, x: torch.Tensor, params: Scenario):
         """
