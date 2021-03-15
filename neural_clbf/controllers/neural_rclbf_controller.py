@@ -166,7 +166,7 @@ class NeuralrCLBFController(pl.LightningModule):
         # Apply the offset and range to normalize about zero
         x = self.normalize(x)
 
-        # Compute the CLBF as the sum-squares of the output layer activations
+        # Compute the control effort using the neural network
         u = self.u_NN(x)
 
         return u
@@ -293,7 +293,7 @@ class NeuralrCLBFController(pl.LightningModule):
         loss = {}
         #   1.) CLBF value should be non-positive on the goal set.
         V0 = self.V(x[goal_mask])
-        goal_term = F.relu(V0)
+        goal_term = F.relu(eps + V0)
         loss["CLBF goal term"] = goal_term.mean()
 
         #   2.) V <= safe_level in the safe region
