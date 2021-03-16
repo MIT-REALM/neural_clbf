@@ -71,7 +71,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Initialize the DataModule
-    data_module = F16GcasDataModule(N_samples=5000000, split=0.1, batch_size=256)
+    data_module = F16GcasDataModule(N_samples=500000, split=0.1, batch_size=256)
 
     # ## Setup trainer parameters ##
     # Define the dynamics model
