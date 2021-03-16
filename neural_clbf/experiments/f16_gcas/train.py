@@ -71,7 +71,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Initialize the DataModule
-    data_module = F16GcasDataModule(N_samples=500000, split=0.1, batch_size=256)
+    data_module = F16GcasDataModule(N_samples=5000000, split=0.1, batch_size=256)
 
     # ## Setup trainer parameters ##
     # Define the dynamics model
@@ -98,7 +98,7 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=1,
         clbf_hidden_size=8,
-        qp_clbf_relaxation_penalty=1e4,
+        qp_clbf_relaxation_penalty=1e6,
         learning_rate=1e-3,
         x_center=data_module.x_center,
         x_range=data_module.x_range,
