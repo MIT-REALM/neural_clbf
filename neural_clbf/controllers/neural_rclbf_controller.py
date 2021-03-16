@@ -28,7 +28,7 @@ class NeuralrCLBFController(pl.LightningModule):
         u_nn_hidden_layers: int = 1,
         u_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
-        clbf_safety_level: float = 1.0,
+        safety_level: float = 1.0,
         clbf_timestep: float = 0.01,
         control_loss_weight: float = 1e-6,
         qp_clbf_relaxation_penalty: float = 1e4,
@@ -49,7 +49,7 @@ class NeuralrCLBFController(pl.LightningModule):
             u_nn_hidden_layers: number of hidden layers to use for the proof controller
             u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             clbf_lambda: convergence rate for the CLBF
-            clbf_safety_level: safety level set value for the CLBF
+            safety_level: safety level set value for the CLBF
             clbf_timestep: the timestep to use in simulating forward Vdot
             control_loss_weight: the weight to apply to the control loss
             qp_clbf_relaxation_penalty: the penalty coefficient applied to the
@@ -73,7 +73,7 @@ class NeuralrCLBFController(pl.LightningModule):
 
         # Save the other parameters
         self.clbf_lambda = clbf_lambda
-        self.clbf_safety_level = clbf_safety_level
+        self.safety_level = safety_level
         self.clbf_timestep = clbf_timestep
         self.control_loss_weight = control_loss_weight
         self.qp_clbf_relaxation_penalty = qp_clbf_relaxation_penalty
@@ -320,14 +320,15 @@ class NeuralrCLBFController(pl.LightningModule):
         goal_term = F.relu(eps + V0)
         loss["CLBF goal term"] = goal_term.mean()
 
-        #   2.) V <= safe_level in the safe region
+        #   2.) 0 <= V <= safe_level in the safe region (ignoring the goal)
+        safe_mask = torch.logical_and(safe_mask, torch.logical_not(goal_mask))
         V_safe = self.V(x[safe_mask])
-        safe_clbf_term = F.relu(eps + V_safe - self.clbf_safety_level)
+        safe_clbf_term = F.relu(eps + V_safe - self.safety_level) + F.relu(eps - V_safe)
         loss["CLBF safe region term"] = safe_clbf_term.mean()
 
         #   3.) V >= safe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
-        unsafe_clbf_term = F.relu(eps + self.clbf_safety_level - V_unsafe)
+        unsafe_clbf_term = F.relu(eps + self.safety_level - V_unsafe)
         loss["CLBF unsafe region term"] = unsafe_clbf_term.mean()
 
         #   4.) A term to encourage satisfaction of CLBF decrease condition

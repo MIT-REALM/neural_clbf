@@ -115,7 +115,7 @@ def plot_CLBF(
         y_vals.cpu(),
         V_grid.cpu(),
         colors=["blue"],
-        levels=[clbf_net.clbf_safety_level],
+        levels=[clbf_net.safety_level],
     )
     axs[0].set_xlabel(x_axis_label)
     axs[0].set_ylabel(y_axis_label)
