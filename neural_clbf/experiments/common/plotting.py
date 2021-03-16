@@ -279,7 +279,7 @@ def rollout_CLBF(
                     goal_reached = True
                     break
 
-    except (Exception, RuntimeError):
+    except (Exception, RuntimeError, OverflowError):
         raise
         controller_failed = True
 
