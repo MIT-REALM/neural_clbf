@@ -9,10 +9,12 @@ from torch.utils.data import TensorDataset, DataLoader, random_split
 from neural_clbf.systems.f16 import F16
 
 
-class F16GcasDataModule(pl.LightningDataModule):
+class F16GcasSamplingDataModule(pl.LightningDataModule):
     """
     DataModule for generating sample points (and a corresponding safe/unsafe mask) for
     the 2D quadrotor obstacle avoidance experiment.
+
+    Generates random data by sampling uniformly from the state space.
 
     # TODO @dawsonc move this to a common superclass
     """

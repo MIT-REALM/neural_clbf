@@ -1,15 +1,15 @@
-"""Test the data generation for the 2D quadrotor with obstacles"""
+"""Test the data generation for the f16 gcas"""
 import torch
 import numpy as np
 
-from neural_clbf.experiments.f16_gcas.data_generation import (
-    F16GcasDataModule,
+from neural_clbf.experiments.f16_gcas.sampling_data_generation import (
+    F16GcasSamplingDataModule,
 )
 
 
 def test_f16_safe_unsafe_mask():
     """Test the safe and unsafe mask for the F16"""
-    dm = F16GcasDataModule()
+    dm = F16GcasSamplingDataModule()
     # This point should be safe
     safe_x = torch.tensor(
         [
@@ -63,7 +63,7 @@ def test_f16_safe_unsafe_mask():
 
 # def test_f16_goal_mask():
 #     """Test the goal mask for the F16"""
-#     dm = F16GcasDataModule()
+#     dm = F16GcasSamplingDataModule()
 #     # These points should all be in the goal
 #     in_goal = torch.tensor(
 #         [
@@ -82,7 +82,7 @@ def test_f16_safe_unsafe_mask():
 
 
 def test_f16_datamodule():
-    """Test the custom DataModule for the 2D quadrotor with obstacles"""
+    """Test the custom DataModule for the f16 gcas"""
     domains = [
         [
             (400, 600),  # vt
@@ -105,7 +105,7 @@ def test_f16_datamodule():
     ]
     N_samples = 1000
     split = 0.1
-    dm = F16GcasDataModule(N_samples=N_samples, domains=domains, split=split)
+    dm = F16GcasSamplingDataModule(N_samples=N_samples, domains=domains, split=split)
     assert dm is not None
 
     # And the center point and range should be set correctly
@@ -172,7 +172,7 @@ def test_f16_datamodule():
 
 
 def test_f16_datamodule_dataloaders():
-    """Test the custom DataModule's DataLoaders for the 2D quadrotor with obstacles"""
+    """Test the custom DataModule's DataLoaders for the f16 gcas"""
     domains = [
         [
             (400, 600),  # vt
@@ -196,7 +196,7 @@ def test_f16_datamodule_dataloaders():
     N_samples = 1000
     split = 0.1
     batch_size = 10
-    dm = F16GcasDataModule(
+    dm = F16GcasSamplingDataModule(
         N_samples=N_samples, domains=domains, split=split, batch_size=batch_size
     )
     dm.prepare_data()

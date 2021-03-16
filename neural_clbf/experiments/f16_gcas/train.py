@@ -7,8 +7,8 @@ from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
 from neural_clbf.controllers import NeuralrCLBFController
-from neural_clbf.experiments.f16_gcas.data_generation import (
-    F16GcasDataModule,
+from neural_clbf.experiments.f16_gcas.sampling_data_generation import (
+    F16GcasSamplingDataModule,
 )
 from neural_clbf.experiments.common.plotting import (
     plot_CLBF,
@@ -71,7 +71,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Initialize the DataModule
-    data_module = F16GcasDataModule(N_samples=500000, split=0.1, batch_size=256)
+    data_module = F16GcasSamplingDataModule(N_samples=500000, split=0.1, batch_size=256)
 
     # ## Setup trainer parameters ##
     # Define the dynamics model
