@@ -1,6 +1,7 @@
 from typing import Tuple, Dict, List, Optional, Callable
 from collections import OrderedDict
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -32,6 +33,7 @@ class NeuralQPrCLBFController(pl.LightningModule):
         control_loss_weight: float = 1e-6,
         qp_clbf_relaxation_penalty: float = 1e4,
         learning_rate: float = 1e-3,
+        control_update_fraction: float = 0.1,
         x_center: Optional[torch.Tensor] = None,
         x_range: Optional[torch.Tensor] = None,
         plotting_callbacks: Optional[
@@ -55,6 +57,8 @@ class NeuralQPrCLBFController(pl.LightningModule):
                                         relaxation of the CLBF decrease conditions in
                                         the QP controller.
             learning_rate: the learning rate for SGD
+            control_update_fraction: the fraction of batches (randomly chosen) on which
+                                     to compute loss based on the QP controller
             x_center: a dynamics_model.n_dims length tensor representing the center
                       point of the data
             x_range: a dynamics_model.n_dims length tensor representing the range of the
@@ -378,7 +382,6 @@ class NeuralQPrCLBFController(pl.LightningModule):
         loss["QP relaxation term"] = relaxation_term.mean()
 
         # Add a loss term for the control input magnitude
-        u, _ = self.u(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         controller_squared_difference = ((u - u_nominal) ** 2).sum(dim=-1)
         loss["Control effort difference from nominal"] = (
@@ -394,10 +397,17 @@ class NeuralQPrCLBFController(pl.LightningModule):
 
         # Get the various losses
         component_losses = {}
+        # Compute the CLBF loss on every epoch
         clbf_loss_dict = self.clbf_loss(x, goal_mask, safe_mask, unsafe_mask)
         component_losses.update(clbf_loss_dict)
-        controller_loss_dict = self.controller_loss(x)
-        component_losses.update(controller_loss_dict)
+
+        # Computing the controller loss is much more expensive, so only do that
+        # 10% as frequently
+        if np.random.uniform() <= self.control_update_fraction:
+            controller_loss_dict = self.controller_loss(x)
+            for key in controller_loss_dict:
+                controller_loss_dict[key] /= self.control_update_fraction
+            component_losses.update(controller_loss_dict)
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -437,8 +447,14 @@ class NeuralQPrCLBFController(pl.LightningModule):
         component_losses = {}
         clbf_loss_dict = self.clbf_loss(x, goal_mask, safe_mask, unsafe_mask)
         component_losses.update(clbf_loss_dict)
-        controller_loss_dict = self.controller_loss(x)
-        component_losses.update(controller_loss_dict)
+
+        # Computing the controller loss is much more expensive, so only do that
+        # 10% as frequently
+        if np.random.uniform() <= self.control_update_fraction:
+            controller_loss_dict = self.controller_loss(x)
+            for key in controller_loss_dict:
+                controller_loss_dict[key] /= self.control_update_fraction
+            component_losses.update(controller_loss_dict)
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
