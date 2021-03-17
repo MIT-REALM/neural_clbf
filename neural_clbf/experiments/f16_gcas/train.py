@@ -104,7 +104,7 @@ def main(args):
         u_nn_hidden_layers=3,
         u_nn_hidden_size=32,
         clbf_timestep=controller_period,
-        qp_clbf_relaxation_penalty=1e2,
+        qp_clbf_relaxation_penalty=args.qp_relax_penalty,
         learning_rate=1e-3,
         x_center=data_module.x_center,
         x_range=data_module.x_range,
@@ -117,7 +117,11 @@ def main(args):
     rclbf_controller.test_dataloader = data_module.test_dataloader
 
     # Initialize the logger and trainer
-    tb_logger = pl_loggers.TensorBoardLogger("logs/f16_gcas/")
+    tb_logger = pl_loggers.TensorBoardLogger(
+        "logs/f16_gcas/",
+        name="relax_penalty_sweep",
+        version=f"penalty_{args.qp_relax_penalty}",
+    )
     trainer = pl.Trainer.from_argparse_args(args)
     trainer.logger = tb_logger
 
@@ -127,6 +131,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
+    parser.add_argument("--qp_relax_penalty", type=float, nargs="?", default=1e3)
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()
 
