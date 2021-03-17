@@ -101,7 +101,7 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=3,
         clbf_hidden_size=32,
-        qp_clbf_relaxation_penalty=1e0,
+        qp_clbf_relaxation_penalty=1e3,
         clbf_timestep=controller_period,
         learning_rate=1e-3,
         x_center=data_module.x_center,
