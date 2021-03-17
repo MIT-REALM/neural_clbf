@@ -8,14 +8,14 @@ from torch.autograd.functional import jacobian
 import pytorch_lightning as pl
 from matplotlib.pyplot import figure
 
-import casadi
+from qpth.qp import QPFunction
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
 from neural_clbf.controllers.utils import Controller
 
 
-class NeuralrCLBFController(pl.LightningModule):
+class NeuralQPrCLBFController(pl.LightningModule):
     """
     A neural rCLBF controller
     """
@@ -26,8 +26,6 @@ class NeuralrCLBFController(pl.LightningModule):
         scenarios: ScenarioList,
         clbf_hidden_layers: int = 1,
         clbf_hidden_size: int = 8,
-        u_nn_hidden_layers: int = 1,
-        u_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
         clbf_timestep: float = 0.01,
@@ -117,26 +115,20 @@ class NeuralrCLBFController(pl.LightningModule):
         # We also want to be able to add a bias to V as needed
         self.V_bias = nn.Linear(1, 1)
 
-        # Also define the proof controller network, denoted u_nn
-        self.clbf_hidden_layers = clbf_hidden_layers
-        self.clbf_hidden_size = clbf_hidden_size
-        # Likewise, build the network up layer by layer, starting with the input
-        self.u_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.u_NN_layers["input_layer"] = nn.Linear(
-            self.dynamics_model.n_dims, self.clbf_hidden_size
+        # Also set up the objective and actuation limit constraints for the qp
+        # controller (enforced as G_u @ u <= h)
+        self.G_u = torch.zeros(
+            (2 * self.dynamics_model.n_controls, self.dynamics_model.n_controls)
         )
-        self.u_NN_layers["input_layer_activation"] = nn.Tanh()
-        for i in range(self.clbf_hidden_layers):
-            self.u_NN_layers[f"layer_{i}"] = nn.Linear(
-                self.clbf_hidden_size, self.clbf_hidden_size
-            )
-            self.u_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
-        # No output layer, so the control saturates at [-1, 1]
-        self.u_NN_layers["output_layer"] = nn.Linear(
-            self.clbf_hidden_size, self.dynamics_model.n_controls
-        )
-        self.u_NN_layers["output_layer_activation"] = nn.Tanh()
-        self.u_NN = nn.Sequential(self.u_NN_layers)
+        self.h_u = torch.zeros((2 * self.dynamics_model.n_controls, 1))
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        for j in range(self.dynamics_model.n_controls):
+            # Upper limit u[j] <= upper_lim[j]
+            self.G_u[2 * j, j] = 1.0
+            self.h_u[2 * j, 0] = upper_lim[j]
+            # Upper limit u[j] >= lower_lim[j] (-> -u[j] <= -lower_lim[j])
+            self.G_u[2 * j + 1, j] = -1.0
+            self.h_u[2 * j + 1, 0] = -lower_lim[j]
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the input using the stored center point and range
@@ -162,28 +154,6 @@ class NeuralrCLBFController(pl.LightningModule):
         V = self.V_bias(V)
 
         return V
-
-    def u(self, x: torch.Tensor) -> torch.Tensor:
-        """Computes the learned controller input from the state x
-
-        args:
-            x: bs x sellf.dynamics_model.n_dims the points at which to evaluate the
-               controller
-        """
-        # Apply the offset and range to normalize about zero
-        x = self.normalize(x)
-
-        # Compute the control effort using the neural network
-        u = self.u_NN(x)
-
-        # Scale to reflect plant actuator limits
-        upper_lim, lower_lim = self.dynamics_model.control_limits
-        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
-        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
-
-        u_scaled = u * u_semi_range + u_center
-
-        return u_scaled
 
     def V_lie_derivatives(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute the Lie derivatives of the CLBF V along the control-affine dynamics
@@ -226,74 +196,116 @@ class NeuralrCLBFController(pl.LightningModule):
         # return the Lie derivatives
         return Lf_V, Lg_V
 
-    def forward(self, x):
-        """Determine the control input for a given state by solving a QP
+    def u(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Computes the controller input from the state x
 
         args:
-            x: bs x self.dynamics_model.n_dims tensor of state
+            x: bs x self.dynamics_model.n_dims the points at which to evaluate the
+               controller
         returns:
-            u_rclbf: bs x self.dynamics_model.n_controls tensor of control inputs
+            u: bs x self.dynamics_model.n_controls the control input
+            relaxation: bs x 1 the relaxation of the CLBF constraint in the QP
         """
         # Get the value of the CLBF...
         V = self.V(x)
         # and the Lie derivatives of the CLBF for each scenario
         Lf_V, Lg_V = self.V_lie_derivatives(x)
 
-        # To find a control input, we need to solve an optimization problem.
-        # TODO @dawsonc review whether torch-native solvers are as good as casadi
-        # (cvxpylayers was pretty bad in terms of accuracy, but maybe qpth is better).
-        batch_size = x.shape[0]
-        u_batched = torch.zeros(batch_size, self.dynamics_model.n_controls)
-        u_batched = u_batched.type_as(x)
-        # Get nominal control to compare with
-        u_nominal = self.dynamics_model.u_nominal(x)
-        for i in range(batch_size):
-            # Create an optimization problem to find a good input
-            opti = casadi.Opti()
-            # The decision variables will be the control inputs
-            u = opti.variable(self.dynamics_model.n_controls)
-            # and the relaxation of the CLBF condition
-            r = opti.variable(1)
-            opti.subject_to(r >= 0.0)
+        # To find the control input, we want to solve a QP constrained by
+        #
+        # L_f V + L_g V u + lambda V <= 0
+        #
+        # To ensure that this QP is always feasible, we relax the constraint
+        #
+        # L_f V + L_g V u + lambda V - r <= 0
+        #                              r >= 0
+        #
+        # and add the cost term relaxation_penalty * r.
+        #
+        # The decision variables here are z=[u r], so our quadratic cost is
+        # 1/2 z^T Q z + p^T z. We want this cost to equal
+        #
+        #           ||u - u_nominal||^2 + relaxation_penalty * (r^2 + r)
+        #
+        # This reduces to (ignoring constant terms)
+        #
+        #           u^T I u - 2 u_nominal^T u + relaxation_penalty * r
+        #
+        # so we need
+        #
+        #           Q = [I 0
+        #                0 relaxation_penalty]
+        #           p = [-2 u_nominal^T relaxation_penalty]
+        #
+        # Expressing the constraints formally:
+        #
+        #       Gz <= h
+        #
+        # where h = [-L_f V - lambda V, 0]^T and G = [L_g V, -1
+        #                                             ... repeated for each scenario
+        #                                             0,     -1
+        #                                             G_u,    0]
+        # We also add the user-specified inequality constraints
+        n_controls = self.dynamics_model.n_controls
+        n_scenarios = self.n_scenarios
+        bs = x.shape[0]
 
-            # The objective is simple: minimize the size of the control input
-            u_nominal_np = u_nominal[i, :].squeeze().cpu().numpy()
-            opti.minimize(
-                casadi.sumsqr(u - u_nominal_np) + self.qp_clbf_relaxation_penalty * r
-            )
+        # Start by building the cost
+        Q = torch.zeros(bs, n_controls + 1, n_controls + 1).type_as(x)
+        for j in range(n_controls):
+            Q[:, j, j] = 1.0
+        Q[:, -1, -1] = self.qp_clbf_relaxation_penalty + 0.01
+        p = torch.zeros(bs, n_controls + 1).type_as(x)
+        p[:, :-1] = -2.0 * self.dynamics_model.u_nominal(x)
+        p[:, -1] = self.qp_clbf_relaxation_penalty
 
-            # Add a constraint for CLBF decrease in each scenario
-            for j in range(self.n_scenarios):
-                # We need to convert these tensors to numpy to make the constraint
-                Lf_V_np = Lf_V[i, j, :].squeeze().cpu().numpy().item()
-                Lg_V_np = (
-                    Lg_V[i, j, :]
-                    .squeeze()
-                    .cpu()
-                    .numpy()
-                    .reshape((1, self.dynamics_model.n_controls))
-                )
-                V_np = V[i].cpu().item()
-                opti.subject_to(Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np <= r)
+        # Now build the inequality constraints G @ [u r]^T <= h
+        G = torch.zeros(
+            bs, n_scenarios + 1 + self.G_u.shape[0], n_controls + 1
+        ).type_as(x)
+        h = torch.zeros(bs, n_scenarios + 1 + self.h_u.shape[0], 1).type_as(x)
+        # CLBF decrease condition in each scenario
+        for i in range(n_scenarios):
+            G[:, i, :n_controls] = Lg_V[:, i, :]
+            G[:, i, -1] = -1
+            h[:, i, :] = -Lf_V[:, i, :] - self.clbf_lambda * V
+        # Positive relaxation
+        G[:, n_scenarios, -1] = -1
+        h[:, n_scenarios, 0] = 0.0
+        # Actuation limits
+        G[:, n_scenarios + 1 :, :n_controls] = self.G_u.type_as(x)
+        h[:, n_scenarios + 1 :, 0] = self.h_u.view(1, -1).type_as(x)
+        h = h.squeeze()
+        # No equality constraints
+        A = torch.tensor([])
+        b = torch.tensor([])
 
-            # Add constraints for the actuator limits
-            upper_lim, lower_lim = self.dynamics_model.control_limits
-            for j in range(self.dynamics_model.n_controls):
-                opti.subject_to(u[j] <= upper_lim[j].cpu().numpy().item())
-                opti.subject_to(u[j] >= lower_lim[j].cpu().numpy().item())
+        # Convert to double precision for solving
+        Q = Q.double()
+        p = p.double()
+        G = G.double()
+        h = h.double()
 
-            # Set up the solver
-            p_opts = {"expand": True, "print_time": 0}
-            s_opts = {"max_iter": 1000, "print_level": 0, "sb": "yes"}
-            opti.solver("ipopt", p_opts, s_opts)
+        # Solve the QP!
+        result: torch.Tensor = QPFunction(verbose=False)(Q, p, G, h, A, b)
+        # Extract the results
+        u = result[:, :n_controls]
+        relaxation = result[:, -1]
 
-            # Solve the QP
-            solution = opti.solve()
+        return u, relaxation
 
-            # Save the solution
-            u_batched[i, :] = torch.tensor(solution.value(u)).type_as(x)
+    def forward(self, x):
+        """Determine the control input for a given state by solving a QP
 
-        return u_batched
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of state
+        returns:
+            u: bs x self.dynamics_model.n_controls tensor of control inputs
+        """
+        # We don't need to return the relaxation on the forward pass
+        u, _ = self.u(x)
+
+        return u
 
     def clbf_loss(
         self,
@@ -332,44 +344,11 @@ class NeuralrCLBFController(pl.LightningModule):
         unsafe_clbf_term = F.relu(eps + self.safety_level - V_unsafe)
         loss["CLBF unsafe region term"] = unsafe_clbf_term.mean()
 
-        #   4.) A term to encourage satisfaction of CLBF decrease condition
-        # We compute the change in V in two ways:
-        #       a) simulating x forward in time and checking if V decreases
-        #          in each scenario
-        #       b) Linearizing V along f.
-        # In both cases we use u_NN, but (b) provides a stronger training signal
-        # on u_NN.
-
-        # Start with (4a): CLBF decrease in simulation
-        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        V = self.V(x)
-        u_nn = self.u(x)
-        for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
-            x_next = x + self.clbf_timestep * xdot
-            V_next = self.V(x_next)
-            clbf_descent_term_sim += F.relu(
-                eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
-            ).mean()
-        loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
-
-        # # Then do (4b): CLBF decrease from linearization in each scenario
-        # # (this is pretty slow to compute in practice)
-        # Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
-        # for i in range(self.n_scenarios):
-        #     Vdot = Lf_V[:, i, :] + torch.sum(
-        #         Lg_V[:, i, :] * u_nn, dim=-1
-        #     ).unsqueeze(-1)
-        #     clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
-
-        # loss["CLBF descent term (linearized)"] = clbf_descent_term_lin
-
         return loss
 
     def controller_loss(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
-        Compute a loss to train the proof controller
+        Compute a loss to train the controller
 
         args:
             x: the points at which to evaluate the loss
@@ -378,10 +357,30 @@ class NeuralrCLBFController(pl.LightningModule):
         """
         loss = {}
 
+        #   Begin with a term to encourage satisfaction of CLBF decrease condition
+        # We compute the change in V by simulating x forward in time and checking if V
+        # decreases in each scenario
+        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        V = self.V(x)
+        u, relaxation = self.u(x)
+        eps = 0.01
+        for s in self.scenarios:
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u, s)
+            x_next = x + self.clbf_timestep * xdot
+            V_next = self.V(x_next)
+            clbf_descent_term_sim += F.relu(
+                eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
+            ).mean()
+        loss["CLBF descent term (simulated)"] = clbf_descent_term_sim
+
+        # Also penalize the relaxation
+        relaxation_term = relaxation * self.qp_clbf_relaxation_penalty
+        loss["QP relaxation term"] = relaxation_term.mean()
+
         # Add a loss term for the control input magnitude
-        u_nn = self.u(x)
+        u, _ = self.u(x)
         u_nominal = self.dynamics_model.u_nominal(x)
-        controller_squared_difference = ((u_nn - u_nominal) ** 2).sum(dim=-1)
+        controller_squared_difference = ((u - u_nominal) ** 2).sum(dim=-1)
         loss["Control effort difference from nominal"] = (
             self.control_loss_weight * controller_squared_difference.mean()
         )

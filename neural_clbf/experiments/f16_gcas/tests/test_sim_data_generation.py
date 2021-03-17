@@ -1,6 +1,7 @@
 """Test the data generation for the f16 gcas"""
 import torch
 import numpy as np
+import random
 
 from neural_clbf.experiments.f16_gcas.sim_data_generation import (
     F16GcasSimDataModule,
@@ -68,6 +69,7 @@ def test_f16_safe_unsafe_mask():
 
 def test_f16_datamodule():
     """Test the custom DataModule for the f16"""
+    random.seed(0)
     initial_domains = [
         [
             (400, 600),  # vt
@@ -100,14 +102,15 @@ def test_f16_datamodule():
     )
     assert dm is not None
 
-    # After preparing data, there should be 2 * N_sample points
+    # After preparing data, there should be a bunch of sample points (we don't know
+    # exactly how many due to randomness)
     dm.prepare_data()
-    total_samples = len(initial_domains) * N_samples
-    assert len(dm.dataset) == total_samples
+    assert dm.dataset is not None
 
     # After setup, the data should be structured and split into DataLoaders
     dm.setup()
     # Make sure we have the right amount of data
+    total_samples = len(dm.dataset)
     num_validation_pts = int(split * total_samples)
     num_train_pts = total_samples - num_validation_pts
     assert len(dm.train_data) == num_train_pts
@@ -121,6 +124,7 @@ def test_f16_datamodule():
 
 def test_f16_datamodule_dataloaders():
     """Test the custom DataModule's DataLoaders for the f16 gcas"""
+    random.seed(0)
     initial_domains = [
         [
             (400, 600),  # vt
@@ -157,7 +161,7 @@ def test_f16_datamodule_dataloaders():
     dm.setup()
 
     # Make sure the data loaders are batched appropriately
-    total_samples = len(initial_domains) * N_samples
+    total_samples = len(dm.dataset)
     train_dl = dm.train_dataloader()
     assert len(train_dl) == (total_samples - int(total_samples * split)) // batch_size
     val_dl = dm.val_dataloader()
