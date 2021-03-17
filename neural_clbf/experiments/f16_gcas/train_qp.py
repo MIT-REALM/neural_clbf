@@ -40,7 +40,7 @@ init = [
 ]
 start_x = torch.tensor([init])
 
-controller_period = 0.05
+controller_period = 0.01
 
 
 def rollout_plotting_cb(clbf_net):
