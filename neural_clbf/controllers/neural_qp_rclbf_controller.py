@@ -81,6 +81,7 @@ class NeuralQPrCLBFController(pl.LightningModule):
         self.control_loss_weight = control_loss_weight
         self.qp_clbf_relaxation_penalty = qp_clbf_relaxation_penalty
         self.learning_rate = learning_rate
+        self.control_update_fraction = control_update_fraction
 
         # Save the center and range if provided
         if x_center is not None:
