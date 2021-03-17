@@ -115,7 +115,7 @@ def main(args):
     rclbf_controller.test_dataloader = data_module.test_dataloader
 
     # Initialize the logger and trainer
-    tb_logger = pl_loggers.TensorBoardLogger("logs/f16_gcas/")
+    tb_logger = pl_loggers.TensorBoardLogger("logs/f16_gcas_qp/")
     trainer = pl.Trainer.from_argparse_args(args)
     trainer.logger = tb_logger
 
