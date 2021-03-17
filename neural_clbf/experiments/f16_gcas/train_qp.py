@@ -104,6 +104,7 @@ def main(args):
         qp_clbf_relaxation_penalty=1e3,
         clbf_timestep=controller_period,
         learning_rate=1e-3,
+        control_update_fraction=0.1,
         x_center=data_module.x_center,
         x_range=data_module.x_range,
     )

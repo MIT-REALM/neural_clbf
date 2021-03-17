@@ -40,6 +40,8 @@ init = [
 ]
 start_x = torch.tensor([init])
 
+controller_period = 0.01
+
 
 def rollout_plotting_cb(clbf_net):
     return rollout_CLBF(
@@ -50,6 +52,7 @@ def rollout_plotting_cb(clbf_net):
         plot_u_indices=[F16.U_NZ, F16.U_SR],
         plot_u_labels=["$N_z$", "$SR$"],
         t_sim=10.0,
+        controller_period=controller_period,
         n_sims_per_start=1,
     )
 
@@ -100,7 +103,8 @@ def main(args):
         clbf_hidden_size=32,
         u_nn_hidden_layers=3,
         u_nn_hidden_size=32,
-        qp_clbf_relaxation_penalty=1e6,
+        clbf_timestep=controller_period,
+        qp_clbf_relaxation_penalty=1e3,
         learning_rate=1e-3,
         x_center=data_module.x_center,
         x_range=data_module.x_range,
