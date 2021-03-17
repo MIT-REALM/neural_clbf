@@ -424,9 +424,14 @@ class NeuralQPrCLBFController(pl.LightningModule):
         """This function is called after every epoch is completed."""
         # Compute the average loss over all batches for each component
         avg_losses = {}
-        for loss_key in outputs[0].keys():
+        loss_keys = set().union(*(d.keys() for d in outputs))
+        for loss_key in loss_keys:
             avg_losses[loss_key] = torch.stack(
-                [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
+                [
+                    x[loss_key]
+                    for x in outputs
+                    if loss_key in x and not torch.isnan(x[loss_key])
+                ]
             ).mean()
 
         # Log the overall loss...
@@ -471,8 +476,13 @@ class NeuralQPrCLBFController(pl.LightningModule):
         """This function is called after every epoch is completed."""
         # Compute the average loss over all batches for each component
         avg_losses = {}
-        for loss_key in outputs[0].keys():
-            losses = [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
+        loss_keys = set().union(*(d.keys() for d in outputs))
+        for loss_key in loss_keys:
+            losses = [
+                x[loss_key]
+                for x in outputs
+                if loss_key in x and not torch.isnan(x[loss_key])
+            ]
             if len(losses) > 0:
                 avg_losses[loss_key] = torch.stack(losses).mean()
 

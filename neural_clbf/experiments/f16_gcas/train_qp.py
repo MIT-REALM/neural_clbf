@@ -101,7 +101,7 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=3,
         clbf_hidden_size=32,
-        qp_clbf_relaxation_penalty=1e3,
+        qp_clbf_relaxation_penalty=1e2,
         clbf_timestep=controller_period,
         learning_rate=1e-3,
         control_update_fraction=0.1,
@@ -116,7 +116,7 @@ def main(args):
     rclbf_controller.test_dataloader = data_module.test_dataloader
 
     # Initialize the logger and trainer
-    tb_logger = pl_loggers.TensorBoardLogger("logs/f16_gcas_qp/")
+    tb_logger = pl_loggers.TensorBoardLogger("logs/f16_gcas/", name="qp")
     trainer = pl.Trainer.from_argparse_args(args)
     trainer.logger = tb_logger
 
