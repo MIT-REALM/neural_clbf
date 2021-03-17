@@ -122,6 +122,13 @@ class F16GcasSamplingDataModule(pl.LightningDataModule):
         floor_mask = x[:, F16.H] <= unsafe_height
         unsafe_mask.logical_or_(floor_mask)
 
+        # Add a boundary near the edge of the training domain
+        for i in range(self.n_dims):
+            near_min_value = x[:, i] >= self.x_center[i] - self.x_range[i] * 0.8
+            near_max_value = x[:, i] <= self.x_center[i] + self.x_range[i] * 0.8
+            unsafe_mask.logical_or_(near_min_value)
+            unsafe_mask.logical_or_(near_max_value)
+
         return unsafe_mask
 
     def goal_mask_fn(self, x):

@@ -1,1 +1,2 @@
-2. Finish tests for the F16 GCAS datamodule
+- Test sim data locally
+- Run sim data experiments on server
