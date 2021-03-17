@@ -163,6 +163,6 @@ def test_f16_datamodule_dataloaders():
     # Make sure the data loaders are batched appropriately
     total_samples = len(dm.dataset)
     train_dl = dm.train_dataloader()
-    assert len(train_dl) == (total_samples - int(total_samples * split)) // batch_size
+    assert len(train_dl) == round((total_samples - int(total_samples * split)) / batch_size)
     val_dl = dm.val_dataloader()
-    assert len(val_dl) == int(total_samples * split) // batch_size
+    assert len(val_dl) == round(int(total_samples * split) / batch_size)
