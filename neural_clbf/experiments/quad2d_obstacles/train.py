@@ -21,7 +21,7 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 def main(args):
     # Initialize the DataModule
-    data_module = Quad2DObstaclesDataModule(N_samples=500000, split=0.1, batch_size=256)
+    data_module = Quad2DObstaclesDataModule(N_samples=5000000, split=0.1, batch_size=256)
 
     # ## Setup trainer parameters ##
     controller_period = 0.001
@@ -79,7 +79,7 @@ def main(args):
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=2,
         clbf_hidden_size=32,
-        learning_rate=1e-2,
+        learning_rate=1e-3,
     )
     # Add the DataModule hooks
     rclbf_controller.prepare_data = data_module.prepare_data
