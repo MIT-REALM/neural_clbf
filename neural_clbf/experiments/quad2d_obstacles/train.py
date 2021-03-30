@@ -21,7 +21,9 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 def main(args):
     # Initialize the DataModule
-    data_module = Quad2DObstaclesDataModule(N_samples=5000000, split=0.1, batch_size=256)
+    data_module = Quad2DObstaclesDataModule(
+        N_samples=5000000, split=0.1, batch_size=256
+    )
 
     # ## Setup trainer parameters ##
     controller_period = 0.001
