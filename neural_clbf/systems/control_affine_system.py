@@ -4,7 +4,7 @@ from abc import (
     abstractmethod,
     abstractproperty,
 )
-from typing import Tuple, Optional
+from typing import Callable, Tuple, Optional
 
 import torch
 
@@ -24,12 +24,13 @@ class ControlAffineSystem(ABC):
     useful properties when it comes to designing controllers.
     """
 
-    def __init__(self, nominal_params: Scenario):
+    def __init__(self, nominal_params: Scenario, dt: float = 0.01):
         """
         Initialize a system.
 
         args:
             nominal_params: a dictionary giving the parameter values for the system
+            dt: the timestep to use for simulation
         raises:
             ValueError if nominal_params are not valid for this system
         """
@@ -41,13 +42,16 @@ class ControlAffineSystem(ABC):
 
         self.nominal_params = nominal_params
 
+        # Make sure the timestep is valid
+        assert dt > 0.0
+        self.dt = dt
+
     @abstractmethod
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
 
         args:
             params: a dictionary giving the parameter values for the system.
-                    Requires keys ["m", "I", "r"]
         returns:
             True if parameters are valid, False otherwise
         """
@@ -62,10 +66,45 @@ class ControlAffineSystem(ABC):
         pass
 
     @abstractproperty
+    def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the expected range of states for this
+        system
+        """
+        pass
+
+    @abstractproperty
     def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Return a tuple (upper, lower) describing the range of allowable control
         limits for this system
+        """
+        pass
+
+    @abstractmethod
+    def safe_mask(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating safe regions for this system
+
+        args:
+            x: a tensor of points in the state space
+        """
+        pass
+
+    @abstractmethod
+    def unsafe_mask(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating unsafe regions for this system
+
+        args:
+            x: a tensor of points in the state space
+        """
+        pass
+
+    @abstractmethod
+    def goal_mask(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating goal regions for this system
+
+        args:
+            x: a tensor of points in the state space
         """
         pass
 
@@ -117,6 +156,62 @@ class ControlAffineSystem(ABC):
         # Compute state derivatives using control-affine form
         xdot = f + torch.bmm(g, u.unsqueeze(-1))
         return xdot.view(x.shape)
+
+    def simulate(
+        self,
+        x_init: torch.Tensor,
+        num_steps: int,
+        controller: Callable[[torch.Tensor], torch.Tensor],
+        controller_period: Optional[float] = None,
+    ) -> torch.Tensor:
+        """
+        Simulate the system for the specified number of steps using the given controller
+
+        args:
+            x_init - bs x n_dims tensor of initial conditions
+            num_steps - a positive integer
+            controller - a mapping from state to control action
+            controller_period - the period determining how often the controller is run
+                                (in seconds). If none, defaults to self.dt
+        returns
+            a bs x num_steps x self.n_dims tensor of simulated trajectories
+        """
+        # Create a tensor to hold the simulation results
+        x_sim = torch.zeros(x_init.shape[0], num_steps, self.n_dims).type_as(x_init)
+        x_sim[:, 0, :] = x_init
+        u = torch.zeros(x_init.shape[0], self.n_controls).type_as(x_init)
+
+        # Compute controller update frequency
+        if controller_period is None:
+            controller_period = self.dt
+        controller_update_freq = int(controller_period / self.dt)
+
+        # Run the simulation
+        for tstep in range(1, num_steps):
+            # Get the current state
+            x_current = x_sim[:, tstep - 1, :]
+            # Get the control input at the current state if it's time
+            if tstep == 1 or tstep % controller_update_freq == 0:
+                u = controller(x_current)
+
+            # Simulate forward using the dynamics
+            xdot = self.closed_loop_dynamics(x_current, u)
+            x_sim[:, tstep, :] = x_current + self.dt * xdot
+
+        return x_sim
+
+    def nominal_simulator(self, x_init: torch.Tensor, num_steps: int) -> torch.Tensor:
+        """
+        Simulate the system forward using the nominal controller
+
+        args:
+            x_init - bs x n_dims tensor of initial conditions
+            num_steps - a positive integer
+        returns
+            a bs x num_steps x self.n_dims tensor of simulated trajectories
+        """
+        # Call the simulate method using the nominal controller
+        return self.simulate(x_init, num_steps, self.u_nominal)
 
     @abstractmethod
     def _f(self, x: torch.Tensor, params: Scenario) -> torch.Tensor:

@@ -2,6 +2,7 @@
 import pytest
 
 import torch
+import numpy as np
 
 from neural_clbf.systems import F16
 
@@ -31,3 +32,58 @@ def test_f16_init():
     for incomplete_params in incomplete_params_list:
         with pytest.raises(ValueError):
             f16 = F16(incomplete_params)
+
+
+def test_f16_safe_unsafe_mask():
+    """Test the safe and unsafe mask for the F16"""
+    valid_params = {"lag_error": 0.0}
+    f16 = F16(valid_params)
+    # This point should be safe
+    safe_x = torch.tensor(
+        [
+            [
+                540.0,
+                0.035,
+                0.0,
+                -np.pi / 8,
+                -0.15 * np.pi,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1000.0,
+                9.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        ]
+    )
+    assert torch.all(f16.safe_mask(safe_x))
+
+    # Thise point should be unsafe
+    unsafe_x = torch.tensor(
+        [
+            [
+                540.0,
+                0.035,
+                0.0,
+                -np.pi / 8,
+                -0.15 * np.pi,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                100.0,
+                9.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        ]
+    )
+    assert torch.all(f16.unsafe_mask(unsafe_x))

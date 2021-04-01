@@ -73,17 +73,18 @@ class F16(ControlAffineSystem):
     U_NYR = 2  # desired side acceleration + yaw rate
     U_THROTTLE = 3  # throttle command
 
-    def __init__(self, nominal_params: Scenario):
+    def __init__(self, nominal_params: Scenario, dt: float = 0.01):
         """
         Initialize the quadrotor.
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
                             Requires keys ["lag_error"]
+            dt: the timestep to use for simulation
         raises:
             ValueError if nominal_params are not valid for this system
         """
-        super().__init__(nominal_params)
+        super().__init__(nominal_params, dt)
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -108,6 +109,55 @@ class F16(ControlAffineSystem):
         return F16.N_CONTROLS
 
     @property
+    def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the expected range of states for this
+        system
+        """
+        lower_limit = torch.tensor(
+            [
+                400,  # vt
+                -1.0,  # alpha
+                -1.0,  # beta
+                -np.pi,  # phi
+                -np.pi,  # theta
+                -np.pi,  # psi
+                -2 * np.pi,  # P
+                -2 * np.pi,  # Q
+                -2 * np.pi,  # R
+                -1000,  # pos_n
+                -1000,  # pos_e
+                0.0,  # alt
+                0.0,  # pow
+                -20.0,  # nz_int
+                -20.0,  # ps_int
+                -20.0,  # nyr_int
+            ]
+        )
+        upper_limit = torch.tensor(
+            [
+                600,  # vt
+                1.0,  # alpha
+                1.0,  # beta
+                np.pi,  # phi
+                np.pi,  # theta
+                np.pi,  # psi
+                2 * np.pi,  # P
+                2 * np.pi,  # Q
+                2 * np.pi,  # R
+                1000,  # pos_n
+                1000,  # pos_e
+                1500.0,  # alt
+                10.0,  # pow
+                20.0,  # nz_int
+                20.0,  # ps_int
+                20.0,  # nyr_int
+            ]
+        )
+
+        return (upper_limit, lower_limit)
+
+    @property
     def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Return a tuple (upper, lower) describing the range of allowable control
@@ -118,6 +168,68 @@ class F16(ControlAffineSystem):
         lower_limit = torch.tensor([-1.0, -20.0, -20.0, 0.0])
 
         return (upper_limit, lower_limit)
+
+    def safe_mask(self, x):
+        """Return the mask of x indicating safe regions for the GCAS
+
+        args:
+            x: a tensor of points in the state space
+        """
+        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        # GCAS activates under 1000 feet
+        safe_height = 900
+        floor_mask = x[:, F16.H] >= safe_height
+        safe_mask.logical_and_(floor_mask)
+
+        # To be safe, we also need to be within the expected state limits
+        in_limit_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+        x_max, x_min = self.state_limits
+        for i in range(self.n_dims):
+            under_max = x[:, i] <= x_max[i]
+            over_min = x[:, i] >= x_min[i]
+            in_limit_mask.logical_and_(under_max)
+            in_limit_mask.logical_and_(over_min)
+        safe_mask.logical_and_(in_limit_mask)
+
+        return safe_mask
+
+    def unsafe_mask(self, x):
+        """Return the mask of x indicating unsafe regions for the obstacle task
+
+        args:
+            x: a tensor of points in the state space
+        """
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        # We have a floor that we need to avoid
+        unsafe_height = 500
+        floor_mask = x[:, F16.H] <= unsafe_height
+        unsafe_mask.logical_or_(floor_mask)
+
+        return unsafe_mask
+
+    def goal_mask(self, x):
+        """Return the mask of x indicating points in the goal set (within 0.2 m of the
+        goal).
+
+        args:
+            x: a tensor of points in the state space
+        """
+        goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        # Define the goal region as anywhere where the aircraft is near level and above
+        # the deck
+        nose_high_enough = x[:, F16.THETA] + x[:, F16.ALPHA] <= 0.0
+        goal_mask.logical_and_(nose_high_enough)
+        roll_rate_low = x[:, F16.P].abs() <= 0.25
+        goal_mask.logical_and_(roll_rate_low)
+        wings_near_level = x[:, F16.PHI].abs() <= 0.1
+        goal_mask.logical_and_(wings_near_level)
+        above_deck = x[:, F16.H] >= 1000.0
+        goal_mask.logical_and_(above_deck)
+
+        return goal_mask
 
     def _f(self, x: torch.Tensor, params: Scenario):
         """

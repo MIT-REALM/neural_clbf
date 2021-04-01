@@ -47,6 +47,18 @@ class MockSystem(ControlAffineSystem):
         return MockSystem.N_CONTROLS
 
     @property
+    def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the expected range of states for this
+        system
+        """
+        # define upper and lower limits based around the nominal equilibrium input
+        lower_limit = -10.0 * torch.ones(self.n_dims)
+        upper_limit = 10.0 * torch.ones(self.n_dims)
+
+        return (upper_limit, lower_limit)
+
+    @property
     def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Return a tuple (upper, lower) describing the range of allowable control
@@ -116,3 +128,34 @@ class MockSystem(ControlAffineSystem):
         g[:, 1, 1] = 4.0
 
         return g
+
+    def safe_mask(self, x):
+        """Return the mask of x indicating safe regions for the GCAS
+
+        args:
+            x: a tensor of points in the state space
+        """
+        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        return safe_mask
+
+    def unsafe_mask(self, x):
+        """Return the mask of x indicating unsafe regions for the obstacle task
+
+        args:
+            x: a tensor of points in the state space
+        """
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        return unsafe_mask
+
+    def goal_mask(self, x):
+        """Return the mask of x indicating points in the goal set (within 0.2 m of the
+        goal).
+
+        args:
+            x: a tensor of points in the state space
+        """
+        goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        return goal_mask

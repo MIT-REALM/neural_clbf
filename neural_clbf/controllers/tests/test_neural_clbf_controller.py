@@ -2,21 +2,28 @@
 import torch
 import random
 
-from neural_clbf.controllers.neural_rclbf_controller import (
-    NeuralrCLBFController,
+from neural_clbf.controllers.neural_clbf_controller import (
+    NeuralCLBFController,
 )
 from neural_clbf.systems.tests.mock_system import MockSystem
+from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
 
 
 def test_init_neuralrclbfcontroller():
-    """Test the initialization of a NeuralrCLBFController"""
+    """Test the initialization of a NeuralCLBFController"""
     # Define the model system
     params = {}
     system = MockSystem(params)
+    # Define the datamodule
+    initial_domain = [
+        (-1.0, 1.0),
+        (-1.0, 1.0),
+    ]
+    dm = EpisodicDataModule(system, initial_domain)
 
     # Instantiate with a list of only one scenarios
     scenarios = [params]
-    controller = NeuralrCLBFController(system, scenarios)
+    controller = NeuralCLBFController(system, scenarios, dm)
     assert controller is not None
 
 
@@ -29,7 +36,13 @@ def test_V_lie_derivatives():
     params = {}
     system = MockSystem(params)
     scenarios = [params]
-    controller = NeuralrCLBFController(system, scenarios)
+    # Define the datamodule
+    initial_domain = [
+        (-1.0, 1.0),
+        (-1.0, 1.0),
+    ]
+    dm = EpisodicDataModule(system, initial_domain)
+    controller = NeuralCLBFController(system, scenarios, dm)
 
     # Create the points (state and control) at which to test the Lie derivatives
     N_test = 10

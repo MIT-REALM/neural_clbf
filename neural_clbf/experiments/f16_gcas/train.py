@@ -6,9 +6,9 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
-from neural_clbf.controllers import NeuralrCLBFController
-from neural_clbf.experiments.f16_gcas.sampling_data_generation import (
-    F16GcasSamplingDataModule,
+from neural_clbf.controllers import NeuralCLBFController
+from neural_clbf.experiments.common.episodic_datamodule import (
+    EpisodicDataModule,
 )
 from neural_clbf.experiments.common.plotting import (
     plot_CLBF,
@@ -35,8 +35,8 @@ init = [
     1000.0,  # H
     9.0,  # pow
     0.0,  # integrator state 1
-    0.0,  # integrator state 1
-    0.0,  # integrator state 1
+    0.0,  # integrator state 2
+    0.0,  # integrator state 3
 ]
 start_x = torch.tensor([init])
 
@@ -73,13 +73,55 @@ def clbf_plotting_cb(clbf_net):
 
 
 def main(args):
-    # Initialize the DataModule
-    data_module = F16GcasSamplingDataModule(N_samples=500000, split=0.1, batch_size=256)
-
-    # ## Setup trainer parameters ##
     # Define the dynamics model
     nominal_params = {"lag_error": 0.0}
-    dynamics_model = F16(nominal_params)
+    dynamics_model = F16(nominal_params, dt=controller_period)
+
+    # Initialize the DataModule
+    initial_conditions = [
+        (300.0, 700.0),  # vt
+        (-0.1, 0.1),  # alpha
+        (-0.1, 0.1),  # beta
+        (-np.pi / 2, np.pi / 2),  # phi
+        (-np.pi / 4, 0.0),  # theta
+        (-np.pi / 2, np.pi / 2),  # psi
+        (-5.0, 5.0),  # P
+        (-5.0, 5.0),  # Q
+        (-5.0, 5.0),  # R
+        (-100.0, 100.0),  # PN
+        (-100.0, 100.0),  # PE
+        (500.0, 1000.0),  # H
+        (1.0, 9.0),  # pow
+        (0.0, 0.0),  # integrator state 1
+        (0.0, 0.0),  # integrator state 2
+        (0.0, 0.0),  # integrator state 3
+    ]
+    initial_conditions = [
+        (500.0, 500.0),  # vt
+        (0.035, 0.035),  # alpha
+        (0.0, 0.0),  # beta
+        (-np.pi / 8, -np.pi / 8),  # phi
+        (-0.15 * np.pi, -0.15 * np.pi),  # theta
+        (0.0, 0.0),  # psi
+        (0.0, 0.0),  # P
+        (0.0, 0.0),  # Q
+        (0.0, 0.0),  # R
+        (0.0, 0.0),  # PN
+        (0.0, 0.0),  # PE
+        (1000.0, 1000.0),  # H
+        (9.0, 9.0),  # pow
+        (0.0, 0.0),  # integrator state 1
+        (0.0, 0.0),  # integrator state 2
+        (0.0, 0.0),  # integrator state 3
+    ]
+    data_module = EpisodicDataModule(
+        dynamics_model,
+        initial_conditions,
+        trajectories_per_episode=100,
+        trajectory_length=5000,
+        val_split=0.1,
+        batch_size=256,
+    )
 
     # Define the scenarios
     scenarios = [
@@ -95,43 +137,42 @@ def main(args):
     ]
 
     # Initialize the controller
-    rclbf_controller = NeuralrCLBFController(
+    clbf_controller = NeuralCLBFController(
         dynamics_model,
         scenarios,
+        data_module,
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=3,
         clbf_hidden_size=32,
         u_nn_hidden_layers=3,
         u_nn_hidden_size=32,
         clbf_timestep=controller_period,
-        qp_clbf_relaxation_penalty=args.qp_relax_penalty,
-        learning_rate=1e-3,
-        x_center=data_module.x_center,
-        x_range=data_module.x_range,
+        primal_learning_rate=1e-3,
+        dual_learning_rate=1e-5,
+        epochs_per_episode=5,
     )
     # Add the DataModule hooks
-    rclbf_controller.prepare_data = data_module.prepare_data
-    rclbf_controller.setup = data_module.setup
-    rclbf_controller.train_dataloader = data_module.train_dataloader
-    rclbf_controller.val_dataloader = data_module.val_dataloader
-    rclbf_controller.test_dataloader = data_module.test_dataloader
+    clbf_controller.prepare_data = data_module.prepare_data
+    clbf_controller.setup = data_module.setup
+    clbf_controller.train_dataloader = data_module.train_dataloader
+    clbf_controller.val_dataloader = data_module.val_dataloader
+    clbf_controller.test_dataloader = data_module.test_dataloader
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/f16_gcas/",
-        name="relax_penalty_sweep",
-        version=f"penalty_{args.qp_relax_penalty}",
+        name="episodic",
     )
-    trainer = pl.Trainer.from_argparse_args(args)
-    trainer.logger = tb_logger
+    trainer = pl.Trainer.from_argparse_args(
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True
+    )
 
     # Train
-    trainer.fit(rclbf_controller)
+    trainer.fit(clbf_controller)
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--qp_relax_penalty", type=float, nargs="?", default=1e3)
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()
 

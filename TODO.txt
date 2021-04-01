@@ -1,2 +1,0 @@
-- Test sim data locally
-- Run sim data experiments on server

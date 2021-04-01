@@ -5,7 +5,7 @@ import torch.multiprocessing
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 
-from neural_clbf.controllers import NeuralrCLBFController
+from neural_clbf.controllers import NeuralCLBFController
 from neural_clbf.experiments.quad2d_obstacles.data_generation import (
     Quad2DObstaclesDataModule,
 )
@@ -74,7 +74,7 @@ def main(args):
     ]
 
     # Initialize the controller
-    rclbf_controller = NeuralrCLBFController(
+    rclbf_controller = NeuralCLBFController(
         dynamics_model,
         scenarios,
         clbf_timestep=controller_period,
