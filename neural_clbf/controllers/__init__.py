@@ -1,4 +1,4 @@
-from .neural_rclbf_controller import NeuralrCLBFController
+from .neural_clbf_controller import NeuralCLBFController
 from .utils import Controller
 
-__all__ = ["NeuralrCLBFController", "Controller"]
+__all__ = ["NeuralCLBFController", "Controller"]
