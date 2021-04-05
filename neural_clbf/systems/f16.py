@@ -178,7 +178,7 @@ class F16(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # GCAS activates under 1000 feet
-        safe_height = 900
+        safe_height = 500
         floor_mask = x[:, F16.H] >= safe_height
         safe_mask.logical_and_(floor_mask)
 
@@ -192,6 +192,20 @@ class F16(ControlAffineSystem):
             in_limit_mask.logical_and_(over_min)
         safe_mask.logical_and_(in_limit_mask)
 
+        # We also need to carve out some space around the goal region
+        goal_buffer = torch.ones_like(x[:, 0], dtype=torch.bool)
+        nose_high_enough = x[:, F16.THETA] + x[:, F16.ALPHA] >= -0.2
+        roll_rate_low = x[:, F16.P].abs() <= 0.5
+        wings_near_level = x[:, F16.PHI].abs() <= 0.2
+        above_deck = x[:, F16.H] >= 800.0
+        goal_buffer.logical_and_(nose_high_enough)
+        goal_buffer.logical_and_(roll_rate_low)
+        goal_buffer.logical_and_(wings_near_level)
+        goal_buffer.logical_and_(above_deck)
+        # Carve out the buffer
+        goal_buffer = torch.logical_not(goal_buffer)
+        safe_mask.logical_and_(goal_buffer)
+
         return safe_mask
 
     def unsafe_mask(self, x):
@@ -203,7 +217,7 @@ class F16(ControlAffineSystem):
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
 
         # We have a floor that we need to avoid
-        unsafe_height = 500
+        unsafe_height = 100
         floor_mask = x[:, F16.H] <= unsafe_height
         unsafe_mask.logical_or_(floor_mask)
 
@@ -218,9 +232,9 @@ class F16(ControlAffineSystem):
         """
         goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
-        # Define the goal region as anywhere where the aircraft is near level and above
+        # Define the goal region as anywhere where the aircraft is nose level and above
         # the deck
-        nose_high_enough = x[:, F16.THETA] + x[:, F16.ALPHA] <= 0.0
+        nose_high_enough = x[:, F16.THETA] + x[:, F16.ALPHA] >= 0.0
         goal_mask.logical_and_(nose_high_enough)
         roll_rate_low = x[:, F16.P].abs() <= 0.25
         goal_mask.logical_and_(roll_rate_low)
@@ -369,7 +383,7 @@ class F16(ControlAffineSystem):
             # then pulls up. Here we unwrap the state machine logic to get a simpler
             # mapping from state to control
 
-            # If the plane is not hurtling towards the ground, no need to do anything.
+            # If the plane is not hurtling towards the ground, don't do anything
             if gcas.is_nose_high_enough(x_np[batch, :]) or gcas.is_above_flight_deck(
                 x_np[batch, :]
             ):
