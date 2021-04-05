@@ -174,7 +174,9 @@ class ControlAffineSystem(ABC):
             controller_period - the period determining how often the controller is run
                                 (in seconds). If none, defaults to self.dt
         returns
-            a bs x num_steps x self.n_dims tensor of simulated trajectories
+            a bs x num_steps x self.n_dims tensor of simulated trajectories. If an error
+            occurs on any trajectory, the simulation of all trajectories will stop and
+            the second dimension will be less than num_steps
         """
         # Create a tensor to hold the simulation results
         x_sim = torch.zeros(x_init.shape[0], num_steps, self.n_dims).type_as(x_init)
@@ -186,19 +188,26 @@ class ControlAffineSystem(ABC):
             controller_period = self.dt
         controller_update_freq = int(controller_period / self.dt)
 
-        # Run the simulation
+        # Run the simulation until it's over or an error occurs
+        t_sim_final = 0
         for tstep in range(1, num_steps):
-            # Get the current state
-            x_current = x_sim[:, tstep - 1, :]
-            # Get the control input at the current state if it's time
-            if tstep == 1 or tstep % controller_update_freq == 0:
-                u = controller(x_current)
+            try:
+                # Get the current state
+                x_current = x_sim[:, tstep - 1, :]
+                # Get the control input at the current state if it's time
+                if tstep == 1 or tstep % controller_update_freq == 0:
+                    u = controller(x_current)
 
-            # Simulate forward using the dynamics
-            xdot = self.closed_loop_dynamics(x_current, u)
-            x_sim[:, tstep, :] = x_current + self.dt * xdot
+                # Simulate forward using the dynamics
+                xdot = self.closed_loop_dynamics(x_current, u)
+                x_sim[:, tstep, :] = x_current + self.dt * xdot
 
-        return x_sim
+                # Update the final simulation time if the step was successful
+                t_sim_final = tstep
+            except ValueError:
+                break
+
+        return x_sim[:, : t_sim_final + 1, :]
 
     def nominal_simulator(self, x_init: torch.Tensor, num_steps: int) -> torch.Tensor:
         """
