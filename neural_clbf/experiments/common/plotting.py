@@ -4,9 +4,8 @@ import random
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
+# import matplotlib.ticker as ticker
 import seaborn as sns
 import tqdm
 
@@ -61,7 +60,7 @@ def plot_CLBF(
 
     # Set up tensors to store the results
     V_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    # V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
 
     # If the default state is not provided, use zeros
     if (
@@ -85,21 +84,12 @@ def plot_CLBF(
             # Get the value of the CLBF
             V_grid[j, i] = clbf_net.V(x)
 
-            # Get the derivative from the Lie derivatives and controller
-            Lf_V, Lg_V = clbf_net.V_lie_derivatives(x)
-            # Try to get the control input; if it fails, default to zero
-            try:
-                u = clbf_net(x)
-            except (Exception):
-                u = torch.zeros(1, clbf_net.dynamics_model.n_controls).type_as(x_vals)
-            # Accumulate violation across all scenarios
-            for scenario_idx in range(clbf_net.n_scenarios):
-                Vdot = Lf_V[:, scenario_idx, :] + torch.sum(
-                    Lg_V[:, scenario_idx, :] * u, dim=-1
-                ).unsqueeze(-1)
-                V_dot_grid[j, i] += F.relu(
-                    Vdot + clbf_net.clbf_lambda * V_grid[j, i]
-                ).squeeze()
+            # # Try to get the control input; if it fails, default to zero
+            # try:
+            #     u = clbf_net(x)
+            # except (Exception):
+            #     u = torch.zeros(1, clbf_net.dynamics_model.n_controls).type_as(x_vals)
+            # V_dot_grid[j, i] = clbf_net.V_decrease_violation(x)
 
     # Make the plots
     fig, axs = plt.subplots(1, 2)
@@ -123,23 +113,26 @@ def plot_CLBF(
     axs[0].plot([], [], c="blue", label="V(x) = c")
     axs[0].legend()
 
-    # Then for dV/dt
-    contours = axs[1].contourf(
-        x_vals.cpu(), y_vals.cpu(), V_dot_grid.cpu(), cmap="Greys", levels=20
-    )
+    # # Then for dV/dt
+    # contours = axs[1].contourf(
+    #     x_vals.cpu(), y_vals.cpu(), V_dot_grid.cpu(), cmap="Greys", levels=20
+    # )
 
-    def fmt(x, pos):
-        a, b = "{:.2e}".format(x).split("e")
-        b = int(b)
-        return r"${} \times 10^{{{}}}$".format(a, b)
+    # def fmt(x, pos):
+    #     a, b = "{:.2e}".format(x).split("e")
+    #     b = int(b)
+    #     return r"${} \times 10^{{{}}}$".format(a, b)
 
-    cbar = plt.colorbar(
-        contours, ax=axs[1], orientation="horizontal", format=ticker.FuncFormatter(fmt)
-    )
-    cbar.ax.set_xticklabels(cbar.ax.get_xticklabels(), rotation=45)
-    axs[1].set_xlabel(x_axis_label)
-    axs[1].set_ylabel(y_axis_label)
-    axs[1].set_title("$[dV/dt + \\lambda V]_+$")
+    # cbar = plt.colorbar(
+    #     contours,
+    #     ax=axs[1],
+    #     orientation="horizontal",
+    #     format=ticker.FuncFormatter(fmt)
+    # )
+    # cbar.ax.set_xticklabels(cbar.ax.get_xticklabels(), rotation=45)
+    # axs[1].set_xlabel(x_axis_label)
+    # axs[1].set_ylabel(y_axis_label)
+    # axs[1].set_title("$[dV/dt + \\lambda V]_+$")
 
     fig.tight_layout()
 

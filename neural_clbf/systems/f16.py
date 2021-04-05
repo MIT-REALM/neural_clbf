@@ -1,5 +1,5 @@
 """Define a dynamical system for the F16 AeroBench model"""
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 import torch
 import numpy as np
@@ -103,6 +103,16 @@ class F16(ControlAffineSystem):
     @property
     def n_dims(self) -> int:
         return F16.N_DIMS
+
+    @property
+    def angle_dims(self) -> List[int]:
+        return [
+            F16.ALPHA,  # angle of attack
+            F16.BETA,  # sideslip angle
+            F16.PHI,  # roll angle
+            F16.THETA,  # pitch angle
+            F16.PSI,  # yaw angle
+        ]
 
     @property
     def n_controls(self) -> int:
