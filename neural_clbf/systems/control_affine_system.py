@@ -4,7 +4,7 @@ from abc import (
     abstractmethod,
     abstractproperty,
 )
-from typing import Callable, Tuple, Optional
+from typing import Callable, Tuple, Optional, List
 
 import torch
 
@@ -59,6 +59,10 @@ class ControlAffineSystem(ABC):
 
     @abstractproperty
     def n_dims(self) -> int:
+        pass
+
+    @abstractproperty
+    def angle_dims(self) -> List[int]:
         pass
 
     @abstractproperty

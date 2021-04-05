@@ -6,10 +6,13 @@ from torch.optim import Optimizer
 # We only need these imports if type checking, to avoid circular imports
 if TYPE_CHECKING:
     from neural_clbf.controllers.neural_clbf_controller import NeuralCLBFController
+    from neural_clbf.controllers.neural_sid_clbf_controller import (
+        NeuralSIDCLBFController,
+    )
 
 
 # Define a convenience type
-Controller = Union["NeuralCLBFController"]
+Controller = Union["NeuralCLBFController", "NeuralSIDCLBFController"]
 
 
 class SGA(Optimizer):

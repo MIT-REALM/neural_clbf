@@ -1,5 +1,5 @@
 """Define a dynamical system for a 2D quadrotor"""
-from typing import Tuple
+from typing import Tuple, List
 
 import torch
 import numpy as np
@@ -107,6 +107,10 @@ class Quad2D(ControlAffineSystem):
     @property
     def n_dims(self) -> int:
         return Quad2D.N_DIMS
+
+    @property
+    def angle_dims(self) -> List[int]:
+        return [Quad2D.THETA]
 
     @property
     def n_controls(self) -> int:

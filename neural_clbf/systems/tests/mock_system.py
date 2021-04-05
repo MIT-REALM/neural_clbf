@@ -1,5 +1,5 @@
 """Define a mock ControlAffineSystem for testing use"""
-from typing import Tuple
+from typing import Tuple, List
 
 import torch
 
@@ -41,6 +41,10 @@ class MockSystem(ControlAffineSystem):
     @property
     def n_dims(self) -> int:
         return MockSystem.N_DIMS
+
+    @property
+    def angle_dims(self) -> List[int]:
+        return [0]
 
     @property
     def n_controls(self) -> int:
