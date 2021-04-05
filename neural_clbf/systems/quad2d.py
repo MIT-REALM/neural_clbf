@@ -123,8 +123,15 @@ class Quad2D(ControlAffineSystem):
         system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        lower_limit = -10.0 * torch.ones(self.n_dims)
-        upper_limit = 10.0 * torch.ones(self.n_dims)
+        upper_limit = torch.ones(self.n_dims)
+        upper_limit[Quad2D.PX] = 2.0
+        upper_limit[Quad2D.PZ] = 2.0
+        upper_limit[Quad2D.THETA] = np.pi
+        upper_limit[Quad2D.VX] = 4.0
+        upper_limit[Quad2D.VZ] = 4.0
+        upper_limit[Quad2D.THETA_DOT] = 2 * np.pi
+
+        lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
 
