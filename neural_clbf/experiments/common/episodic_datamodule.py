@@ -143,6 +143,7 @@ class EpisodicDataModule(pl.LightningDataModule):
             simulator: a function that simulates the given initial conditions out for
                        the specified number of timesteps
         """
+        print("Adding data!")
         # Get some data points from simulations
         x_sim = self.sample_trajectories(simulator)
 
