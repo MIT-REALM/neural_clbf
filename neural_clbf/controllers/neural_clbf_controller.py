@@ -161,7 +161,7 @@ class NeuralCLBFController(pl.LightningModule):
         """Computes the learned controller input from the state x
 
         args:
-            x: bs x sellf.dynamics_model.n_dims the points at which to evaluate the
+            x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                controller
         """
         # Apply the offset and range to normalize about zero
@@ -268,20 +268,40 @@ class NeuralCLBFController(pl.LightningModule):
         unsafe_clbf_term = F.relu(eps + self.safety_level - V_unsafe)
         loss.append(("CLBF unsafe region term", unsafe_clbf_term.mean()))
 
-        #   4.) A term to encourage satisfaction of CLBF decrease condition
-        # We compute the change in V by simulating x forward in time and checking if V
-        # decreases
-        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        # #   4a.) A term to encourage satisfaction of CLBF decrease condition
+        # # We compute the change in V by simulating x forward in time and checking if V
+        # # decreases
+        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        # V = self.V(x)
+        # u_nn = self.u(x)
+        # for s in self.scenarios:
+        #     xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
+        #     x_next = x + self.clbf_timestep * xdot
+        #     V_next = self.V(x_next)
+        #     # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
+        #     # simplifies to V_next - V + dt * lambda V \leq 0
+        #     # simplifies to V_next - (1 + dt * lambda) V \leq 0
+        #     clbf_descent_term_sim += F.relu(
+        #         eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
+        #     ).mean()
+        # loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+
+        #   4b.) A term to encourage satisfaction of CLBF decrease condition
+        # This time, we compute the decrease using linearization, which provides a
+        # training signal for the controller
+        clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
+        # Get the current value of the CLBF and its Lie derivatives
+        # (Lie derivatives are computed using a linear fit of the dynamics)
+        # TODO @dawsonc do we need dynamics learning here?
         V = self.V(x)
-        u_nn = self.u(x)
-        for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
-            x_next = x + self.clbf_timestep * xdot
-            V_next = self.V(x_next)
-            clbf_descent_term_sim += F.relu(
-                eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
-            ).mean()
-        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+        Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # Get the control and reshape it to bs x n_controls x 1
+        u_nn = self.u(x).unsqueeze(-1)
+        for i, s in enumerate(self.scenarios):
+            # Use these dynamics to compute the derivative of V
+            Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :].unsqueeze(1), u_nn)
+            clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
+        loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
         return loss
 
@@ -326,6 +346,9 @@ class NeuralCLBFController(pl.LightningModule):
         # The constraints need to be multiplied by the dual variables
         for i, constraint_tuple in enumerate(constraints_list):
             loss_value = constraint_tuple[1]
+            component_losses[
+                "Lambda " + constraint_tuple[0]
+            ] = self.lagrange_multipliers[i]
             if not torch.isnan(loss_value):
                 total_loss += self.lagrange_multipliers[i] * loss_value
 
@@ -417,7 +440,7 @@ class NeuralCLBFController(pl.LightningModule):
     def on_validation_epoch_end(self):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
-        if self.current_epoch % self.epochs_per_episode == 0:
+        if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
             # Use the models simulation function with this controller
             def simulator_fn(x_init: torch.Tensor, num_steps: int):
                 return self.dynamics_model.simulate(x_init, num_steps, self.u)
