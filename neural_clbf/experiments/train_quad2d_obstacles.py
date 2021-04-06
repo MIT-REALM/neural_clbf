@@ -56,7 +56,7 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-2.0, 2.0),  # x
+        (-1.5, 1.5),  # x
         (0.0, 1.0),  # z
         (-np.pi / 4, np.pi / 4),  # theta
         (-1.0, 1.0),  # vx
@@ -67,7 +67,7 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=100,
-        trajectory_length=1000,
+        trajectory_length=500,
         val_split=0.1,
         batch_size=256,
     )
@@ -79,10 +79,10 @@ def main(args):
 
     # Define the plotting callbacks
     plotting_callbacks = [
-        # This plotting function plots V and dV/dt violation on a grid
-        clbf_plotting_cb,
-        # This plotting function simulates rollouts of the controller
-        rollout_plotting_cb,
+        # # This plotting function plots V and dV/dt violation on a grid
+        # clbf_plotting_cb,
+        # # This plotting function simulates rollouts of the controller
+        # rollout_plotting_cb,
     ]
 
     # Initialize the controller
@@ -91,16 +91,16 @@ def main(args):
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=3,
-        clbf_hidden_size=32,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=32,
-        f_nn_hidden_layers=3,
-        f_nn_hidden_size=32,
-        clbf_timestep=controller_period,
+        clbf_hidden_layers=2,
+        clbf_hidden_size=8,
+        u_nn_hidden_layers=2,
+        u_nn_hidden_size=8,
+        f_nn_hidden_layers=2,
+        f_nn_hidden_size=8,
+        dynamics_timestep=controller_period,
         primal_learning_rate=1e-3,
         dual_learning_rate=1e-3,
-        epochs_per_episode=5,
+        epochs_per_episode=2,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data

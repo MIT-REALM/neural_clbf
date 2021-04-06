@@ -85,6 +85,21 @@ class ControlAffineSystem(ABC):
         """
         pass
 
+    def out_of_bounds_mask(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating whether rows are outside the state limits
+        for this system
+
+        args:
+            x: a tensor of points in the state space
+        """
+        upper_lim, lower_lim = self.state_limits
+        out_of_bounds_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+        for i_dim in range(x.shape[-1]):
+            out_of_bounds_mask.logical_or_(x[:, i_dim] >= upper_lim[i_dim])
+            out_of_bounds_mask.logical_or_(x[:, i_dim] <= lower_lim[i_dim])
+
+        return out_of_bounds_mask
+
     @abstractmethod
     def safe_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating safe regions for this system
@@ -167,6 +182,7 @@ class ControlAffineSystem(ABC):
         num_steps: int,
         controller: Callable[[torch.Tensor], torch.Tensor],
         controller_period: Optional[float] = None,
+        guard: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
     ) -> torch.Tensor:
         """
         Simulate the system for the specified number of steps using the given controller
@@ -177,6 +193,8 @@ class ControlAffineSystem(ABC):
             controller - a mapping from state to control action
             controller_period - the period determining how often the controller is run
                                 (in seconds). If none, defaults to self.dt
+            guard - a function that takes a bs x n_dims tensor and returns a length bs
+                    mask that's True for any trajectories that should be reset to x_init
         returns
             a bs x num_steps x self.n_dims tensor of simulated trajectories. If an error
             occurs on any trajectory, the simulation of all trajectories will stop and
@@ -206,6 +224,11 @@ class ControlAffineSystem(ABC):
                 xdot = self.closed_loop_dynamics(x_current, u)
                 x_sim[:, tstep, :] = x_current + self.dt * xdot
 
+                # If the guard is activated for any trajectory, reset that trajectory
+                if guard is not None:
+                    guard_activations = guard(x_sim[:, tstep, :])
+                    x_sim[guard_activations, tstep, :] = x_init[guard_activations, :]
+
                 # Update the final simulation time if the step was successful
                 t_sim_final = tstep
             except ValueError:
@@ -224,7 +247,9 @@ class ControlAffineSystem(ABC):
             a bs x num_steps x self.n_dims tensor of simulated trajectories
         """
         # Call the simulate method using the nominal controller
-        return self.simulate(x_init, num_steps, self.u_nominal)
+        return self.simulate(
+            x_init, num_steps, self.u_nominal, guard=self.out_of_bounds_mask
+        )
 
     @abstractmethod
     def _f(self, x: torch.Tensor, params: Scenario) -> torch.Tensor:

@@ -148,7 +148,7 @@ def main(args):
         u_nn_hidden_size=32,
         f_nn_hidden_layers=3,
         f_nn_hidden_size=32,
-        clbf_timestep=controller_period,
+        dynamics_timestep=controller_period,
         primal_learning_rate=1e-3,
         dual_learning_rate=1e-3,
         epochs_per_episode=5,
