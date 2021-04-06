@@ -92,15 +92,15 @@ def main(args):
         data_module,
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=2,
-        clbf_hidden_size=8,
+        clbf_hidden_size=32,
         u_nn_hidden_layers=2,
-        u_nn_hidden_size=8,
+        u_nn_hidden_size=32,
         f_nn_hidden_layers=2,
-        f_nn_hidden_size=8,
+        f_nn_hidden_size=32,
         dynamics_timestep=controller_period,
         primal_learning_rate=1e-3,
         dual_learning_rate=1e-3,
-        epochs_per_episode=2,
+        epochs_per_episode=5,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
