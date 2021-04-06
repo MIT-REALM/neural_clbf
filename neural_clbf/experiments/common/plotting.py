@@ -152,7 +152,6 @@ def rollout_CLBF(
     plot_u_labels: Optional[List[str]] = None,
     n_sims_per_start: int = 5,
     t_sim: float = 5.0,
-    delta_t: float = 0.001,
     controller_period: float = 0.01,
     goal_check_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
 ) -> Tuple[str, plt.figure]:
@@ -170,7 +169,6 @@ def rollout_CLBF(
         n_sims_per_start: the number of simulations to run (with random parameters),
                           per row in start_x
         t_sim: the amount of time to simulate for
-        delta_t: the simulation timestep,
         controller_period: the period determining how often the controller is run
         goal_check_fn: a function that takes a tensor and returns a tensor of booleans
                        indicating whether a state is in the goal
@@ -227,6 +225,7 @@ def rollout_CLBF(
 
     # Simulate!
     # (but first make somewhere to save the results)
+    delta_t = clbf_net.dynamics_model.dt
     num_timesteps = int(t_sim // delta_t)
     x_sim = torch.zeros(num_timesteps, n_sims, clbf_net.dynamics_model.n_dims).type_as(
         start_x

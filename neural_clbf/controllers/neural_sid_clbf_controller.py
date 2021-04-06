@@ -33,7 +33,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
         f_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
-        dynamics_timestep: float = 0.01,
+        discrete_timestep: Optional[float] = None,
+        controller_period: Optional[float] = None,
         primal_learning_rate: float = 1e-3,
         dual_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
@@ -54,7 +55,9 @@ class NeuralSIDCLBFController(pl.LightningModule):
             f_nn_hidden_size: number of neurons per hidden layer in the learned dynamics
             clbf_lambda: convergence rate for the CLBF
             safety_level: safety level set value for the CLBF
-            dynamics_timestep: the timestep to use in the dynamics
+            discrete_timestep: the duration of one discrete time step. Defaults to
+                               dynamics_model.dt
+            controller_period: the control loop period. Defaults to dynamics_model.dt.
             primal_learning_rate: the learning rate for SGD for the network weights
             dual_learning_rate: the learning rate for SGD for the dual variables
             epochs_per_episode: the number of epochs to include in each episode
@@ -76,10 +79,18 @@ class NeuralSIDCLBFController(pl.LightningModule):
         assert clbf_lambda <= 1.0
         self.clbf_lambda = clbf_lambda
         self.safety_level = safety_level
-        self.dynamics_timestep = dynamics_timestep
         self.primal_learning_rate = primal_learning_rate
         self.dual_learning_rate = dual_learning_rate
         self.epochs_per_episode = epochs_per_episode
+
+        if discrete_timestep is None:
+            self.discrete_timestep = self.dynamics_model.dt
+        else:
+            self.discrete_timestep = discrete_timestep
+        if controller_period is None:
+            self.controller_period = self.dynamics_model.dt
+        else:
+            self.controller_period = controller_period
 
         # Some of the dimensions might represent angles. We want to replace these
         # dimensions with two dimensions: sin and cos of the angle. To do this, we need
@@ -329,10 +340,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Add a loss term for dynamics learning
         u_nn = self.u(x)
         x_next_est = self.f(x, u_nn)
-        x_next_true = (
-            x
-            + self.dynamics_timestep * self.dynamics_model.closed_loop_dynamics(x, u_nn)
-        )
+        next_num_timesteps = round(self.discrete_timestep / self.dynamics_model.dt)
+        x_next_true = self.simulator_fn(x, next_num_timesteps)[:, -1, :]
         dynamics_difference = ((x_next_est - x_next_true) ** 2).sum(dim=-1)
         loss["Dynamics MSE"] = dynamics_difference.mean()
 
@@ -477,7 +486,11 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
     def simulator_fn(self, x_init: torch.Tensor, num_steps: int):
         return self.dynamics_model.simulate(
-            x_init, num_steps, self.u, guard=self.dynamics_model.out_of_bounds_mask
+            x_init,
+            num_steps,
+            self.u,
+            guard=self.dynamics_model.out_of_bounds_mask,
+            controller_period=self.controller_period,
         )
 
     def on_validation_epoch_end(self):
