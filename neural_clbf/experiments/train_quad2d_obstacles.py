@@ -67,7 +67,7 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=100,
-        trajectory_length=500,
+        trajectory_length=50,
         val_split=0.1,
         batch_size=256,
     )
@@ -97,7 +97,8 @@ def main(args):
         u_nn_hidden_size=32,
         f_nn_hidden_layers=2,
         f_nn_hidden_size=32,
-        dynamics_timestep=controller_period,
+        discrete_timestep=0.1,
+        controller_period=controller_period,
         primal_learning_rate=1e-3,
         dual_learning_rate=1e-3,
         epochs_per_episode=5,

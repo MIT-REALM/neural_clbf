@@ -143,7 +143,7 @@ class EpisodicDataModule(pl.LightningDataModule):
             simulator: a function that simulates the given initial conditions out for
                        the specified number of timesteps
         """
-        print("Adding data!")
+        print("\nAdding data!\n")
         # Get some data points from simulations
         x_sim = self.sample_trajectories(simulator)
 
@@ -151,15 +151,30 @@ class EpisodicDataModule(pl.LightningDataModule):
         x_sample = self.sample_fixed()
         x = torch.cat((x_sim, x_sample), dim=0)
 
+        print(f"Sampled {x.shape[0]} new points")
+
         # Randomly split data into training and test sets
         random_indices = torch.randperm(x.shape[0])
         val_pts = int(x.shape[0] * self.val_split)
         validation_indices = random_indices[:val_pts]
         training_indices = random_indices[val_pts:]
 
+        print(f"\t{training_indices.shape[0]} train, {validation_indices.shape[0]} val")
+
         # Augment the existing data with the new points
         self.x_training = torch.cat((self.x_training, x[training_indices]))
         self.x_validation = torch.cat((self.x_validation, x[validation_indices]))
+
+        print("Full dataset:")
+        print(f"\t{self.x_training.shape[0]} training")
+        print(f"\t{self.x_validation.shape[0]} validation")
+        print("\t----------------------")
+        print(f"\t{self.model.goal_mask(self.x_training).sum()} goal points")
+        print(f"\t({self.model.goal_mask(self.x_validation).sum()} val)")
+        print(f"\t{self.model.safe_mask(self.x_training).sum()} safe points")
+        print(f"\t({self.model.safe_mask(self.x_validation).sum()} val)")
+        print(f"\t{self.model.unsafe_mask(self.x_training).sum()} unsafe points")
+        print(f"\t({self.model.unsafe_mask(self.x_validation).sum()} val)")
 
         # Save the new datasets
         self.training_data = TensorDataset(

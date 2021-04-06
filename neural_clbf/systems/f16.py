@@ -196,8 +196,8 @@ class F16(ControlAffineSystem):
         in_limit_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
         x_max, x_min = self.state_limits
         for i in range(self.n_dims):
-            under_max = x[:, i] <= x_max[i]
-            over_min = x[:, i] >= x_min[i]
+            under_max = x[:, i] <= 0.95 * x_max[i]
+            over_min = x[:, i] >= 0.95 * x_min[i]
             in_limit_mask.logical_and_(under_max)
             in_limit_mask.logical_and_(over_min)
         safe_mask.logical_and_(in_limit_mask)
