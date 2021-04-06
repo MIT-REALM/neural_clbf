@@ -176,6 +176,7 @@ class ControlAffineSystem(ABC):
         xdot = f + torch.bmm(g, u.unsqueeze(-1))
         return xdot.view(x.shape)
 
+    @torch.no_grad()
     def simulate(
         self,
         x_init: torch.Tensor,

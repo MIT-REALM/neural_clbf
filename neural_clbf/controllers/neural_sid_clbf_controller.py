@@ -404,7 +404,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Average all the losses
         avg_losses = {}
         for key in losses.keys():
-            avg_losses[key] = torch.stack(losses[key]).mean()
+            key_losses = torch.stack(losses[key])
+            avg_losses[key] = torch.nansum(key_losses) / key_losses.shape[0]
 
         # Log the overall loss...
         self.log("Total loss / train", avg_losses["loss"], sync_dist=True)
@@ -460,7 +461,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Average all the losses
         avg_losses = {}
         for key in losses.keys():
-            avg_losses[key] = torch.stack(losses[key]).mean()
+            key_losses = torch.stack(losses[key])
+            avg_losses[key] = torch.nansum(key_losses) / key_losses.shape[0]
 
         # Log the overall loss...
         self.log("Total loss / val", avg_losses["val_loss"], sync_dist=True)
