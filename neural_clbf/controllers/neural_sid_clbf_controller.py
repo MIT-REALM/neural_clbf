@@ -1,5 +1,6 @@
 from typing import Tuple, Dict, List, Optional, Callable
 from collections import OrderedDict
+import itertools
 
 import torch
 import torch.nn as nn
@@ -302,8 +303,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
         #   4.) A term to encourage satisfaction of CLBF decrease condition
         clbf_descent_term = torch.tensor(0.0).type_as(x)
-        # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u(x).unsqueeze(-1)
+        # Get the control
+        u_nn = self.u(x)
         # We simulate trajectories forwards using the learned dynamics
         V = self.V(x)
         V_next = self.V(self.f(x, u_nn))
@@ -346,8 +347,12 @@ class NeuralSIDCLBFController(pl.LightningModule):
         component_losses = {}
         objective_dict = self.objective(x)
         component_losses.update(objective_dict)
-        constraints_list = self.constraints(x, goal_mask, safe_mask, unsafe_mask)
-        component_losses.update(dict(constraints_list))
+
+        # The constraints are not evaluated when optimizing the dynamics model (f)
+        constraints_list = []
+        if optimizer_idx != 1:
+            constraints_list = self.constraints(x, goal_mask, safe_mask, unsafe_mask)
+            component_losses.update(dict(constraints_list))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -355,14 +360,17 @@ class NeuralSIDCLBFController(pl.LightningModule):
         for _, loss_value in objective_dict.items():
             if not torch.isnan(loss_value):
                 total_loss += loss_value
+
         # The constraints need to be multiplied by the dual variables
-        for i, constraint_tuple in enumerate(constraints_list):
-            loss_value = constraint_tuple[1]
-            component_losses[
-                "Lambda " + constraint_tuple[0]
-            ] = self.lagrange_multipliers[i]
-            if not torch.isnan(loss_value):
-                total_loss += self.lagrange_multipliers[i] * loss_value
+        # Again, we only care about this when not optimizing the dynamics model
+        if optimizer_idx != 1:
+            for i, constraint_tuple in enumerate(constraints_list):
+                loss_value = constraint_tuple[1]
+                component_losses[
+                    "Lambda " + constraint_tuple[0]
+                ] = self.lagrange_multipliers[i]
+                if not torch.isnan(loss_value):
+                    total_loss += self.lagrange_multipliers[i] * loss_value
 
         batch_dict = {"loss": total_loss, **component_losses}
 
@@ -370,15 +378,24 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
     def training_epoch_end(self, outputs):
         """This function is called after every epoch is completed."""
-        # Outputs contains two lists, one for training and one for validation
-        # We only need the training one here
-        outputs = outputs[0]
-        # Compute the average loss over all batches for each component
+        # Outputs contains a list for each optimizer, and we need to collect the losses
+        # from all of them
+        outputs = itertools.chain(*outputs)
+        # Gather up all of the losses for each component from all batches
+        losses = {}
+        for batch_output in outputs:
+            for key in batch_output.keys():
+                # if we've seen this key before, add this component loss to the list
+                if key in losses:
+                    losses[key].append(batch_output[key])
+                else:
+                    # otherwise, make a new list
+                    losses[key] = [batch_output[key]]
+
+        # Average all the losses
         avg_losses = {}
-        for loss_key in outputs[0].keys():
-            avg_losses[loss_key] = torch.stack(
-                [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
-            ).mean()
+        for key in losses.keys():
+            avg_losses[key] = torch.stack(losses[key]).mean()
 
         # Log the overall loss...
         self.log("Total loss / train", avg_losses["loss"], sync_dist=True)
@@ -420,12 +437,21 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         """This function is called after every epoch is completed."""
-        # Compute the average loss over all batches for each component
+        # Gather up all of the losses for each component from all batches
+        losses = {}
+        for batch_output in outputs:
+            for key in batch_output.keys():
+                # if we've seen this key before, add this component loss to the list
+                if key in losses:
+                    losses[key].append(batch_output[key])
+                else:
+                    # otherwise, make a new list
+                    losses[key] = [batch_output[key]]
+
+        # Average all the losses
         avg_losses = {}
-        for loss_key in outputs[0].keys():
-            losses = [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
-            if len(losses) > 0:
-                avg_losses[loss_key] = torch.stack(losses).mean()
+        for key in losses.keys():
+            avg_losses[key] = torch.stack(losses[key]).mean()
 
         # Log the overall loss...
         self.log("Total loss / val", avg_losses["val_loss"], sync_dist=True)
@@ -449,21 +475,30 @@ class NeuralSIDCLBFController(pl.LightningModule):
         self.logger.experiment.close()
         self.logger.experiment.flush()
 
+    def simulator_fn(self, x_init: torch.Tensor, num_steps: int):
+        return self.dynamics_model.simulate(
+            x_init, num_steps, self.u, guard=self.dynamics_model.out_of_bounds_mask
+        )
+
     def on_validation_epoch_end(self):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
             # Use the models simulation function with this controller
-            def simulator_fn(x_init: torch.Tensor, num_steps: int):
-                return self.dynamics_model.simulate(x_init, num_steps, self.u)
 
-            self.datamodule.add_data(simulator_fn)
+            self.datamodule.add_data(self.simulator_fn)
 
     def configure_optimizers(self):
-        primal_opt = torch.optim.SGD(
+        primal_opt_CLBF_u = torch.optim.SGD(
             list(self.V_net.parameters())
             + list(self.V_bias.parameters())
             + list(self.u_NN.parameters()),
+            lr=self.primal_learning_rate,
+            weight_decay=1e-6,
+        )
+
+        primal_opt_f = torch.optim.SGD(
+            list(self.f_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
@@ -474,4 +509,4 @@ class NeuralSIDCLBFController(pl.LightningModule):
             weight_decay=self.dual_learning_rate * 1e-2,
         )
 
-        return [primal_opt, dual_opt]
+        return [primal_opt_CLBF_u, primal_opt_f, dual_opt]
