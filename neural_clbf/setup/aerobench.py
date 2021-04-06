@@ -4,9 +4,12 @@ import sys
 import os
 
 
-laptop_dir = "/home/cbd/src/mit/AeroBenchVVPython"
-server_dir = "/home/cbd/src/AeroBenchVVPython"
-if os.path.isdir(laptop_dir):
-    sys.path.append(laptop_dir)
-else:
-    sys.path.append(server_dir)
+dirs = [
+    "/home/cbd/src/mit/AeroBenchVVPython",
+    "/home/cbd/src/AeroBenchVVPython",
+    "/home/charles/src/AeroBenchVVPython",
+]
+for dir_name in dirs:
+    if os.path.isdir(dir_name):
+        sys.path.append(dir_name)
+        break
