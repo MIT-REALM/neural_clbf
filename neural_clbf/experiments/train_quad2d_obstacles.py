@@ -101,7 +101,7 @@ def main(args):
         controller_period=controller_period,
         primal_learning_rate=1e-3,
         dual_learning_rate=1e-3,
-        epochs_per_episode=50,
+        epochs_per_episode=1,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
