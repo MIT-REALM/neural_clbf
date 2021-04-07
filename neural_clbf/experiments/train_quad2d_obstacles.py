@@ -94,7 +94,7 @@ def main(args):
         clbf_hidden_layers=2,
         clbf_hidden_size=32,
         u_nn_hidden_layers=2,
-        u_nn_hidden_size=8,
+        u_nn_hidden_size=32,
         f_nn_hidden_layers=2,
         f_nn_hidden_size=32,
         discrete_timestep=0.1,
