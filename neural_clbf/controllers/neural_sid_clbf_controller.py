@@ -96,7 +96,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # dimensions with two dimensions: sin and cos of the angle. To do this, we need
         # to figure out how many numbers are in the expanded state
         n_angles = len(self.dynamics_model.angle_dims)
-        self.n_dims_w_angles = self.dynamics_model.n_dims + n_angles
+        self.n_dims_w_angles = self.dynamics_model.n_dims  # + n_angles
 
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
@@ -188,11 +188,11 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Scale and offset based on the center and range
         x = (x - self.x_center.type_as(x)) / self.x_semi_range.type_as(x)
 
-        # Replace all angles with their sine, and append cosine
-        angle_dims = self.dynamics_model.angle_dims
-        angles = x[:, angle_dims]
-        x[:, angle_dims] = torch.sin(angles)
-        x = torch.cat((x, torch.cos(angles)), dim=-1)
+        # # Replace all angles with their sine, and append cosine
+        # angle_dims = self.dynamics_model.angle_dims
+        # angles = x[:, angle_dims]
+        # x[:, angle_dims] = torch.sin(angles)
+        # x = torch.cat((x, torch.cos(angles)), dim=-1)
 
         return x
 
