@@ -95,8 +95,10 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Some of the dimensions might represent angles. We want to replace these
         # dimensions with two dimensions: sin and cos of the angle. To do this, we need
         # to figure out how many numbers are in the expanded state
-        n_angles = len(self.dynamics_model.angle_dims)
-        self.n_dims_w_angles = self.dynamics_model.n_dims  # + n_angles
+        # n_angles = len(self.dynamics_model.angle_dims)
+        # self.n_dims_extended = self.dynamics_model.n_dims + n_angles
+        # Temporarily disabled
+        self.n_dims_extended = self.dynamics_model.n_dims
 
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
@@ -117,7 +119,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # We're going to build the network up layer by layer, starting with the input
         self.V_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.V_layers["input_layer"] = nn.Linear(
-            self.n_dims_w_angles, self.clbf_hidden_size
+            self.n_dims_extended, self.clbf_hidden_size
         )
         self.V_layers["input_layer_activation"] = nn.Tanh()
         for i in range(self.clbf_hidden_layers):
@@ -138,7 +140,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Likewise, build the network up layer by layer, starting with the input
         self.u_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.u_NN_layers["input_layer"] = nn.Linear(
-            self.n_dims_w_angles, self.u_nn_hidden_size
+            self.n_dims_extended, self.u_nn_hidden_size
         )
         self.u_NN_layers["input_layer_activation"] = nn.Tanh()
         for i in range(self.u_nn_hidden_layers):
@@ -159,7 +161,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Likewise, build the network up layer by layer, starting with the input
         self.f_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.f_NN_layers["input_layer"] = nn.Linear(
-            self.n_dims_w_angles + self.dynamics_model.n_controls,
+            self.n_dims_extended + self.dynamics_model.n_controls,
             self.f_nn_hidden_size,
         )
         self.f_NN_layers["input_layer_activation"] = nn.Tanh()
@@ -178,6 +180,18 @@ class NeuralSIDCLBFController(pl.LightningModule):
         self.n_constraints = 4
         self.lagrange_multipliers = nn.Parameter(torch.ones(self.n_constraints))
 
+    def normalize(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize the input using the stored center point and range, but don't modify
+        angles
+
+        args:
+            x: bs x self.dynamics_model.n_dims the points to normalize
+        """
+        # Scale and offset based on the center and range
+        x = (x - self.x_center.type_as(x)) / self.x_semi_range.type_as(x)
+
+        return x
+
     def normalize_w_angles(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the input using the stored center point and range, and replace all
         angles with the sine and cosine of the angles
@@ -186,13 +200,13 @@ class NeuralSIDCLBFController(pl.LightningModule):
             x: bs x self.dynamics_model.n_dims the points to normalize
         """
         # Scale and offset based on the center and range
-        x = (x - self.x_center.type_as(x)) / self.x_semi_range.type_as(x)
+        x = self.normalize(x)
 
-        # # Replace all angles with their sine, and append cosine
-        # angle_dims = self.dynamics_model.angle_dims
-        # angles = x[:, angle_dims]
-        # x[:, angle_dims] = torch.sin(angles)
-        # x = torch.cat((x, torch.cos(angles)), dim=-1)
+        # Replace all angles with their sine, and append cosine
+        angle_dims = self.dynamics_model.angle_dims
+        angles = x[:, angle_dims]
+        x[:, angle_dims] = torch.sin(angles)
+        x = torch.cat((x, torch.cos(angles)), dim=-1)
 
         return x
 
@@ -203,7 +217,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
             x: bs x sellf.dynamics_model.n_dims the points at which to evaluate the CLBF
         """
         # Apply the offset and range to normalize about zero
-        x = self.normalize_w_angles(x)
+        x = self.normalize(x)
 
         # Compute the CLBF as the sum-squares of the output layer activations
         V_output = self.V_net(x)
@@ -221,7 +235,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
                controller
         """
         # Apply the offset and range to normalize about zero
-        x = self.normalize_w_angles(x)
+        x = self.normalize(x)
 
         # Compute the control effort using the neural network
         u = self.u_NN(x)
@@ -247,7 +261,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         """
         # Apply the offset and range to normalize about zero
         # Do this for both the state...
-        x = self.normalize_w_angles(x)
+        x = self.normalize(x)
         # And the control effort
         upper_lim, lower_lim = self.dynamics_model.control_limits
         u_center = (upper_lim + lower_lim).type_as(x) / 2.0
