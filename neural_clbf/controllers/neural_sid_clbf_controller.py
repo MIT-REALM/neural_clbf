@@ -488,7 +488,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
     def simulator_fn(self, x_init: torch.Tensor, num_steps: int):
         return self.dynamics_model.simulate(
-            x_init,
+            x_init.to(self.device),
             num_steps,
             self.u,
             guard=self.dynamics_model.out_of_bounds_mask,
