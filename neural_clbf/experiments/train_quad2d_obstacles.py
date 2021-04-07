@@ -69,7 +69,7 @@ def main(args):
         trajectories_per_episode=500,
         trajectory_length=1000,
         val_split=0.1,
-        batch_size=256,
+        batch_size=1024,
     )
 
     # Define the scenarios
@@ -101,7 +101,7 @@ def main(args):
         controller_period=controller_period,
         primal_learning_rate=1e-3,
         dual_learning_rate=1e-3,
-        epochs_per_episode=1,
+        epochs_per_episode=50,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
