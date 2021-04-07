@@ -121,12 +121,12 @@ class NeuralSIDCLBFController(pl.LightningModule):
         self.V_layers["input_layer"] = nn.Linear(
             self.n_dims_extended, self.clbf_hidden_size
         )
-        self.V_layers["input_layer_activation"] = nn.Tanh()
+        self.V_layers["input_layer_activation"] = nn.ReLU()
         for i in range(self.clbf_hidden_layers):
             self.V_layers[f"layer_{i}"] = nn.Linear(
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
-            self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.V_layers["output_layer"] = nn.Linear(
             self.clbf_hidden_size, self.clbf_hidden_size
         )
@@ -142,17 +142,18 @@ class NeuralSIDCLBFController(pl.LightningModule):
         self.u_NN_layers["input_layer"] = nn.Linear(
             self.n_dims_extended, self.u_nn_hidden_size
         )
-        self.u_NN_layers["input_layer_activation"] = nn.Tanh()
+        self.u_NN_layers["input_layer_activation"] = nn.ReLU()
         for i in range(self.u_nn_hidden_layers):
             self.u_NN_layers[f"layer_{i}"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
-        # Output layer with tanh, so the control saturates at [-1, 1]
+            self.u_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
+        # Output layer with ReLU, so the control saturates at [-1, 1]
         self.u_NN_layers["output_layer"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_NN_layers["output_layer_activation"] = nn.Tanh()
+        # Add an output activation if we're using Tanh
+        # self.u_NN_layers["output_layer_activation"] = nn.ReLU()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
         # Also define the dynamics learning network, denoted f_nn
@@ -164,12 +165,12 @@ class NeuralSIDCLBFController(pl.LightningModule):
             self.n_dims_extended + self.dynamics_model.n_controls,
             self.f_nn_hidden_size,
         )
-        self.f_NN_layers["input_layer_activation"] = nn.Tanh()
+        self.f_NN_layers["input_layer_activation"] = nn.ReLU()
         for i in range(self.f_nn_hidden_layers):
             self.f_NN_layers[f"layer_{i}"] = nn.Linear(
                 self.f_nn_hidden_size, self.f_nn_hidden_size
             )
-            self.f_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.f_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.f_NN_layers["output_layer"] = nn.Linear(
             self.f_nn_hidden_size, self.dynamics_model.n_dims
         )
