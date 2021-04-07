@@ -224,7 +224,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         x = self.normalize_w_angles(x)
 
         # Compute the control effort using the neural network
-        u = 0.0 * self.u_NN(x)
+        u = self.u_NN(x)
 
         # Scale to reflect plant actuator limits
         upper_lim, lower_lim = self.dynamics_model.control_limits
