@@ -213,6 +213,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
         return V
 
+    @pl.core.decorators.auto_move_data
     def u(self, x: torch.Tensor) -> torch.Tensor:
         """Computes the learned controller input from the state x
 
@@ -488,7 +489,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
     def simulator_fn(self, x_init: torch.Tensor, num_steps: int):
         return self.dynamics_model.simulate(
-            x_init.to(self.device),
+            x_init,
             num_steps,
             self.u,
             guard=self.dynamics_model.out_of_bounds_mask,
