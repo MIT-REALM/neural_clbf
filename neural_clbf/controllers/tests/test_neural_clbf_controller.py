@@ -1,4 +1,4 @@
-"""Test the data generation for the 2D quadrotor with obstacles"""
+"""Test the the vanilla neural clbf controller"""
 import torch
 import random
 

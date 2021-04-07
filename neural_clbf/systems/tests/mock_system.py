@@ -44,7 +44,7 @@ class MockSystem(ControlAffineSystem):
 
     @property
     def angle_dims(self) -> List[int]:
-        return [0]
+        return [1]
 
     @property
     def n_controls(self) -> int:
@@ -57,7 +57,7 @@ class MockSystem(ControlAffineSystem):
         system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        lower_limit = -10.0 * torch.ones(self.n_dims)
+        lower_limit = -1.0 * torch.ones(self.n_dims)
         upper_limit = 10.0 * torch.ones(self.n_dims)
 
         return (upper_limit, lower_limit)
