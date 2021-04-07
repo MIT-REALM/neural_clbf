@@ -142,12 +142,8 @@ class Quad2D(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = self.nominal_params["m"] * grav / 2.0 + 0.0 * torch.tensor(
-            [20.0, 20.0]
-        )
-        lower_limit = self.nominal_params["m"] * grav / 2.0 - 0.0 * torch.tensor(
-            [20.0, 20.0]
-        )
+        upper_limit = self.nominal_params["m"] * grav / 2.0 + torch.tensor([1.0, 1.0])
+        lower_limit = self.nominal_params["m"] * grav / 2.0 - torch.tensor([1.0, 1.0])
 
         return (upper_limit, lower_limit)
 
