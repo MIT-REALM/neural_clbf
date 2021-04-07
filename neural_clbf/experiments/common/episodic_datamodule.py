@@ -149,7 +149,7 @@ class EpisodicDataModule(pl.LightningDataModule):
 
         # Augment those points with samples from the fixed range
         x_sample = self.sample_fixed()
-        x = torch.cat((x_sim, x_sample), dim=0)
+        x = torch.cat((x_sim.type_as(x_sample), x_sample), dim=0)
 
         print(f"Sampled {x.shape[0]} new points")
 
