@@ -250,11 +250,10 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
         # Clamp outputs based on limits
         for u_dim in range(self.dynamics_model.n_controls):
-            torch.clamp(
+            u_scaled[:, u_dim] = torch.clamp(
                 u_scaled[:, u_dim],
                 min=lower_lim[u_dim].item(),
-                max=upper_lim[u_dim].item(),
-                out=u_scaled[:, u_dim],
+                max=upper_lim[u_dim].item()
             )
 
         return u_scaled
