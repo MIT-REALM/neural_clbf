@@ -551,8 +551,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         )
 
         primal_opt_f = torch.optim.SGD(
-            list(self.f_NN.parameters())
-            + list(self.u_NN.parameters()),
+            list(self.f_NN.parameters()) + list(self.u_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
