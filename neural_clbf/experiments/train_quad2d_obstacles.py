@@ -20,7 +20,8 @@ from neural_clbf.systems import Quad2D
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 start_x = torch.tensor([[-1.5, 0.1, 0.0, 0.0, 0.0, 0.0]])
-controller_period = 0.01
+controller_period = 0.1
+simulation_dt = 0.01
 
 
 def rollout_plotting_cb(clbf_net):
@@ -52,7 +53,7 @@ def clbf_plotting_cb(clbf_net):
 def main(args):
     # Define the dynamics model
     nominal_params = {"m": 1.0, "I": 0.001, "r": 0.25}
-    dynamics_model = Quad2D(nominal_params, dt=controller_period)
+    dynamics_model = Quad2D(nominal_params, dt=simulation_dt)
 
     # Initialize the DataModule
     initial_conditions = [
@@ -69,7 +70,7 @@ def main(args):
         trajectories_per_episode=500,
         trajectory_length=1000,
         val_split=0.1,
-        batch_size=256,
+        batch_size=1024,
     )
 
     # Define the scenarios

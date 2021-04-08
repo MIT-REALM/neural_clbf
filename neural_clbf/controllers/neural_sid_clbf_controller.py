@@ -328,14 +328,13 @@ class NeuralSIDCLBFController(pl.LightningModule):
         loss.append(("CLBF unsafe region term", unsafe_clbf_term.mean()))
 
         #   4.) A term to encourage satisfaction of CLBF decrease condition
-        clbf_descent_term = torch.tensor(0.0).type_as(x)
         # Get the control
         u_nn = self.u(x)
         # We simulate trajectories forwards using the learned dynamics
         V = self.V(x)
         V_next = self.V(self.f(x, u_nn))
         V_change = V_next - self.clbf_lambda * V
-        clbf_descent_term += F.relu(eps + V_change).mean()
+        clbf_descent_term = F.relu(eps + V_change).mean()
         loss.append(("CLBF descent term", clbf_descent_term))
 
         return loss
