@@ -248,6 +248,15 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
         u_scaled = u * u_semi_range + u_center
 
+        # Clamp outputs based on limits
+        for u_dim in range(self.dynamics_model.n_controls):
+            torch.clamp(
+                u_scaled[:, u_dim],
+                min=lower_lim[u_dim].item(),
+                max=upper_lim[u_dim].item(),
+                out=u_scaled[:, u_dim],
+            )
+
         return u_scaled
 
     def f(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
