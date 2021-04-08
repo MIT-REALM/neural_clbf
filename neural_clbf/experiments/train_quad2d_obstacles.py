@@ -70,7 +70,7 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=500,
-        trajectory_length=100,
+        trajectory_length=1000,
         val_split=0.1,
         batch_size=1024,
     )
