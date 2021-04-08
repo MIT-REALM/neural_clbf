@@ -176,6 +176,14 @@ class NeuralSIDCLBFController(pl.LightningModule):
         )
         self.f_NN = nn.Sequential(self.f_NN_layers)
 
+        # Initialize weights (thanks stackoverflow)
+        def init_weights(m):
+            if type(m) == nn.Linear:
+                torch.nn.init.xavier_normal_(m.weight)
+                m.bias.data.fill_(0.01)
+
+        self.apply(init_weights)
+
         # Since this is technically a constrained optimization, we need to define dual
         # variables (Lagrange multipliers) that allow us to dualize the constraints
         self.n_constraints = 4

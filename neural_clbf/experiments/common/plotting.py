@@ -94,25 +94,26 @@ def plot_CLBF(
 
     # Make the plots
     fig, axs = plt.subplots(1, 2)
+    fig, axs = plt.subplots(1, 1)
     fig.set_size_inches(10, 6)
 
     # First for V
-    contours = axs[0].contourf(
+    contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
     )
-    plt.colorbar(contours, ax=axs[0], orientation="horizontal")
-    contours = axs[0].contour(
+    plt.colorbar(contours, ax=axs, orientation="horizontal")
+    contours = axs.contour(
         x_vals.cpu(),
         y_vals.cpu(),
         V_grid.cpu(),
         colors=["blue"],
         levels=[clbf_net.safety_level],
     )
-    axs[0].set_xlabel(x_axis_label)
-    axs[0].set_ylabel(y_axis_label)
-    axs[0].set_title("$V$")
-    axs[0].plot([], [], c="blue", label="V(x) = c")
-    axs[0].legend()
+    axs.set_xlabel(x_axis_label)
+    axs.set_ylabel(y_axis_label)
+    axs.set_title("$V$")
+    axs.plot([], [], c="blue", label="V(x) = c")
+    axs.legend()
 
     # # Then for dV/dt
     # contours = axs[1].contourf(
