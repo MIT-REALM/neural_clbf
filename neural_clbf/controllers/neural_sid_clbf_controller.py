@@ -377,6 +377,11 @@ class NeuralSIDCLBFController(pl.LightningModule):
         dynamics_difference = ((x_next_est - x_next_true) ** 2).sum(dim=-1)
         loss["Dynamics MSE"] = dynamics_difference.mean()
 
+        u_nn = self.u(x)
+        u_nominal = self.dynamics_model.u_nominal(x)
+        control_difference = ((u_nn - u_nominal) ** 2).sum(dim=-1)
+        loss["Control MSE"] = control_difference.mean()
+
         return loss
 
     def training_step(self, batch, batch_idx, optimizer_idx):
@@ -546,7 +551,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
         )
 
         primal_opt_f = torch.optim.SGD(
-            list(self.f_NN.parameters()),
+            list(self.f_NN.parameters())
+            + list(self.u_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )

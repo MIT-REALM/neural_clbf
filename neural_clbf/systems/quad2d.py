@@ -1,5 +1,5 @@
 """Define a dynamical system for a 2D quadrotor"""
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 import torch
 import numpy as np
@@ -44,14 +44,20 @@ class Quad2D(ControlAffineSystem):
     U_RIGHT = 0
     U_LEFT = 1
 
-    def __init__(self, nominal_params: Scenario, dt: float = 0.01):
+    def __init__(
+        self,
+        nominal_params: Scenario,
+        dt: float = 0.01,
+        controller_dt: Optional[float] = None,
+    ):
         """
         Initialize the quadrotor.
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
                             Requires keys ["m", "I", "r"]
-            dt: the timestep to use for the simulation and LQR discretization
+            dt: the timestep to use for the simulation
+            controller_dt: the timestep for the LQR discretization. Defaults to dt
         raises:
             ValueError if nominal_params are not valid for this system
         """
@@ -72,8 +78,11 @@ class Quad2D(ControlAffineSystem):
         B[5, 1] = -self.nominal_params["r"] / self.nominal_params["I"]
 
         # Adapt for discrete time
-        A = np.eye(self.n_dims) + dt * A
-        B = dt * B
+        if controller_dt is None:
+            controller_dt = dt
+
+        A = np.eye(self.n_dims) + controller_dt * A
+        B = controller_dt * B
 
         # Define cost matrices as identity
         Q = np.eye(self.n_dims)
