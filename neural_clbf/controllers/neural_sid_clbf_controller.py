@@ -377,10 +377,13 @@ class NeuralSIDCLBFController(pl.LightningModule):
         dynamics_difference = ((x_next_est - x_next_true) ** 2).sum(dim=-1)
         loss["Dynamics MSE"] = dynamics_difference.mean()
 
+        # And a loss term for the controller, which decreases at every episode
+        episode = self.current_epoch // self.epochs_per_episode
+        control_loss_weight = 0.1 ** episode
         u_nn = self.u(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         control_difference = ((u_nn - u_nominal) ** 2).sum(dim=-1)
-        loss["Control MSE"] = control_difference.mean()
+        loss["Control MSE"] = control_loss_weight * control_difference.mean()
 
         return loss
 
@@ -538,7 +541,6 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # We want to generate new data at the end of every episode
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
             # Use the models simulation function with this controller
-
             self.datamodule.add_data(self.simulator_fn)
 
     def configure_optimizers(self):
