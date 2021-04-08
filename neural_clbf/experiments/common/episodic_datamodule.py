@@ -25,6 +25,7 @@ class EpisodicDataModule(pl.LightningDataModule):
         initial_domain: List[Tuple[float, float]],
         trajectories_per_episode: int = 100,
         trajectory_length: int = 5000,
+        max_points: int = 10000000,
         val_split: float = 0.1,
         batch_size: int = 64,
     ):
@@ -47,6 +48,7 @@ class EpisodicDataModule(pl.LightningDataModule):
         # Save the parameters
         self.trajectories_per_episode = trajectories_per_episode
         self.trajectory_length = trajectory_length
+        self.max_points = max_points
         self.val_split = val_split
         self.batch_size = batch_size
 
@@ -164,6 +166,18 @@ class EpisodicDataModule(pl.LightningDataModule):
         # Augment the existing data with the new points
         self.x_training = torch.cat((self.x_training, x[training_indices]))
         self.x_validation = torch.cat((self.x_validation, x[validation_indices]))
+
+        # If we've exceeded the maximum number of points, sample down to the max number
+        if self.x_training.shape[0] + self.x_validation.shape[0] > self.max_points:
+            print("Sample budget exceeded! Downsampling...")
+            # Figure out how many training and validation points we should have
+            n_val = int(self.max_points * self.val_split)
+            n_train = self.max_points - n_val
+            # And then randomly select only that many points
+            new_training_indices = torch.randperm(self.x_training.shape[0])[:n_train]
+            self.x_training = self.x_training[new_training_indices]
+            new_validation_indices = torch.randperm(self.x_validation.shape[0])[:n_val]
+            self.x_validation = self.x_validation[new_validation_indices]
 
         print("Full dataset:")
         print(f"\t{self.x_training.shape[0]} training")
