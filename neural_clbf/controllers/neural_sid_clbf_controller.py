@@ -29,8 +29,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
         clbf_hidden_size: int = 8,
         u_nn_hidden_layers: int = 1,
         u_nn_hidden_size: int = 8,
-        f_nn_hidden_layers: int = 1,
-        f_nn_hidden_size: int = 8,
+        Q_nn_hidden_layers: int = 1,
+        Q_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
         discrete_timestep: Optional[float] = None,
@@ -51,8 +51,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
             clbf_hidden_size: number of neurons per hidden layer in the CLBF network
             u_nn_hidden_layers: number of hidden layers to use for the controller
             u_nn_hidden_size: number of neurons per hidden layer in the controller
-            f_nn_hidden_layers: number of hidden layers to use for the learned dynamics
-            f_nn_hidden_size: number of neurons per hidden layer in the learned dynamics
+            Q_nn_hidden_layers: number of hidden layers to use for the learned dynamics
+            Q_nn_hidden_size: number of neurons per hidden layer in the learned dynamics
             clbf_lambda: convergence rate for the CLBF
             safety_level: safety level set value for the CLBF
             discrete_timestep: the duration of one discrete time step. Defaults to
@@ -156,25 +156,23 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # self.u_NN_layers["output_layer_activation"] = nn.ReLU()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
-        # Also define the dynamics learning network, denoted f_nn
-        self.f_nn_hidden_layers = f_nn_hidden_layers
-        self.f_nn_hidden_size = f_nn_hidden_size
+        # Also define the dynamics learning network, denoted Q_nn
+        self.Q_nn_hidden_layers = Q_nn_hidden_layers
+        self.Q_nn_hidden_size = Q_nn_hidden_size
         # Likewise, build the network up layer by layer, starting with the input
-        self.f_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.f_NN_layers["input_layer"] = nn.Linear(
+        self.Q_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
+        self.Q_NN_layers["input_layer"] = nn.Linear(
             self.n_dims_extended + self.dynamics_model.n_controls,
-            self.f_nn_hidden_size,
+            self.Q_nn_hidden_size,
         )
-        self.f_NN_layers["input_layer_activation"] = nn.ReLU()
-        for i in range(self.f_nn_hidden_layers):
-            self.f_NN_layers[f"layer_{i}"] = nn.Linear(
-                self.f_nn_hidden_size, self.f_nn_hidden_size
+        self.Q_NN_layers["input_layer_activation"] = nn.ReLU()
+        for i in range(self.Q_nn_hidden_layers):
+            self.Q_NN_layers[f"layer_{i}"] = nn.Linear(
+                self.Q_nn_hidden_size, self.Q_nn_hidden_size
             )
-            self.f_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
-        self.f_NN_layers["output_layer"] = nn.Linear(
-            self.f_nn_hidden_size, self.dynamics_model.n_dims
-        )
-        self.f_NN = nn.Sequential(self.f_NN_layers)
+            self.Q_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
+        self.Q_NN_layers["output_layer"] = nn.Linear(self.Q_nn_hidden_size, 1)
+        self.Q_NN = nn.Sequential(self.Q_NN_layers)
 
         # Initialize weights (thanks stackoverflow)
         def init_weights(m):
@@ -268,15 +266,17 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
         return u_scaled
 
-    def f(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
-        """Computes the learned dynamics from the state x
+    def Q(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+        """Computes the learned dynamics of V from the state x with action u
+
+        i.e. computs V_{t+1} given x_t and u_t
 
         args:
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                dynamics
-            x: bs x self.dynamics_model.n_controls the inputs for each x
+            u: bs x self.dynamics_model.n_controls the inputs for each x
         returns:
-            f trained such that dx/dt(u) = f
+            V_{t+1} the anticipated next value of the CLBF
         """
         # Apply the offset and range to normalize about zero
         # Do this for both the state...
@@ -291,12 +291,9 @@ class NeuralSIDCLBFController(pl.LightningModule):
         inputs = torch.cat((x, u_scaled), dim=-1)
 
         # Compute the dynamics effort using the neural network
-        f = self.f_NN(inputs)
+        Q = self.Q_NN(inputs)
 
-        # Scale to reflect state ranges
-        f = f * self.x_semi_range.type_as(x) + self.x_center.type_as(x)
-
-        return f
+        return Q
 
     def forward(self, x):
         """Determine the control input for a given state using a NN
@@ -350,7 +347,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         u_nn = self.u(x)
         # We simulate trajectories forwards using the learned dynamics
         V = self.V(x)
-        V_next = self.V(self.f(x, u_nn))
+        V_next = self.Q(x, u_nn)
         V_change = V_next - self.clbf_lambda * V
         clbf_descent_term = F.relu(eps + V_change).mean()
         loss.append(("CLBF descent term", clbf_descent_term))
@@ -371,10 +368,11 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
         # Add a loss term for dynamics learning
         u_nn = self.u(x)
-        x_next_est = self.f(x, u_nn)
+        V_next_est = self.Q(x, u_nn)
         next_num_timesteps = round(self.discrete_timestep / self.dynamics_model.dt)
         x_next_true = self.simulator_fn(x, next_num_timesteps)[:, -1, :]
-        dynamics_difference = ((x_next_est - x_next_true) ** 2).sum(dim=-1)
+        V_next_true = self.V(x_next_true)
+        dynamics_difference = ((V_next_est - V_next_true) ** 2).sum(dim=-1)
         loss["Dynamics MSE"] = dynamics_difference.mean()
 
         # And a loss term for the controller, which decreases at every episode
@@ -553,7 +551,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         )
 
         primal_opt_f = torch.optim.SGD(
-            list(self.f_NN.parameters()) + list(self.u_NN.parameters()),
+            list(self.Q_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
