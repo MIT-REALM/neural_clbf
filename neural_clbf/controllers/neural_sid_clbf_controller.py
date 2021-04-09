@@ -383,6 +383,9 @@ class NeuralSIDCLBFController(pl.LightningModule):
         control_difference = ((u_nn - u_nominal) ** 2).sum(dim=-1)
         loss["Control MSE"] = control_loss_weight * control_difference.mean()
 
+        if torch.isnan(loss["Control MSE"]) or torch.isnan(loss["Dynamics MSE"]):
+            import pdb; pdb.set_trace()
+
         return loss
 
     def training_step(self, batch, batch_idx, optimizer_idx):
