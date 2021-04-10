@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
-from neural_clbf.controllers import NeuralSIDCLBFController
+from neural_clbf.controllers import CLBFDDPGController
 from neural_clbf.experiments.common.episodic_datamodule import (
     EpisodicDataModule,
 )
@@ -35,6 +35,8 @@ def rollout_plotting_cb(clbf_net):
         t_sim=6.0,
         n_sims_per_start=1,
         controller_period=controller_period,
+        goal_check_fn=clbf_net.dynamics_model.goal_mask,
+        out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
     )
 
 
@@ -69,8 +71,10 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=500,
-        trajectory_length=1000,
+        trajectories_per_episode=200,
+        trajectory_length=500,
+        fixed_samples=100000,
+        max_points=1000000,
         val_split=0.1,
         batch_size=1024,
     )
@@ -89,7 +93,7 @@ def main(args):
     ]
 
     # Initialize the controller
-    clbf_controller = NeuralSIDCLBFController(
+    clbf_controller = CLBFDDPGController(
         dynamics_model,
         scenarios,
         data_module,
@@ -101,10 +105,9 @@ def main(args):
         Q_nn_hidden_layers=3,
         Q_nn_hidden_size=32,
         discrete_timestep=controller_period,
-        controller_period=controller_period,
         primal_learning_rate=1e-3,
-        dual_learning_rate=1e-3,
-        epochs_per_episode=50,
+        polyak=0.99,
+        epochs_per_episode=10,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
@@ -116,13 +119,14 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/quad2d_obstacles/",
-        name="episodic_Q",
+        name="DDPG",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
     )
 
     # Train
+    torch.autograd.set_detect_anomaly(True)
     trainer.fit(clbf_controller)
 
 

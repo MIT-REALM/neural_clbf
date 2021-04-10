@@ -22,14 +22,16 @@ def test_episodic_datamodule():
         initial_domain,
         trajectories_per_episode=100,
         trajectory_length=50,
+        fixed_samples=1000,
         val_split=0.1,
-        batch_size=64,
+        batch_size=10,
     )
     assert dm is not None
 
     # After preparing data, there should be a bunch of sample points
     dm.prepare_data()
-    expected_num_datapoints = 2 * dm.trajectories_per_episode * dm.trajectory_length
+    expected_num_datapoints = dm.trajectories_per_episode * dm.trajectory_length
+    expected_num_datapoints += dm.fixed_samples
     val_pts = int(expected_num_datapoints * dm.val_split)
     train_pts = expected_num_datapoints - val_pts
     assert dm.x_training.shape[0] == train_pts

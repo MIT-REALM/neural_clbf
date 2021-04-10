@@ -25,6 +25,7 @@ class EpisodicDataModule(pl.LightningDataModule):
         initial_domain: List[Tuple[float, float]],
         trajectories_per_episode: int = 100,
         trajectory_length: int = 5000,
+        fixed_samples: int = 100000,
         max_points: int = 10000000,
         val_split: float = 0.1,
         batch_size: int = 64,
@@ -37,6 +38,7 @@ class EpisodicDataModule(pl.LightningDataModule):
                              tuples denoting the min/max range for each dimension
             trajectories_per_episode: the number of rollouts to conduct at each episode
             trajectory_length: the number of samples to collect in each trajectory
+            fixed_samples: the number of uniform samples to collect
             val_split: the fraction of sampled data to reserve for validation
             batch_size: the batch size
         """
@@ -48,6 +50,7 @@ class EpisodicDataModule(pl.LightningDataModule):
         # Save the parameters
         self.trajectories_per_episode = trajectories_per_episode
         self.trajectory_length = trajectory_length
+        self.fixed_samples = fixed_samples
         self.max_points = max_points
         self.val_split = val_split
         self.batch_size = batch_size
@@ -93,12 +96,8 @@ class EpisodicDataModule(pl.LightningDataModule):
         """
         Generate new data points by sampling uniformly from the state space
         """
-        # We want to get roughly the same number of points sampled uniformly as from
-        # simulation
-        N_samples = self.trajectories_per_episode * self.trajectory_length
-
         # Sample all dimensions from [0, 1], then scale and shift as needed
-        x_sample = torch.Tensor(N_samples, self.n_dims).uniform_(0.0, 1.0)
+        x_sample = torch.Tensor(self.fixed_samples, self.n_dims).uniform_(0.0, 1.0)
         for i in range(self.n_dims):
             x_sample[:, i] = (
                 x_sample[:, i] * (self.x_max[i] - self.x_min[i]) + self.x_min[i]
@@ -167,17 +166,15 @@ class EpisodicDataModule(pl.LightningDataModule):
         self.x_training = torch.cat((self.x_training, x[training_indices]))
         self.x_validation = torch.cat((self.x_validation, x[validation_indices]))
 
-        # If we've exceeded the maximum number of points, sample down to the max number
+        # If we've exceeded the maximum number of points, forget the oldest
         if self.x_training.shape[0] + self.x_validation.shape[0] > self.max_points:
-            print("Sample budget exceeded! Downsampling...")
+            print("Sample budget exceeded! Forgetting...")
             # Figure out how many training and validation points we should have
             n_val = int(self.max_points * self.val_split)
             n_train = self.max_points - n_val
-            # And then randomly select only that many points
-            new_training_indices = torch.randperm(self.x_training.shape[0])[:n_train]
-            self.x_training = self.x_training[new_training_indices]
-            new_validation_indices = torch.randperm(self.x_validation.shape[0])[:n_val]
-            self.x_validation = self.x_validation[new_validation_indices]
+            # And then keep only the most recent points
+            self.x_training = self.x_training[:-n_train]
+            self.x_validation = self.x_validation[:-n_val]
 
         print("Full dataset:")
         print(f"\t{self.x_training.shape[0]} training")

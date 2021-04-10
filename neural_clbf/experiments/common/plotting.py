@@ -102,17 +102,27 @@ def plot_CLBF(
         x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    contours = axs.contour(
+    # Plot safe levels
+    axs.contour(
+        x_vals.cpu(),
+        y_vals.cpu(),
+        V_grid.cpu(),
+        colors=["green"],
+        levels=[clbf_net.safe_level.item()],  # type: ignore
+    )
+    # And unsafe levels
+    axs.contour(
         x_vals.cpu(),
         y_vals.cpu(),
         V_grid.cpu(),
         colors=["blue"],
-        levels=[clbf_net.safety_level],
+        levels=[clbf_net.unsafe_level.item()],  # type: ignore
     )
     axs.set_xlabel(x_axis_label)
     axs.set_ylabel(y_axis_label)
     axs.set_title("$V$")
-    axs.plot([], [], c="blue", label="V(x) = c")
+    axs.plot([], [], c="green", label="Safe")
+    axs.plot([], [], c="blue", label="Unsafe")
     axs.legend()
 
     # # Then for dV/dt
@@ -155,6 +165,7 @@ def rollout_CLBF(
     t_sim: float = 5.0,
     controller_period: float = 0.01,
     goal_check_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+    out_of_bounds_check_fn: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
 ) -> Tuple[str, plt.figure]:
     """Simulate the performance of the controller over time
 
@@ -173,6 +184,8 @@ def rollout_CLBF(
         controller_period: the period determining how often the controller is run
         goal_check_fn: a function that takes a tensor and returns a tensor of booleans
                        indicating whether a state is in the goal
+        out_of_bounds_check_fn: a function that takes a tensor and returns a tensor of
+                                booleans indicating whether a state is out of bounds
     returns:
         a matplotlib.pyplot.figure containing the plots of state and control input
         over time.
@@ -240,6 +253,7 @@ def rollout_CLBF(
     t_final = 0
     controller_failed = False
     goal_reached = False
+    out_of_bounds = False
     controller_update_freq = int(controller_period / delta_t)
     try:
         print("Simulating CLBF rollout...")
@@ -273,6 +287,12 @@ def rollout_CLBF(
                 if goal_check_fn(x_sim[tstep, :, :]).all():
                     goal_reached = True
                     break
+            # Or if we've gone out of bounds, stop the rollout
+            if out_of_bounds_check_fn is not None:
+                if out_of_bounds_check_fn(x_sim[tstep, :, :]).any():
+                    out_of_bounds = True
+                    print(f"out of bounds at\n{x_sim[tstep, :, :]}")
+                    break
 
     except (Exception, RuntimeError, OverflowError):
         controller_failed = True
@@ -291,6 +311,8 @@ def rollout_CLBF(
     # If the controller fails, mark that on the plot
     if goal_reached:
         ax1.set_title("Goal reached!")
+    if out_of_bounds:
+        ax1.set_title("Out of bounds!")
     if controller_failed:
         ax1.set_title("Controller failure!")
 

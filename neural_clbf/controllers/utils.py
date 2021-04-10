@@ -9,10 +9,13 @@ if TYPE_CHECKING:
     from neural_clbf.controllers.neural_sid_clbf_controller import (
         NeuralSIDCLBFController,
     )
+    from neural_clbf.controllers.clbf_ddpg_controller import CLBFDDPGController
 
 
 # Define a convenience type
-Controller = Union["NeuralCLBFController", "NeuralSIDCLBFController"]
+Controller = Union[
+    "NeuralCLBFController", "NeuralSIDCLBFController", "CLBFDDPGController"
+]
 
 
 class SGA(Optimizer):
