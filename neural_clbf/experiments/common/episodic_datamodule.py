@@ -122,6 +122,17 @@ class EpisodicDataModule(pl.LightningDataModule):
         self.x_training = x[training_indices]
         self.x_validation = x[validation_indices]
 
+        print("Full dataset:")
+        print(f"\t{self.x_training.shape[0]} training")
+        print(f"\t{self.x_validation.shape[0]} validation")
+        print("\t----------------------")
+        print(f"\t{self.model.goal_mask(self.x_training).sum()} goal points")
+        print(f"\t({self.model.goal_mask(self.x_validation).sum()} val)")
+        print(f"\t{self.model.safe_mask(self.x_training).sum()} safe points")
+        print(f"\t({self.model.safe_mask(self.x_validation).sum()} val)")
+        print(f"\t{self.model.unsafe_mask(self.x_training).sum()} unsafe points")
+        print(f"\t({self.model.unsafe_mask(self.x_validation).sum()} val)")
+
         # Turn these into tensor datasets
         self.training_data = TensorDataset(
             self.x_training,
