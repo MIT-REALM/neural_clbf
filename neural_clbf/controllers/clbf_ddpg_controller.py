@@ -589,7 +589,7 @@ class CLBFDDPGController(pl.LightningModule):
 
     def configure_optimizers(self):
         clbf_opt = torch.optim.SGD(
-            list(self.V_NN.parameters()) + [self.safe_level, self.unsafe_level],
+            list(self.V_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
