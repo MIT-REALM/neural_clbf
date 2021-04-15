@@ -19,7 +19,7 @@ from neural_clbf.systems import Quad2D
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-start_x = torch.tensor([[-1.5, 0.1, 0.0, 0.0, 0.0, 0.0]])
+start_x = torch.tensor([[-0.75, 0.75, 0.0, 0.0, 0.0, 0.0]])
 controller_period = 0.01
 simulation_dt = 0.001
 
@@ -107,7 +107,7 @@ def main(args):
         discrete_timestep=controller_period,
         primal_learning_rate=1e-3,
         polyak=0.995,
-        epochs_per_episode=10,
+        epochs_per_episode=100,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
