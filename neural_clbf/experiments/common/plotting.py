@@ -118,11 +118,27 @@ def plot_CLBF(
         colors=["blue"],
         levels=[clbf_net.unsafe_level.item()],  # type: ignore
     )
+    # And goal levels
+    axs.contour(
+        x_vals.cpu(),
+        y_vals.cpu(),
+        V_grid.cpu(),
+        colors=["white"],
+        levels=[0.0],
+    )
     axs.set_xlabel(x_axis_label)
     axs.set_ylabel(y_axis_label)
     axs.set_title("$V$")
-    axs.plot([], [], c="green", label="Safe")
-    axs.plot([], [], c="blue", label="Unsafe")
+    axs.plot(
+        [], [], c="green", label=f"Safe V={clbf_net.safe_level.item()}"  # type: ignore
+    )
+    axs.plot(
+        [],
+        [],
+        c="blue",
+        label=f"Unsafe V={clbf_net.unsafe_level.item()}",  # type: ignore
+    )
+    axs.plot([], [], c="white", label="Goal V=0")
     axs.legend()
 
     # # Then for dV/dt

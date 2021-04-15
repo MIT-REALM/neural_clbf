@@ -30,8 +30,8 @@ class CLBFDDPGController(pl.LightningModule):
         clbf_hidden_size: int = 8,
         u_nn_hidden_layers: int = 1,
         u_nn_hidden_size: int = 8,
-        Q_nn_hidden_layers: int = 1,
-        Q_nn_hidden_size: int = 8,
+        f_nn_hidden_layers: int = 1,
+        f_nn_hidden_size: int = 8,
         clbf_lambda: float = 0.99,
         discrete_timestep: Optional[float] = None,
         primal_learning_rate: float = 1e-3,
@@ -50,8 +50,8 @@ class CLBFDDPGController(pl.LightningModule):
             clbf_hidden_size: number of neurons per hidden layer in the CLBF network
             u_nn_hidden_layers: number of hidden layers to use for the controller
             u_nn_hidden_size: number of neurons per hidden layer in the controller
-            Q_nn_hidden_layers: number of hidden layers to use for the learned dynamics
-            Q_nn_hidden_size: number of neurons per hidden layer in the learned dynamics
+            f_nn_hidden_layers: number of hidden layers to use for the learned dynamics
+            f_nn_hidden_size: number of neurons per hidden layer in the learned dynamics
             clbf_lambda: convergence rate for the CLBF
             discrete_timestep: the duration of one discrete time step. Defaults to
                                dynamics_model.dt
@@ -144,23 +144,25 @@ class CLBFDDPGController(pl.LightningModule):
         # self.u_NN_layers["output_layer_activation"] = nn.ReLU()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
-        # Also define the dynamics learning network, denoted Q_nn
-        self.Q_nn_hidden_layers = Q_nn_hidden_layers
-        self.Q_nn_hidden_size = Q_nn_hidden_size
+        # Also define the dynamics learning network, denoted f_nn
+        self.f_nn_hidden_layers = f_nn_hidden_layers
+        self.f_nn_hidden_size = f_nn_hidden_size
         # Likewise, build the network up layer by layer, starting with the input
-        self.Q_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.Q_NN_layers["input_layer"] = nn.Linear(
+        self.f_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
+        self.f_NN_layers["input_layer"] = nn.Linear(
             self.n_dims_extended + self.dynamics_model.n_controls,
-            self.Q_nn_hidden_size,
+            self.f_nn_hidden_size,
         )
-        self.Q_NN_layers["input_layer_activation"] = nn.ReLU()
-        for i in range(self.Q_nn_hidden_layers):
-            self.Q_NN_layers[f"layer_{i}"] = nn.Linear(
-                self.Q_nn_hidden_size, self.Q_nn_hidden_size
+        self.f_NN_layers["input_layer_activation"] = nn.ReLU()
+        for i in range(self.f_nn_hidden_layers):
+            self.f_NN_layers[f"layer_{i}"] = nn.Linear(
+                self.f_nn_hidden_size, self.f_nn_hidden_size
             )
-            self.Q_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
-        self.Q_NN_layers["output_layer"] = nn.Linear(self.Q_nn_hidden_size, 1)
-        self.Q_NN = nn.Sequential(self.Q_NN_layers)
+            self.f_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
+        self.f_NN_layers["output_layer"] = nn.Linear(
+            self.f_nn_hidden_size, self.n_dims_extended
+        )
+        self.f_NN = nn.Sequential(self.f_NN_layers)
 
         # Also initialize target networks for the CLBF and controller networks
         self.V_NN_target = deepcopy(self.V_NN)
@@ -298,17 +300,17 @@ class CLBFDDPGController(pl.LightningModule):
                 p_targ.data.mul_(self.polyak)
                 p_targ.data.add_((1 - self.polyak) * p.data)
 
-    def Q(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
-        """Computes the learned dynamics of V from the state x with action u
+    def f(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
+        """Computes the learned dynamics of x_{t+1} from the state x_t with action u_t
 
-        i.e. computs V_{t+1} given x_t and u_t
+        i.e. computs x_{t+1} given x_t and u_t
 
         args:
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                dynamics
             u: bs x self.dynamics_model.n_controls the inputs for each x
         returns:
-            V_{t+1} the anticipated next value of the CLBF
+            x_{t+1} the anticipated next value of the state
         """
         # Apply the offset and range to normalize about zero
         # Do this for both the state...
@@ -323,9 +325,9 @@ class CLBFDDPGController(pl.LightningModule):
         inputs = torch.cat((x, u_scaled), dim=-1)
 
         # Compute the dynamics effort using the neural network
-        Q = self.Q_NN(inputs)
+        x_next = self.f_NN(inputs)
 
-        return Q
+        return x_next
 
     def forward(self, x):
         """Determine the control input for a given state using a NN
@@ -391,9 +393,9 @@ class CLBFDDPGController(pl.LightningModule):
 
         return loss
 
-    def Q_loss(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def f_loss(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
-        Evaluate the loss on the Q network
+        Evaluate the loss on the f network
 
         args:
             x: the points at which to evaluate the loss
@@ -402,17 +404,16 @@ class CLBFDDPGController(pl.LightningModule):
         """
         loss = {}
 
-        # Use the Q network to predict the next CLBF value
+        # Use the f network to predict the next state value
         u_target = self.u_target(x)
-        V_next_est = self.Q(x, u_target)
-        # Get the true next CLBF value by simulating forward and using the target
+        x_next_est = self.f(x, u_target)
+        # Get the true next state value by simulating forward and using the target
         # network
         next_num_timesteps = round(self.discrete_timestep / self.dynamics_model.dt)
         x_next_true = self.simulator_fn(x, next_num_timesteps, target=True)[:, -1, :]
-        V_next_true = self.V_target(x_next_true)
-        # Regress Q to learn the true next value
-        Q_difference = ((V_next_est - V_next_true) ** 2).sum(dim=-1)
-        loss["Q MSE"] = Q_difference.mean()
+        # Regress f to learn the true next value
+        f_difference = ((x_next_est - x_next_true) ** 2).sum(dim=-1)
+        loss["Dynamics MSE"] = f_difference.mean()
 
         return loss
 
@@ -427,13 +428,13 @@ class CLBFDDPGController(pl.LightningModule):
         """
         loss = {}
 
-        # The controller's job is to minimize Q
         # Get the control input
         u = self.u(x)
-        # Get the Q value with this input
-        Q = self.Q(x, u)
-        # The goal is to minimize Q, so the loss is just Q
-        loss["Controller loss"] = Q.mean()
+        # Get the next state value with this input
+        x_next = self.f(x, u)
+        # The goal is to minimize V at the next state
+        V_next = self.V(x_next)
+        loss["Controller loss"] = V_next.mean()
 
         return loss
 
@@ -447,8 +448,8 @@ class CLBFDDPGController(pl.LightningModule):
         self.most_recent_opt_idx = optimizer_idx
         if self.opt_idx_dict[optimizer_idx] == "CLBF":
             component_losses.update(self.V_loss(x, goal_mask, safe_mask, unsafe_mask))
-        elif self.opt_idx_dict[optimizer_idx] == "Q":
-            component_losses.update(self.Q_loss(x))
+        elif self.opt_idx_dict[optimizer_idx] == "f":
+            component_losses.update(self.f_loss(x))
         elif self.opt_idx_dict[optimizer_idx] == "u":
             component_losses.update(self.u_loss(x))
 
@@ -510,7 +511,7 @@ class CLBFDDPGController(pl.LightningModule):
         # Get the various losses
         component_losses = {}
         component_losses.update(self.V_loss(x, goal_mask, safe_mask, unsafe_mask))
-        component_losses.update(self.Q_loss(x))
+        component_losses.update(self.f_loss(x))
         component_losses.update(self.u_loss(x))
 
         # Compute the overall loss by summing up the individual losses
@@ -556,7 +557,7 @@ class CLBFDDPGController(pl.LightningModule):
         # **Now entering spicetacular automation zone**
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of every episode, using arbitrary plotting callbacks!
-        if self.current_epoch % self.epochs_per_episode == 0:
+        if True or self.current_epoch % self.epochs_per_episode == 0:
             for plot_fn in self.plotting_callbacks:
                 plot_name, plot = plot_fn(self)
                 self.logger.experiment.add_figure(
@@ -589,13 +590,13 @@ class CLBFDDPGController(pl.LightningModule):
 
     def configure_optimizers(self):
         clbf_opt = torch.optim.SGD(
-            list(self.V_NN.parameters()),
+            list(self.V_NN.parameters()) + [self.safe_level, self.unsafe_level],
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
 
-        Q_opt = torch.optim.SGD(
-            list(self.Q_NN.parameters()),
+        f_opt = torch.optim.SGD(
+            list(self.f_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
@@ -606,6 +607,6 @@ class CLBFDDPGController(pl.LightningModule):
             weight_decay=1e-6,
         )
 
-        self.opt_idx_dict = {0: "CLBF", 1: "Q", 2: "u"}
+        self.opt_idx_dict = {0: "CLBF", 1: "f", 2: "u"}
 
-        return [clbf_opt, Q_opt, u_opt]
+        return [clbf_opt, f_opt, u_opt]
