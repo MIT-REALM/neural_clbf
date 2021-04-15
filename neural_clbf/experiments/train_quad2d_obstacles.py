@@ -43,7 +43,7 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-2.0, 1.0), (-0.5, 1.5)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
+        domain=[(-1.0, 1.0), (-0.5, 1.0)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
         n_grid=15,
         x_axis_index=Quad2D.PX,
         y_axis_index=Quad2D.PZ,
@@ -61,7 +61,7 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-1.5, 1.5),  # x
+        (-0.75, 0.75),  # x
         (0.0, 1.0),  # z
         (-np.pi / 4, np.pi / 4),  # theta
         (-1.0, 1.0),  # vx
@@ -98,12 +98,12 @@ def main(args):
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=2,
-        clbf_hidden_size=32,
-        u_nn_hidden_layers=2,
-        u_nn_hidden_size=32,
-        f_nn_hidden_layers=3,
-        f_nn_hidden_size=32,
+        clbf_hidden_layers=4,
+        clbf_hidden_size=64,
+        u_nn_hidden_layers=4,
+        u_nn_hidden_size=64,
+        f_nn_hidden_layers=4,
+        f_nn_hidden_size=64,
         discrete_timestep=controller_period,
         primal_learning_rate=1e-3,
         polyak=0.995,
