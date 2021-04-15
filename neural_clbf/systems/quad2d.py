@@ -135,10 +135,10 @@ class Quad2D(ControlAffineSystem):
         upper_limit = torch.ones(self.n_dims)
         upper_limit[Quad2D.PX] = 2.0
         upper_limit[Quad2D.PZ] = 2.0
-        upper_limit[Quad2D.THETA] = np.pi
-        upper_limit[Quad2D.VX] = 4.0
-        upper_limit[Quad2D.VZ] = 4.0
-        upper_limit[Quad2D.THETA_DOT] = 4 * np.pi
+        upper_limit[Quad2D.THETA] = 0.5 * np.pi
+        upper_limit[Quad2D.VX] = 2.0
+        upper_limit[Quad2D.VZ] = 2.0
+        upper_limit[Quad2D.THETA_DOT] = 1.0 * np.pi
 
         lower_limit = -1.0 * upper_limit
 
