@@ -102,11 +102,11 @@ def main(args):
         clbf_hidden_size=32,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=32,
-        Q_nn_hidden_layers=3,
-        Q_nn_hidden_size=32,
+        f_nn_hidden_layers=3,
+        f_nn_hidden_size=32,
         discrete_timestep=controller_period,
         primal_learning_rate=1e-3,
-        polyak=0.99,
+        polyak=0.995,
         epochs_per_episode=10,
     )
     # Add the DataModule hooks
