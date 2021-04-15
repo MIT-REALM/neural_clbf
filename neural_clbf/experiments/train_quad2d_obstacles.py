@@ -74,7 +74,7 @@ def main(args):
         trajectories_per_episode=200,
         trajectory_length=500,
         fixed_samples=100000,
-        max_points=1000000,
+        max_points=500000,
         val_split=0.1,
         batch_size=1024,
     )

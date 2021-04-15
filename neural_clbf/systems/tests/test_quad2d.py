@@ -194,8 +194,8 @@ def test_quad2d_obstacles_goal_mask():
     # These points should all be outside the goal
     out_of_goal_mask = torch.tensor(
         [
-            [0.2, 0.1, 0.0, 0.0, 0.0, 0.0],  # too far in xz
-            [0.1, 0.2, 0.0, 0.0, 0.0, 0.0],  # too far in xz
+            [0.3, 0.1, 0.0, 0.0, 0.0, 0.0],  # too far in xz
+            [0.1, 0.3, 0.0, 0.0, 0.0, 0.0],  # too far in xz
             [0.0, 0.0, 0.0, 1.0, 0.1, 0.0],  # too fast in xz
             [0.0, 0.0, 0.0, 0.1, 1.0, 0.0],  # too fast in xz
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.1],  # too fast in theta dot
