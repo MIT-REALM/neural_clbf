@@ -173,8 +173,8 @@ class EpisodicDataModule(pl.LightningDataModule):
             n_val = int(self.max_points * self.val_split)
             n_train = self.max_points - n_val
             # And then keep only the most recent points
-            self.x_training = self.x_training[:-n_train]
-            self.x_validation = self.x_validation[:-n_val]
+            self.x_training = self.x_training[-n_train:]
+            self.x_validation = self.x_validation[-n_val:]
 
         print("Full dataset:")
         print(f"\t{self.x_training.shape[0]} training")
