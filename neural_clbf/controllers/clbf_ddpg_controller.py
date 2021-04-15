@@ -35,7 +35,7 @@ class CLBFDDPGController(pl.LightningModule):
         clbf_lambda: float = 0.99,
         discrete_timestep: Optional[float] = None,
         primal_learning_rate: float = 1e-3,
-        polyak: float = 0.99,
+        polyak: float = 0.995,
         epochs_per_episode: int = 5,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
@@ -384,6 +384,10 @@ class CLBFDDPGController(pl.LightningModule):
         V_change = V_next - self.clbf_lambda * V
         clbf_descent_term = F.relu(eps + V_change).mean()
         loss.append(("CLBF descent term", clbf_descent_term))
+
+        #   5.) A term to encourage unsafe_level > safe_level
+        level_term = F.relu(eps + self.safe_level - self.unsafe_level).mean()
+        loss.append(("CLBF level difference", level_term))
 
         return loss
 

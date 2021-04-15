@@ -236,7 +236,7 @@ class Quad2D(ControlAffineSystem):
         goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Define the goal region as being near the goal
-        near_goal_xz = x[:, : Quad2D.PZ + 1].norm(dim=-1) <= 0.2
+        near_goal_xz = x[:, : Quad2D.PZ + 1].norm(dim=-1) <= 0.3
         goal_mask.logical_and_(near_goal_xz)
         near_goal_theta = x[:, Quad2D.THETA].abs() <= 1.0
         goal_mask.logical_and_(near_goal_theta)
