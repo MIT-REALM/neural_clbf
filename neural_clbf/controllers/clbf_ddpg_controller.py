@@ -380,9 +380,9 @@ class CLBFDDPGController(pl.LightningModule):
         V = self.V(x)
         # Simulate trajectories forwards using the true dynamics...
         next_num_timesteps = round(self.discrete_timestep / self.dynamics_model.dt)
-        x_next = self.simulator_fn(x, next_num_timesteps, target=True)[:, -1, :]
-        # and get the next CLBF value from the target network
-        V_next = self.V_target(x_next)
+        x_next = self.simulator_fn(x, next_num_timesteps)[:, -1, :]
+        # and get the next CLBF value from the V network
+        V_next = self.V(x_next)
         V_change = V_next - self.clbf_lambda * V
         clbf_descent_term = F.relu(eps + V_change).mean()
         loss.append(("CLBF descent term", clbf_descent_term))
@@ -405,12 +405,11 @@ class CLBFDDPGController(pl.LightningModule):
         loss = {}
 
         # Use the f network to predict the next state value
-        u_target = self.u_target(x)
-        x_next_est = self.f(x, u_target)
-        # Get the true next state value by simulating forward and using the target
-        # network
+        u = self.u(x)
+        x_next_est = self.f(x, u)
+        # Get the true next state value by simulating forward
         next_num_timesteps = round(self.discrete_timestep / self.dynamics_model.dt)
-        x_next_true = self.simulator_fn(x, next_num_timesteps, target=True)[:, -1, :]
+        x_next_true = self.simulator_fn(x, next_num_timesteps)[:, -1, :]
         # Regress f to learn the true next value
         f_difference = ((x_next_est - x_next_true) ** 2).sum(dim=-1)
         loss["Dynamics MSE"] = f_difference.mean()
