@@ -513,11 +513,11 @@ class CLBFDDPGController(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         """Conduct the validation step for the given batch"""
         # Extract the input and masks from the batch
-        x, goal_mask, safe_mask, unsafe_mask = batch
+        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
 
         # Get the various losses
         component_losses = {}
-        component_losses.update(self.V_loss(x, goal_mask, safe_mask, unsafe_mask))
+        component_losses.update(self.V_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal))
         component_losses.update(self.f_loss(x))
         component_losses.update(self.u_loss(x))
 
