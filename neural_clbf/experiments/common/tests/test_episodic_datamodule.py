@@ -45,9 +45,9 @@ def test_episodic_datamodule():
     # Each of those things should have the appropriate number of items
     # (point, goal, safe, unsafe)
     for data in dm.training_data:
-        assert len(data) == 4
+        assert len(data) == 5
     for data in dm.validation_data:
-        assert len(data) == 4
+        assert len(data) == 5
 
     # Also make sure the data loaders are batched appropriately
     train_dl = dm.train_dataloader()

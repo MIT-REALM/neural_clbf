@@ -153,6 +153,10 @@ class MockSystem(ControlAffineSystem):
 
         return unsafe_mask
 
+    def distance_to_goal(self, x):
+        """Return the distance from x to the goal"""
+        return x.norm(dim=-1)
+
     def goal_mask(self, x):
         """Return the mask of x indicating points in the goal set (within 0.2 m of the
         goal).

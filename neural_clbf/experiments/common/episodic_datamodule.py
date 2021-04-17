@@ -139,12 +139,14 @@ class EpisodicDataModule(pl.LightningDataModule):
             self.model.goal_mask(self.x_training),
             self.model.safe_mask(self.x_training),
             self.model.unsafe_mask(self.x_training),
+            self.model.distance_to_goal(self.x_training),
         )
         self.validation_data = TensorDataset(
             self.x_validation,
             self.model.goal_mask(self.x_validation),
             self.model.safe_mask(self.x_validation),
             self.model.unsafe_mask(self.x_validation),
+            self.model.distance_to_goal(self.x_validation),
         )
 
     def add_data(self, simulator: Callable[[torch.Tensor, int], torch.Tensor]):
@@ -204,12 +206,14 @@ class EpisodicDataModule(pl.LightningDataModule):
             self.model.goal_mask(self.x_training),
             self.model.safe_mask(self.x_training),
             self.model.unsafe_mask(self.x_training),
+            self.model.distance_to_goal(self.x_training),
         )
         self.validation_data = TensorDataset(
             self.x_validation,
             self.model.goal_mask(self.x_validation),
             self.model.safe_mask(self.x_validation),
             self.model.unsafe_mask(self.x_validation),
+            self.model.distance_to_goal(self.x_validation),
         )
 
     def setup(self, stage=None):
