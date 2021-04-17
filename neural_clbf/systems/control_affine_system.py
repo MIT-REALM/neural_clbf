@@ -119,6 +119,17 @@ class ControlAffineSystem(ABC):
         pass
 
     @abstractmethod
+    def distance_to_goal(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the distance from each point in x to the goal (positive for points
+        outside the goal, negative for points inside the goal), normalized by the state
+        limits.
+
+        args:
+            x: the points from which we calculate distance
+        """
+        pass
+
+    @abstractmethod
     def goal_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating goal regions for this system
 

@@ -345,6 +345,7 @@ class CLBFDDPGController(pl.LightningModule):
         goal_mask: torch.Tensor,
         safe_mask: torch.Tensor,
         unsafe_mask: torch.Tensor,
+        dist_to_goal: torch.Tensor,
     ) -> List[Tuple[str, torch.Tensor]]:
         """
         Evaluate the loss on the CLBF
@@ -354,6 +355,7 @@ class CLBFDDPGController(pl.LightningModule):
             goal_mask: the points in x marked as part of the goal
             safe_mask: the points in x marked safe
             unsafe_mask: the points in x marked unsafe
+            dist_to_goal: the distance from x to the goal region
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
         """
@@ -369,6 +371,10 @@ class CLBFDDPGController(pl.LightningModule):
         V_safe = self.V(x[safe_mask])
         safe_clbf_term = F.relu(eps + V_safe - self.safe_level) + F.relu(eps - V_safe)
         loss.append(("CLBF safe region term", safe_clbf_term.mean()))
+
+        #   2b.) for tuning, V >= dist_to_goal in the safe region
+        safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
+        loss.append(("CLBF tuning term", safe_tuning_term.mean()))
 
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
@@ -440,13 +446,15 @@ class CLBFDDPGController(pl.LightningModule):
     def training_step(self, batch, batch_idx, optimizer_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
-        x, goal_mask, safe_mask, unsafe_mask = batch
+        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
 
         # Compute the losses for this optimizer
         component_losses = {}
         self.most_recent_opt_idx = optimizer_idx
         if self.opt_idx_dict[optimizer_idx] == "CLBF":
-            component_losses.update(self.V_loss(x, goal_mask, safe_mask, unsafe_mask))
+            component_losses.update(
+                self.V_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            )
         elif self.opt_idx_dict[optimizer_idx] == "f":
             component_losses.update(self.f_loss(x))
         elif self.opt_idx_dict[optimizer_idx] == "u":
