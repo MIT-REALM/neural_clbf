@@ -517,7 +517,9 @@ class CLBFDDPGController(pl.LightningModule):
 
         # Get the various losses
         component_losses = {}
-        component_losses.update(self.V_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal))
+        component_losses.update(
+            self.V_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
         component_losses.update(self.f_loss(x))
         component_losses.update(self.u_loss(x))
 
