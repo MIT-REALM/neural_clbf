@@ -20,7 +20,7 @@ from neural_clbf.systems import Quad2D
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 start_x = torch.tensor([[-0.75, 0.75, 0.0, 0.0, 0.0, 0.0]])
-controller_period = 0.01
+controller_period = 0.001
 simulation_dt = 0.001
 
 
@@ -120,7 +120,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/quad2d_obstacles/",
-        name="ControlAffine-VPG",
+        name="ControlAffine-VPG-1000Hz",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
