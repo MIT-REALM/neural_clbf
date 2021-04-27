@@ -369,7 +369,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn = self.u(x)
         for s in self.scenarios:
             next_num_timesteps = round(self.controller_period / self.dynamics_model.dt)
-            x_next = self.simulator_fn(x, next_num_timesteps)[:, -1, :]
+            x_next = self.simulator_fn(x, next_num_timesteps, use_qp=False)[:, -1, :]
             V_next = self.V(x_next)
             # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
             # simplifies to V_next - V + dt * lambda V \leq 0
@@ -534,11 +534,16 @@ class NeuralCLBFController(pl.LightningModule):
         self.logger.experiment.flush()
 
     @pl.core.decorators.auto_move_data
-    def simulator_fn(self, x_init: torch.Tensor, num_steps: int):
+    def simulator_fn(self, x_init: torch.Tensor, num_steps: int, use_qp: bool = True):
+        if use_qp:
+            controller_fn = self.forward
+        else:
+            controller_fn = self.u
+
         return self.dynamics_model.simulate(
             x_init,
             num_steps,
-            self.forward,
+            controller_fn,
             guard=self.dynamics_model.out_of_bounds_mask,
             controller_period=self.controller_period,
         )
