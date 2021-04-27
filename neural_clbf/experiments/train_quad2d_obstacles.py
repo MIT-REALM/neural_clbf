@@ -105,7 +105,8 @@ def main(args):
         clbf_hidden_size=32,
         u_nn_hidden_layers=3,
         u_nn_hidden_size=32,
-        discrete_timestep=controller_period,
+        controller_period=controller_period,
+        clbf_relaxation_penalty=10.0,
         primal_learning_rate=1e-3,
         epochs_per_episode=100,
     )
