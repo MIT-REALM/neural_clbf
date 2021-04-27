@@ -414,14 +414,13 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
 
-        # Compute the losses for this optimizer
+        # Compute the losses
         component_losses = {}
-        self.most_recent_opt_idx = optimizer_idx
         component_losses.update(
             self.V_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
         )
