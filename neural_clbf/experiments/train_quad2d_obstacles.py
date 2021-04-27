@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
-from neural_clbf.controllers import CLBFDDPGController
+from neural_clbf.controllers import NeuralSIDCLBFController
 from neural_clbf.experiments.common.episodic_datamodule import (
     EpisodicDataModule,
 )
@@ -93,20 +93,21 @@ def main(args):
     ]
 
     # Initialize the controller
-    clbf_controller = CLBFDDPGController(
+    clbf_controller = NeuralSIDCLBFController(
         dynamics_model,
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=4,
-        clbf_hidden_size=64,
-        u_nn_hidden_layers=4,
-        u_nn_hidden_size=64,
-        f_nn_hidden_layers=4,
-        f_nn_hidden_size=64,
+        clbf_hidden_layers=3,
+        clbf_hidden_size=32,
+        u_nn_hidden_layers=3,
+        u_nn_hidden_size=32,
+        f_nn_hidden_layers=3,
+        f_nn_hidden_size=32,
+        g_nn_hidden_layers=3,
+        g_nn_hidden_size=32,
         discrete_timestep=controller_period,
         primal_learning_rate=1e-3,
-        polyak=0.995,
         epochs_per_episode=100,
     )
     # Add the DataModule hooks
@@ -119,7 +120,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/quad2d_obstacles/",
-        name="DDPG",
+        name="ControlAffine-VPG",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True

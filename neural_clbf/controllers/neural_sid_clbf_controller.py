@@ -35,7 +35,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         g_nn_hidden_layers: int = 1,
         g_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
-        safety_level: float = 2.0,
+        safe_level: float = 2.0,
         discrete_timestep: Optional[float] = None,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
@@ -61,7 +61,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
             g_nn_hidden_size: number of neurons per hidden layer in the learned dynamics
                               (control part)
             clbf_lambda: convergence rate for the CLBF
-            safety_level: safety level set value for the CLBF
+            safe_level: safety level set value for the CLBF
             discrete_timestep: the duration of one discrete time step. Defaults to
                                dynamics_model.dt
             primal_learning_rate: the learning rate for SGD for the network weights
@@ -83,7 +83,8 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Save the other parameters
         assert clbf_lambda <= 1.0
         self.clbf_lambda = clbf_lambda
-        self.safety_level = safety_level
+        self.safe_level = safe_level
+        self.unsafe_level = safe_level
         self.primal_learning_rate = primal_learning_rate
         self.epochs_per_episode = epochs_per_episode
 
@@ -127,9 +128,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
             self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
-        self.V_layers["output_layer"] = nn.Linear(
-            self.clbf_hidden_size, self.clbf_hidden_size
-        )
+        self.V_layers["output_layer"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_net = nn.Sequential(self.V_layers)
 
         # Also define the controller network, denoted u_NN
@@ -266,7 +265,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         # Construct a Normal distribution with these parameters, and get the action
         # plus the log probability of that action
         dist = Normal(u_mean, u_std)
-        u = dist.sample((x.shape[0],))
+        u = dist.sample()
         u_log_prob = dist.log_prob(u).sum(axis=-1)
 
         # Scale to reflect plant actuator limits
@@ -297,13 +296,13 @@ class NeuralSIDCLBFController(pl.LightningModule):
         f = self.f_NN(x_normalized)
         g = self.g_NN(x_normalized)
         # And reshape g to be a matrix
-        g = g.reshape((-1, self.dynamics_model.n_dims))
+        g = g.reshape((-1, self.dynamics_model.n_dims, self.dynamics_model.n_controls))
 
         # Also make sure u is the right shape
         u = u.reshape((-1, self.dynamics_model.n_controls, 1))
 
         # Compute the dynamics in control-affine form
-        x_next = x + f + torch.bmm(g, u).unsqueeze(-1)
+        x_next = x + f + torch.bmm(g, u).squeeze()
 
         return x_next
 
@@ -348,16 +347,16 @@ class NeuralSIDCLBFController(pl.LightningModule):
 
         #   2.) 0 <= V <= safe_level in the safe region
         V_safe = self.V(x[safe_mask])
-        safe_clbf_term = F.relu(eps + V_safe - self.safety_level) + F.relu(eps - V_safe)
+        safe_clbf_term = F.relu(eps + V_safe - self.safe_level) + F.relu(eps - V_safe)
         loss.append(("CLBF safe region term", safe_clbf_term.mean()))
 
         #   2b.) for tuning, V >= dist_to_goal in the safe region
         safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
         loss.append(("CLBF tuning term", safe_tuning_term.mean()))
 
-        #   3.) V >= safe_level in the unsafe region
+        #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
-        unsafe_clbf_term = F.relu(eps + self.safety_level - V_unsafe)
+        unsafe_clbf_term = F.relu(eps + self.unsafe_level - V_unsafe)
         loss.append(("CLBF unsafe region term", unsafe_clbf_term.mean()))
 
         #   4.) A term to encourage satisfaction of CLBF decrease condition
@@ -568,7 +567,7 @@ class NeuralSIDCLBFController(pl.LightningModule):
         )
 
         u_opt = torch.optim.SGD(
-            list(self.u_NN.parameters()) + list(self.u_log_std),
+            list(self.u_NN.parameters()) + [self.u_log_std],
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )

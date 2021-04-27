@@ -103,20 +103,26 @@ def plot_CLBF(
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
     # Plot safe levels
+    safe_level = clbf_net.safe_level
+    if isinstance(safe_level, torch.Tensor):
+        safe_level = safe_level.item()
     axs.contour(
         x_vals.cpu(),
         y_vals.cpu(),
         V_grid.cpu(),
         colors=["green"],
-        levels=[clbf_net.safe_level.item()],  # type: ignore
+        levels=[safe_level],  # type: ignore
     )
     # And unsafe levels
+    unsafe_level = clbf_net.unsafe_level
+    if isinstance(unsafe_level, torch.Tensor):
+        unsafe_level = unsafe_level.item()
     axs.contour(
         x_vals.cpu(),
         y_vals.cpu(),
         V_grid.cpu(),
         colors=["blue"],
-        levels=[clbf_net.unsafe_level.item()],  # type: ignore
+        levels=[unsafe_level],  # type: ignore
     )
     # And goal levels
     axs.contour(
@@ -129,14 +135,12 @@ def plot_CLBF(
     axs.set_xlabel(x_axis_label)
     axs.set_ylabel(y_axis_label)
     axs.set_title("$V$")
-    axs.plot(
-        [], [], c="green", label=f"Safe V={clbf_net.safe_level.item()}"  # type: ignore
-    )
+    axs.plot([], [], c="green", label=f"Safe V={safe_level}")  # type: ignore
     axs.plot(
         [],
         [],
         c="blue",
-        label=f"Unsafe V={clbf_net.unsafe_level.item()}",  # type: ignore
+        label=f"Unsafe V={unsafe_level}",  # type: ignore
     )
     axs.plot([], [], c="white", label="Goal V=0")
     axs.legend()
