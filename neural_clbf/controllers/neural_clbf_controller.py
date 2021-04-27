@@ -1,6 +1,8 @@
 from typing import Tuple, Dict, List, Optional, Callable
 from collections import OrderedDict
+import itertools
 
+from qpth.qp import QPFunction
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,7 +12,7 @@ from matplotlib.pyplot import figure
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
-from neural_clbf.controllers.utils import Controller, SGA
+from neural_clbf.controllers.utils import Controller
 from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
 
 
@@ -24,15 +26,15 @@ class NeuralCLBFController(pl.LightningModule):
         dynamics_model: ControlAffineSystem,
         scenarios: ScenarioList,
         datamodule: EpisodicDataModule,
-        clbf_hidden_layers: int = 1,
-        clbf_hidden_size: int = 8,
+        clbf_hidden_layers: int = 2,
+        clbf_hidden_size: int = 48,
         u_nn_hidden_layers: int = 1,
         u_nn_hidden_size: int = 8,
-        clbf_lambda: float = 1.0,
+        clbf_lambda: float = 0.1,
         safety_level: float = 1.0,
-        clbf_timestep: float = 0.01,
+        clbf_relaxation_penalty: float = 10.0,
+        controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
-        dual_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
@@ -49,9 +51,9 @@ class NeuralCLBFController(pl.LightningModule):
             u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             clbf_lambda: convergence rate for the CLBF
             safety_level: safety level set value for the CLBF
-            clbf_timestep: the timestep to use in simulating forward Vdot
+            clbf_relaxation_penalty: the penalty for relaxing CLBF conditions.
+            controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights
-            dual_learning_rate: the learning rate for SGD for the dual variables
             epochs_per_episode: the number of epochs to include in each episode
             plotting_callbacks: a list of plotting functions that each take a
                                 NeuralCLBFController and return a tuple of a string
@@ -70,9 +72,9 @@ class NeuralCLBFController(pl.LightningModule):
         # Save the other parameters
         self.clbf_lambda = clbf_lambda
         self.safety_level = safety_level
-        self.clbf_timestep = clbf_timestep
+        self.clbf_relaxation_penalty = clbf_relaxation_penalty
+        self.controller_period = controller_period
         self.primal_learning_rate = primal_learning_rate
-        self.dual_learning_rate = dual_learning_rate
         self.epochs_per_episode = epochs_per_episode
 
         # Compute and save the center and range of the state variables
@@ -99,12 +101,8 @@ class NeuralCLBFController(pl.LightningModule):
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
             self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
-        self.V_layers["output_layer"] = nn.Linear(
-            self.clbf_hidden_size, self.clbf_hidden_size
-        )
-        self.V_net = nn.Sequential(self.V_layers)
-        # We also want to be able to add a bias to V as needed
-        self.V_bias = nn.Linear(1, 1)
+        self.V_layers["output_layer"] = nn.Linear(self.clbf_hidden_size, 1)
+        self.V_nn = nn.Sequential(self.V_layers)
 
         # Also define the proof controller network, denoted u_nn
         self.u_nn_hidden_layers = u_nn_hidden_layers
@@ -127,11 +125,6 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_NN_layers["output_layer_activation"] = nn.Tanh()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
-        # Since this is technically a constrained optimization, we need to define dual
-        # variables (Lagrange multipliers) that allow us to dualize the constraints
-        self.n_constraints = 4
-        self.lagrange_multipliers = nn.Parameter(torch.ones(self.n_constraints))
-
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the input using the stored center point and range
 
@@ -141,19 +134,16 @@ class NeuralCLBFController(pl.LightningModule):
         return (x - self.x_center.type_as(x)) / self.x_range.type_as(x)
 
     def V(self, x: torch.Tensor) -> torch.Tensor:
-        """Computes the CLBF value from the output layer of V_net
+        """Computes the CLBF value from the output layer of V_nn
 
         args:
-            x: bs x sellf.dynamics_model.n_dims the points at which to evaluate the CLBF
+            x: bs x self.dynamics_model.n_dims the points at which to evaluate the CLBF
         """
         # Apply the offset and range to normalize about zero
         x = self.normalize(x)
 
         # Compute the CLBF as the sum-squares of the output layer activations
-        V_output = self.V_net(x)
-        V = 0.5 * (V_output * V_output).sum(-1).reshape(x.shape[0], 1)
-        # and add the bias
-        V = self.V_bias(V)
+        V = self.V_nn(x)
 
         return V
 
@@ -187,7 +177,7 @@ class NeuralCLBFController(pl.LightningModule):
         returns:
             Lf_V: bs x self.n_scenarios x 1 tensor of Lie derivatives of V
                   along f
-            Lf_V: bs x self.n_scenarios x self.dynamics_model.n_controls tensor
+            Lg_V: bs x self.n_scenarios x self.dynamics_model.n_controls tensor
                   of Lie derivatives of V along g
         """
         # Get the Jacobian of V for each entry in the batch
@@ -221,70 +211,169 @@ class NeuralCLBFController(pl.LightningModule):
         return Lf_V, Lg_V
 
     def forward(self, x):
-        """Determine the control input for a given state using a NN
+        """Determine the control input for a given state using a QP
 
         args:
             x: bs x self.dynamics_model.n_dims tensor of state
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control inputs
         """
-        return self.u(x)
+        # Get the value of the CLBF and its Lie derivatives
+        V = self.V(x)
+        Lf_V, Lg_V = self.V_lie_derivatives(x)
 
-    def constraints(
+        # To find the control input, we want to solve a QP constrained by
+        #
+        # L_f V + L_g V u + lambda V <= 0
+        #
+        # To ensure that this QP is always feasible, we relax the constraint
+        #
+        # L_f V + L_g V u + lambda V - r <= 0
+        #                              r >= 0
+        #
+        # and add the cost term relaxation_penalty * r.
+        #
+        # The decision variables here are z=[u r], so our quadratic cost is
+        # 1/2 z^T Q z + p^T z. We want this cost to equal
+        #
+        #           ||u - u_nominal||^2 + relaxation_penalty * r^2
+        #
+        # This reduces to (ignoring constant terms)
+        #
+        #           u^T I u - 2 u_nominal^T u + relaxation_penalty * r^2
+        #
+        # so we need
+        #
+        #           Q = [I 0
+        #                0 relaxation_penalty]
+        #           p = [-2 u_nominal^T 0]
+        #
+        # Expressing the constraints formally:
+        #
+        #       Gz <= h
+        #
+        # where h = [-L_f V - lambda V, 0]^T and G = [L_g V, -1
+        #                                             ... repeated for each scenario
+        #                                             0,     -1
+        #                                             G_u,    0]
+        # We can optionally add the user-specified inequality constraints as G_u
+        n_controls = self.dynamics_model.n_controls
+        n_scenarios = self.n_scenarios
+        bs = x.shape[0]
+
+        # Start by building the cost
+        Q = torch.zeros(bs, n_controls + 1, n_controls + 1).type_as(x)
+        for j in range(n_controls):
+            Q[:, j, j] = 1.0
+        Q[:, -1, -1] = self.qp_clbf_relaxation_penalty + 0.01
+        p = torch.zeros(bs, n_controls + 1).type_as(x)
+        p[:, :-1] = -2.0 * self.dynamics_model.u_nominal(x)
+
+        # Now build the inequality constraints G @ [u r]^T <= h
+        G = torch.zeros(
+            bs, n_scenarios + 1 + self.G_u.shape[0], n_controls + 1
+        ).type_as(x)
+        h = torch.zeros(bs, n_scenarios + 1 + self.h_u.shape[0], 1).type_as(x)
+        # CLBF decrease condition in each scenario
+        for i in range(n_scenarios):
+            G[:, i, :n_controls] = Lg_V[:, i, :]
+            G[:, i, -1] = -1
+            h[:, i, :] = -Lf_V[:, i, :] - self.clbf_lambda * V
+        # Positive relaxation
+        G[:, n_scenarios, -1] = -1
+        h[:, n_scenarios, 0] = 0.0
+        # Actuation limits
+        G[:, n_scenarios + 1 :, :n_controls] = self.G_u.type_as(x)
+        h[:, n_scenarios + 1 :, 0] = self.h_u.view(1, -1).type_as(x)
+        h = h.squeeze()
+        # No equality constraints
+        A = torch.tensor([])
+        b = torch.tensor([])
+
+        # Convert to double precision for solving
+        Q = Q.double()
+        p = p.double()
+        G = G.double()
+        h = h.double()
+
+        # Solve the QP!
+        result: torch.Tensor = QPFunction(verbose=False)(Q, p, G, h, A, b)
+        # Extract the results
+        u = result[:, :n_controls]
+
+        return u
+
+    def V_loss(
         self,
         x: torch.Tensor,
         goal_mask: torch.Tensor,
         safe_mask: torch.Tensor,
         unsafe_mask: torch.Tensor,
+        dist_to_goal: torch.Tensor,
     ) -> List[Tuple[str, torch.Tensor]]:
         """
-        Evaluate the constraints on the CLBF. All of these quantities should be equal to
-        zero at satisfaction
+        Evaluate the loss on the CLBF
 
         args:
-            x: the points at which to evaluate the loss
+            x: the points at which to evaluate the loss,
             goal_mask: the points in x marked as part of the goal
             safe_mask: the points in x marked safe
             unsafe_mask: the points in x marked unsafe
+            dist_to_goal: the distance from x to the goal region
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
         """
         eps = 1e-2
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        #   1.) CLBF value should be non-positive on the goal set.
+        #   1.) CLBF value should be negative on the goal set.
         V0 = self.V(x[goal_mask])
         goal_term = F.relu(eps + V0)
         loss.append(("CLBF goal term", goal_term.mean()))
 
-        #   2.) 0 <= V <= safe_level in the safe region (ignoring the goal)
-        safe_mask = torch.logical_and(safe_mask, torch.logical_not(goal_mask))
+        #   2.) 0 <= V <= safety_level in the safe region
         V_safe = self.V(x[safe_mask])
         safe_clbf_term = F.relu(eps + V_safe - self.safety_level) + F.relu(eps - V_safe)
-        loss.append(("CLBF safe region term", safe_clbf_term.mean()))
+        loss.append(("CLBF safe region term", 100 * safe_clbf_term.mean()))
 
-        #   3.) V >= safe_level in the unsafe region
+        # #   2b.) for tuning, V >= dist_to_goal in the safe region
+        # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
+        # loss.append(("CLBF tuning term", safe_tuning_term.mean()))
+
+        #   3.) V >= safety_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
         unsafe_clbf_term = F.relu(eps + self.safety_level - V_unsafe)
-        loss.append(("CLBF unsafe region term", unsafe_clbf_term.mean()))
+        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term.mean()))
 
-        # #   4a.) A term to encourage satisfaction of CLBF decrease condition
-        # # We compute the change in V by simulating x forward in time and checking if V
-        # # decreases
-        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        # V = self.V(x)
-        # u_nn = self.u(x)
-        # for s in self.scenarios:
-        #     xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, s)
-        #     x_next = x + self.clbf_timestep * xdot
-        #     V_next = self.V(x_next)
-        #     # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
-        #     # simplifies to V_next - V + dt * lambda V \leq 0
-        #     # simplifies to V_next - (1 + dt * lambda) V \leq 0
-        #     clbf_descent_term_sim += F.relu(
-        #         eps + V_next - (1 - self.clbf_lambda * self.clbf_timestep) * V
-        #     ).mean()
-        # loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+        #   4.) A term to encourage satisfaction of CLBF decrease condition
+        # Get the current CLBF values
+        V = self.V(x)
+        # Simulate trajectories forwards using the true dynamics...
+        next_num_timesteps = round(self.controller_period / self.dynamics_model.dt)
+        x_next = self.simulator_fn(x, next_num_timesteps)[:, -1, :]
+        # and get the next CLBF value from the V network
+        V_next = self.V(x_next)
+        V_change = V_next - self.clbf_lambda * V
+        clbf_descent_term = F.relu(eps + V_change).mean()
+        loss.append(("CLBF descent term", clbf_descent_term))
+
+        #   4a.) A term to encourage satisfaction of CLBF decrease condition
+        # We compute the change in V by simulating x forward in time and checking if V
+        # decreases
+        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        V = self.V(x)
+        u_nn = self.u(x)
+        for s in self.scenarios:
+            next_num_timesteps = round(self.controller_period / self.dynamics_model.dt)
+            x_next = self.simulator_fn(x, next_num_timesteps)[:, -1, :]
+            V_next = self.V(x_next)
+            # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
+            # simplifies to V_next - V + dt * lambda V \leq 0
+            # simplifies to V_next - (1 + dt * lambda) V \leq 0
+            clbf_descent_term_sim += F.relu(
+                eps + V_next - (1 - self.clbf_lambda * self.controller_period) * V
+            ).mean()
+        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
         #   4b.) A term to encourage satisfaction of CLBF decrease condition
         # This time, we compute the decrease using linearization, which provides a
@@ -305,10 +394,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def objective(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def u_loss(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
-        Define the objective (the quantity we seek to minimize, subject to the
-        constraints defined above)
+        Evaluate the loss on the controller
 
         args:
             x: the points at which to evaluate the loss
@@ -317,40 +405,30 @@ class NeuralCLBFController(pl.LightningModule):
         """
         loss = {}
 
-        # Add a loss term for the control input magnitude
-        u_nn = self.u(x)
-        u_nominal = self.dynamics_model.u_nominal(x)
-        controller_squared_difference = ((u_nn - u_nominal) ** 2).sum(dim=-1)
-        loss["Control diff. from nominal"] = controller_squared_difference.mean()
+        # Currently no control-specific loss terms...
+        loss["Controller loss"] = torch.tensor(0.0).type_as(x)
 
         return loss
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
-        x, goal_mask, safe_mask, unsafe_mask = batch
+        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
 
-        # Get the various losses
+        # Compute the losses for this optimizer
         component_losses = {}
-        objective_dict = self.objective(x)
-        component_losses.update(objective_dict)
-        constraints_list = self.constraints(x, goal_mask, safe_mask, unsafe_mask)
-        component_losses.update(dict(constraints_list))
+        self.most_recent_opt_idx = optimizer_idx
+        component_losses.update(
+            self.V_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(self.u_loss(x))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
         # For the objectives, we can just sum them
-        for _, loss_value in objective_dict.items():
+        for _, loss_value in component_losses.items():
             if not torch.isnan(loss_value):
                 total_loss += loss_value
-        # The constraints need to be multiplied by the dual variables
-        for i, constraint_tuple in enumerate(constraints_list):
-            loss_value = constraint_tuple[1]
-            component_losses[
-                "Lambda " + constraint_tuple[0]
-            ] = self.lagrange_multipliers[i]
-            if not torch.isnan(loss_value):
-                total_loss += self.lagrange_multipliers[i] * loss_value
 
         batch_dict = {"loss": total_loss, **component_losses}
 
@@ -358,15 +436,25 @@ class NeuralCLBFController(pl.LightningModule):
 
     def training_epoch_end(self, outputs):
         """This function is called after every epoch is completed."""
-        # Outputs contains two lists, one for training and one for validation
-        # We only need the training one here
-        outputs = outputs[0]
-        # Compute the average loss over all batches for each component
+        # Outputs contains a list for each optimizer, and we need to collect the losses
+        # from all of them
+        outputs = itertools.chain(*outputs)
+        # Gather up all of the losses for each component from all batches
+        losses = {}
+        for batch_output in outputs:
+            for key in batch_output.keys():
+                # if we've seen this key before, add this component loss to the list
+                if key in losses:
+                    losses[key].append(batch_output[key])
+                else:
+                    # otherwise, make a new list
+                    losses[key] = [batch_output[key]]
+
+        # Average all the losses
         avg_losses = {}
-        for loss_key in outputs[0].keys():
-            avg_losses[loss_key] = torch.stack(
-                [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
-            ).mean()
+        for key in losses.keys():
+            key_losses = torch.stack(losses[key])
+            avg_losses[key] = torch.nansum(key_losses) / key_losses.shape[0]
 
         # Log the overall loss...
         self.log("Total loss / train", avg_losses["loss"], sync_dist=True)
@@ -381,26 +469,21 @@ class NeuralCLBFController(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         """Conduct the validation step for the given batch"""
         # Extract the input and masks from the batch
-        x, goal_mask, safe_mask, unsafe_mask = batch
+        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
 
         # Get the various losses
         component_losses = {}
-        objective_dict = self.objective(x)
-        component_losses.update(objective_dict)
-        constraints_list = self.constraints(x, goal_mask, safe_mask, unsafe_mask)
-        component_losses.update(dict(constraints_list))
+        component_losses.update(
+            self.V_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(self.u_loss(x))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
         # For the objectives, we can just sum them
-        for _, loss_value in objective_dict.items():
+        for _, loss_value in component_losses.items():
             if not torch.isnan(loss_value):
                 total_loss += loss_value
-        # The constraints need to be multiplied by the dual variables
-        for i, constraint_tuple in enumerate(constraints_list):
-            loss_value = constraint_tuple[1]
-            if not torch.isnan(loss_value):
-                total_loss += self.lagrange_multipliers[i] * loss_value
 
         batch_dict = {"val_loss": total_loss, **component_losses}
 
@@ -408,12 +491,22 @@ class NeuralCLBFController(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         """This function is called after every epoch is completed."""
-        # Compute the average loss over all batches for each component
+        # Gather up all of the losses for each component from all batches
+        losses = {}
+        for batch_output in outputs:
+            for key in batch_output.keys():
+                # if we've seen this key before, add this component loss to the list
+                if key in losses:
+                    losses[key].append(batch_output[key])
+                else:
+                    # otherwise, make a new list
+                    losses[key] = [batch_output[key]]
+
+        # Average all the losses
         avg_losses = {}
-        for loss_key in outputs[0].keys():
-            losses = [x[loss_key] for x in outputs if not torch.isnan(x[loss_key])]
-            if len(losses) > 0:
-                avg_losses[loss_key] = torch.stack(losses).mean()
+        for key in losses.keys():
+            key_losses = torch.stack(losses[key])
+            avg_losses[key] = torch.nansum(key_losses) / key_losses.shape[0]
 
         # Log the overall loss...
         self.log("Total loss / val", avg_losses["val_loss"], sync_dist=True)
@@ -437,6 +530,16 @@ class NeuralCLBFController(pl.LightningModule):
         self.logger.experiment.close()
         self.logger.experiment.flush()
 
+    @pl.core.decorators.auto_move_data
+    def simulator_fn(self, x_init: torch.Tensor, num_steps: int):
+        return self.dynamics_model.simulate(
+            x_init,
+            num_steps,
+            self.forward,
+            guard=self.dynamics_model.out_of_bounds_mask,
+            controller_period=self.controller_period,
+        )
+
     def on_validation_epoch_end(self):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
@@ -449,15 +552,13 @@ class NeuralCLBFController(pl.LightningModule):
 
     def configure_optimizers(self):
         primal_opt = torch.optim.SGD(
-            list(self.V_net.parameters())
+            list(self.V_nn.parameters())
             + list(self.V_bias.parameters())
             + list(self.u_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
 
-        dual_opt = SGA(
-            [self.lagrange_multipliers], lr=self.dual_learning_rate, weight_decay=1e-6
-        )
+        self.opt_idx_dict = {0: "primal"}
 
-        return [primal_opt, dual_opt]
+        return [primal_opt]

@@ -133,13 +133,11 @@ class Quad2D(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        # upper_limit[Quad2D.PX] = 2.0
-        # upper_limit[Quad2D.PZ] = 2.0
-        upper_limit[Quad2D.PX] = 1.0
-        upper_limit[Quad2D.PZ] = 1.0
-        upper_limit[Quad2D.THETA] = 0.5 * np.pi
-        upper_limit[Quad2D.VX] = 1.0
-        upper_limit[Quad2D.VZ] = 1.0
+        upper_limit[Quad2D.PX] = 4.0
+        upper_limit[Quad2D.PZ] = 4.0
+        upper_limit[Quad2D.THETA] = np.pi
+        upper_limit[Quad2D.VX] = 10.0
+        upper_limit[Quad2D.VZ] = 10.0
         upper_limit[Quad2D.THETA_DOT] = 2.0 * np.pi
 
         lower_limit = -1.0 * upper_limit
@@ -223,7 +221,7 @@ class Quad2D(ControlAffineSystem):
         unsafe_mask.logical_or_(obs2_mask)
 
         # Also constrain with a norm bound
-        norm_mask = x.norm(dim=-1) >= 7.0
+        norm_mask = x.norm(dim=-1) >= 5.0
         unsafe_mask.logical_or_(norm_mask)
 
         return unsafe_mask
