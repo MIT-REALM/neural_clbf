@@ -343,12 +343,13 @@ class NeuralCLBFController(pl.LightningModule):
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
         #   1.) CLBF value should be negative on the goal set.
-        V0 = self.V(x[goal_mask])
+        V = self.V(x)
+        V0 = V[goal_mask]
         goal_term = F.relu(eps + V0)
         loss.append(("CLBF goal term", goal_term.mean()))
 
         #   2.) 0 <= V <= safe_level in the safe region
-        V_safe = self.V(x[safe_mask])
+        V_safe = V[safe_mask]
         safe_clbf_term = F.relu(eps + V_safe - self.safe_level) + F.relu(eps - V_safe)
         loss.append(("CLBF safe region term", 100 * safe_clbf_term.mean()))
 
@@ -357,7 +358,7 @@ class NeuralCLBFController(pl.LightningModule):
         # loss.append(("CLBF tuning term", safe_tuning_term.mean()))
 
         #   3.) V >= unsafe_level in the unsafe region
-        V_unsafe = self.V(x[unsafe_mask])
+        V_unsafe = V[unsafe_mask]
         unsafe_clbf_term = F.relu(eps + self.unsafe_level - V_unsafe)
         loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term.mean()))
 
@@ -365,7 +366,6 @@ class NeuralCLBFController(pl.LightningModule):
         # We compute the change in V by simulating x forward in time and checking if V
         # decreases
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        V = self.V(x)
         u_nn = self.u(x)
         for s in self.scenarios:
             next_num_timesteps = round(self.controller_period / self.dynamics_model.dt)
@@ -386,10 +386,9 @@ class NeuralCLBFController(pl.LightningModule):
         # Get the current value of the CLBF and its Lie derivatives
         # (Lie derivatives are computed using a linear fit of the dynamics)
         # TODO @dawsonc do we need dynamics learning here?
-        V = self.V(x)
         Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u(x).unsqueeze(-1)
+        u_nn = u_nn.unsqueeze(-1)
         for i, s in enumerate(self.scenarios):
             # Use these dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :].unsqueeze(1), u_nn)
