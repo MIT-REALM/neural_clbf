@@ -316,7 +316,7 @@ class NeuralCLBFController(pl.LightningModule):
         # Extract the results
         u = result[:, :n_controls]
 
-        return u
+        return u.type_as(x)
 
     def V_loss(
         self,
