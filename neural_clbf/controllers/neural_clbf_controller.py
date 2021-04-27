@@ -6,7 +6,6 @@ from qpth.qp import QPFunction
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd.functional import jacobian
 import pytorch_lightning as pl
 from matplotlib.pyplot import figure
 
@@ -93,16 +92,16 @@ class NeuralCLBFController(pl.LightningModule):
         self.clbf_hidden_size = clbf_hidden_size
         # We're going to build the network up layer by layer, starting with the input
         self.V_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.V_layers["input_layer"] = nn.Linear(
+        self.V_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.clbf_hidden_size
         )
-        self.V_layers["input_layer_activation"] = nn.Tanh()
+        self.V_layers["input_tanh"] = nn.Tanh()
         for i in range(self.clbf_hidden_layers):
-            self.V_layers[f"layer_{i}"] = nn.Linear(
+            self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
-            self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
-        self.V_layers["output_layer"] = nn.Linear(self.clbf_hidden_size, 1)
+            self.V_layers[f"layer_{i}_tanh"] = nn.Tanh()
+        self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
         # Also define the proof controller network, denoted u_nn
@@ -110,20 +109,20 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_nn_hidden_size = u_nn_hidden_size
         # Likewise, build the network up layer by layer, starting with the input
         self.u_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.u_NN_layers["input_layer"] = nn.Linear(
+        self.u_NN_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.u_nn_hidden_size
         )
-        self.u_NN_layers["input_layer_activation"] = nn.Tanh()
+        self.u_NN_layers["input_tanh"] = nn.Tanh()
         for i in range(self.u_nn_hidden_layers):
-            self.u_NN_layers[f"layer_{i}"] = nn.Linear(
+            self.u_NN_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.u_NN_layers[f"layer_{i}_tanh"] = nn.Tanh()
         # No output layer, so the control saturates at [-1, 1]
-        self.u_NN_layers["output_layer"] = nn.Linear(
+        self.u_NN_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_NN_layers["output_layer_activation"] = nn.Tanh()
+        self.u_NN_layers["output_tanh"] = nn.Tanh()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
         # Also set up the objective and actuation limit constraints for the qp
@@ -149,18 +148,44 @@ class NeuralCLBFController(pl.LightningModule):
         """
         return (x - self.x_center.type_as(x)) / self.x_range.type_as(x)
 
-    def V(self, x: torch.Tensor) -> torch.Tensor:
-        """Computes the CLBF value from the output layer of V_nn
+    def V_with_jacobian(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Computes the CLBF value and its Jacobian
 
         args:
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the CLBF
+        returns:
+            V: bs tensor of CLBF values
+            JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
         # Apply the offset and range to normalize about zero
         x = self.normalize(x)
 
-        # Compute the CLBF as the sum-squares of the output layer activations
-        V = self.V_nn(x)
+        # Compute the CLBF layer-by-layer, computing the Jacobian alongside
 
+        # We need to initialize the Jacobian to reflect the normalization that's already
+        # been done to x
+        bs = x.shape[0]
+        JV = torch.zeros((bs, x.shape[-1], x.shape[-1])).type_as(x)
+        # and for each dimension, we need to scale by the normalization
+        for dim in range(self.dynamics_model.n_dims):
+            JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
+
+        # Now step through each layer in V
+        V = x
+        for layer in self.V_nn:
+            V = layer(V)
+            if isinstance(layer, nn.Linear):
+                JV = torch.matmul(layer.weight, JV)
+            elif isinstance(layer, nn.Tanh):
+                JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
+            elif isinstance(layer, nn.ReLU):
+                JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
+
+        return V, JV
+
+    def V(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute the value of the CLBF"""
+        V, _ = self.V_with_jacobian(x)
         return V
 
     def u(self, x: torch.Tensor) -> torch.Tensor:
@@ -197,18 +222,10 @@ class NeuralCLBFController(pl.LightningModule):
                   of Lie derivatives of V along g
         """
         # Get the Jacobian of V for each entry in the batch
-        batch_size = x.shape[0]
-        J_V_x = torch.zeros(batch_size, 1, x.shape[1])
-        J_V_x = J_V_x.type_as(x)
-        # Since this might be called in a no_grad environment, we use the
-        # enable_grad environment to temporarily accumulate gradients
-        with torch.enable_grad():
-            for i in range(batch_size):
-                J_V_x[i, :, :] = jacobian(
-                    self.V, x[i, :].unsqueeze(0), create_graph=True
-                )
+        _, gradV = self.V_with_jacobian(x)
 
         # We need to compute Lie derivatives for each scenario
+        batch_size = x.shape[0]
         Lf_V = torch.zeros(batch_size, self.n_scenarios, 1)
         Lg_V = torch.zeros(batch_size, self.n_scenarios, self.dynamics_model.n_controls)
         Lf_V = Lf_V.type_as(x)
@@ -220,8 +237,8 @@ class NeuralCLBFController(pl.LightningModule):
             f, g = self.dynamics_model.control_affine_dynamics(x, params=s)
 
             # Multiply these with the Jacobian to get the Lie derivatives
-            Lf_V[:, i, :] = torch.bmm(J_V_x, f).squeeze(1)
-            Lg_V[:, i, :] = torch.bmm(J_V_x, g).squeeze(1)
+            Lf_V[:, i, :] = torch.bmm(gradV, f).squeeze(1)
+            Lg_V[:, i, :] = torch.bmm(gradV, g).squeeze(1)
 
         # return the Lie derivatives
         return Lf_V, Lg_V
