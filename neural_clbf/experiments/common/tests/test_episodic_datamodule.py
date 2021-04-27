@@ -2,6 +2,8 @@
 import random
 from typing import Dict
 
+import torch
+
 from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
 from neural_clbf.systems.tests.mock_system import MockSystem
 
@@ -12,7 +14,10 @@ model = MockSystem(params)
 
 def test_episodic_datamodule():
     """Test the custom DataModule for the f16"""
+    # Set a random seed for repeatability
     random.seed(0)
+    torch.manual_seed(0)
+
     initial_domain = [
         (-1.0, 1.0),
         (-1.0, 1.0),
