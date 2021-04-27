@@ -29,6 +29,7 @@ class EpisodicDataModule(pl.LightningDataModule):
         max_points: int = 10000000,
         val_split: float = 0.1,
         batch_size: int = 64,
+        safe_unsafe_goal_quotas: Tuple[float, float, float] = (0.0, 0.0, 0.0),
     ):
         """Initialize the DataModule
 
@@ -41,6 +42,9 @@ class EpisodicDataModule(pl.LightningDataModule):
             fixed_samples: the number of uniform samples to collect
             val_split: the fraction of sampled data to reserve for validation
             batch_size: the batch size
+            safe_unsafe_goal_quotas: a tuple specifying the minimum percentage of the
+                                     fixed samples that should be taken from the safe,
+                                     unsafe, and goal sets, respectively.
         """
         super().__init__()
 
@@ -54,6 +58,7 @@ class EpisodicDataModule(pl.LightningDataModule):
         self.max_points = max_points
         self.val_split = val_split
         self.batch_size = batch_size
+        self.quotas = safe_unsafe_goal_quotas
 
         # Define the sampling intervals for initial conditions as a hyper-rectangle
         assert len(initial_domain) == self.n_dims
@@ -74,8 +79,7 @@ class EpisodicDataModule(pl.LightningDataModule):
             simulator: a function that simulates the given initial conditions out for
                        the specified number of timesteps
         """
-        # Start by sampling from initial conditions
-        # Sample all dimensions from [0, 1], then scale and shift as needed
+        # Start by sampling from initial conditions from the given region
         x_init = torch.Tensor(self.trajectories_per_episode, self.n_dims).uniform_(
             0.0, 1.0
         )
@@ -96,14 +100,26 @@ class EpisodicDataModule(pl.LightningDataModule):
         """
         Generate new data points by sampling uniformly from the state space
         """
-        # Sample all dimensions from [0, 1], then scale and shift as needed
-        x_sample = torch.Tensor(self.fixed_samples, self.n_dims).uniform_(0.0, 1.0)
-        for i in range(self.n_dims):
-            x_sample[:, i] = (
-                x_sample[:, i] * (self.x_max[i] - self.x_min[i]) + self.x_min[i]
-            )
+        samples = []
+        # Figure out how many points are to be sampled at random, how many from the
+        # goal, safe, or unsafe regions specifically
+        min_safe, min_unsafe, min_goal = (
+            int(self.fixed_samples * region_min) for region_min in self.quotas
+        )
 
-        return x_sample
+        print("safe")
+        samples.append(self.model.sample_safe(min_safe))
+        print("unsafe")
+        samples.append(self.model.sample_unsafe(min_unsafe))
+        print("goal")
+        samples.append(self.model.sample_goal(min_goal))
+
+        # Sample all remaining points uniformly at random
+        free_samples = self.fixed_samples - (min_safe + min_unsafe + min_goal)
+        assert free_samples >= 0
+        samples.append(self.model.sample_state_space(free_samples))
+
+        return torch.vstack(samples)
 
     def prepare_data(self):
         """Create the dataset"""
@@ -112,6 +128,8 @@ class EpisodicDataModule(pl.LightningDataModule):
 
         # Augment those points with samples from the fixed range
         x_sample = self.sample_fixed()
+        print(x_sim.shape)
+        print(x_sample.shape)
         x = torch.cat((x_sim, x_sample), dim=0)
 
         # Randomly split data into training and test sets
