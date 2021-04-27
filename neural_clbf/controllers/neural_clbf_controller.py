@@ -265,7 +265,7 @@ class NeuralCLBFController(pl.LightningModule):
         Q = torch.zeros(bs, n_controls + 1, n_controls + 1).type_as(x)
         for j in range(n_controls):
             Q[:, j, j] = 1.0
-        Q[:, -1, -1] = self.qp_clbf_relaxation_penalty + 0.01
+        Q[:, -1, -1] = self.clbf_relaxation_penalty + 0.01
         p = torch.zeros(bs, n_controls + 1).type_as(x)
         p[:, :-1] = -2.0 * self.dynamics_model.u_nominal(x)
 
@@ -552,8 +552,7 @@ class NeuralCLBFController(pl.LightningModule):
 
     def configure_optimizers(self):
         primal_opt = torch.optim.SGD(
-            list(self.V_nn.parameters())
-            + list(self.u_NN.parameters()),
+            list(self.V_nn.parameters()) + list(self.u_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
