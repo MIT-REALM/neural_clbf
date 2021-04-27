@@ -71,7 +71,8 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Save the other parameters
         self.clbf_lambda = clbf_lambda
-        self.safety_level = safety_level
+        self.safe_level = safety_level
+        self.unsafe_level = safety_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
         self.controller_period = controller_period
         self.primal_learning_rate = primal_learning_rate
@@ -346,31 +347,19 @@ class NeuralCLBFController(pl.LightningModule):
         goal_term = F.relu(eps + V0)
         loss.append(("CLBF goal term", goal_term.mean()))
 
-        #   2.) 0 <= V <= safety_level in the safe region
+        #   2.) 0 <= V <= safe_level in the safe region
         V_safe = self.V(x[safe_mask])
-        safe_clbf_term = F.relu(eps + V_safe - self.safety_level) + F.relu(eps - V_safe)
+        safe_clbf_term = F.relu(eps + V_safe - self.safe_level) + F.relu(eps - V_safe)
         loss.append(("CLBF safe region term", 100 * safe_clbf_term.mean()))
 
         # #   2b.) for tuning, V >= dist_to_goal in the safe region
         # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
         # loss.append(("CLBF tuning term", safe_tuning_term.mean()))
 
-        #   3.) V >= safety_level in the unsafe region
+        #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = self.V(x[unsafe_mask])
-        unsafe_clbf_term = F.relu(eps + self.safety_level - V_unsafe)
+        unsafe_clbf_term = F.relu(eps + self.unsafe_level - V_unsafe)
         loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term.mean()))
-
-        #   4.) A term to encourage satisfaction of CLBF decrease condition
-        # Get the current CLBF values
-        V = self.V(x)
-        # Simulate trajectories forwards using the true dynamics...
-        next_num_timesteps = round(self.controller_period / self.dynamics_model.dt)
-        x_next = self.simulator_fn(x, next_num_timesteps)[:, -1, :]
-        # and get the next CLBF value from the V network
-        V_next = self.V(x_next)
-        V_change = V_next - self.clbf_lambda * V
-        clbf_descent_term = F.relu(eps + V_change).mean()
-        loss.append(("CLBF descent term", clbf_descent_term))
 
         #   4a.) A term to encourage satisfaction of CLBF decrease condition
         # We compute the change in V by simulating x forward in time and checking if V
