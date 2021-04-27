@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
-from neural_clbf.controllers import NeuralSIDCLBFController
+from neural_clbf.controllers import NeuralCLBFController
 from neural_clbf.experiments.common.episodic_datamodule import (
     EpisodicDataModule,
 )
@@ -54,7 +54,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Define the dynamics model
-    nominal_params = {"m": 1.0, "I": 0.001, "r": 0.25}
+    nominal_params = {"m": 1.0, "I": 0.01, "r": 0.25}
     dynamics_model = Quad2D(
         nominal_params, dt=simulation_dt, controller_dt=controller_period
     )
@@ -82,6 +82,9 @@ def main(args):
     # Define the scenarios
     scenarios = [
         nominal_params,
+        {"m": 1.05, "I": 0.01, "r": 0.25},
+        {"m": 1.0, "I": 0.0105, "r": 0.25},
+        {"m": 1.05, "I": 0.0105, "r": 0.25},
     ]
 
     # Define the plotting callbacks
@@ -93,7 +96,7 @@ def main(args):
     ]
 
     # Initialize the controller
-    clbf_controller = NeuralSIDCLBFController(
+    clbf_controller = NeuralCLBFController(
         dynamics_model,
         scenarios,
         data_module,
@@ -102,10 +105,6 @@ def main(args):
         clbf_hidden_size=32,
         u_nn_hidden_layers=3,
         u_nn_hidden_size=32,
-        f_nn_hidden_layers=3,
-        f_nn_hidden_size=32,
-        g_nn_hidden_layers=3,
-        g_nn_hidden_size=32,
         discrete_timestep=controller_period,
         primal_learning_rate=1e-3,
         epochs_per_episode=100,
@@ -120,7 +119,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/quad2d_obstacles/",
-        name="ControlAffine-VPG-1000Hz",
+        name="repeat",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
