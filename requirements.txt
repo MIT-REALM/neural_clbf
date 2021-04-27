@@ -13,3 +13,6 @@ black
 # Learning libraries
 pytorch >= 1.8.0
 pytorch-lightning >= 1.2.0
+
+# Optimization
+casadi >= 3.5.5
