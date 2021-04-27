@@ -1,6 +1,5 @@
 from typing import Tuple, Dict, List, Optional, Callable
 from collections import OrderedDict
-import itertools
 
 from qpth.qp import QPFunction
 import torch
@@ -455,9 +454,6 @@ class NeuralCLBFController(pl.LightningModule):
 
     def training_epoch_end(self, outputs):
         """This function is called after every epoch is completed."""
-        # Outputs contains a list for each optimizer, and we need to collect the losses
-        # from all of them
-        outputs = itertools.chain(*outputs)
         # Gather up all of the losses for each component from all batches
         losses = {}
         for batch_output in outputs:

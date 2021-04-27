@@ -139,7 +139,7 @@ class MockSystem(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+        safe_mask = x[:, 0] >= 0
 
         return safe_mask
 
@@ -149,7 +149,7 @@ class MockSystem(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+        unsafe_mask = x[:, 0] <= 0
 
         return unsafe_mask
 
@@ -164,6 +164,6 @@ class MockSystem(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+        goal_mask = x[:, 0].abs() <= 0.1
 
         return goal_mask
