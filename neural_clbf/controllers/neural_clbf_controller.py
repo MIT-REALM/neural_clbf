@@ -125,6 +125,21 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_NN_layers["output_layer_activation"] = nn.Tanh()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
+        # Also set up the objective and actuation limit constraints for the qp
+        # controller (enforced as G_u @ u <= h)
+        self.G_u = torch.zeros(
+            (2 * self.dynamics_model.n_controls, self.dynamics_model.n_controls)
+        )
+        self.h_u = torch.zeros((2 * self.dynamics_model.n_controls, 1))
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        for j in range(self.dynamics_model.n_controls):
+            # Upper limit u[j] <= upper_lim[j]
+            self.G_u[2 * j, j] = 1.0
+            self.h_u[2 * j, 0] = upper_lim[j]
+            # Upper limit u[j] >= lower_lim[j] (-> -u[j] <= -lower_lim[j])
+            self.G_u[2 * j + 1, j] = -1.0
+            self.h_u[2 * j + 1, 0] = -lower_lim[j]
+
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the input using the stored center point and range
 
