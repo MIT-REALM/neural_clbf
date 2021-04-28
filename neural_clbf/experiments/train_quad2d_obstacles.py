@@ -43,7 +43,7 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-1.0, 1.0), (-0.5, 1.0)],  # plot for x, z in [-2, 1], [-0.5, 1.5]
+        domain=[(-1.0, 1.0), (-0.5, 1.0)],  # plot for x, z
         n_grid=15,
         x_axis_index=Quad2D.PX,
         y_axis_index=Quad2D.PZ,
@@ -73,7 +73,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=1,
         trajectory_length=1,
-        fixed_samples=10000,
+        fixed_samples=100000,
         max_points=10000000,
         val_split=0.1,
         batch_size=1024,
@@ -107,7 +107,7 @@ def main(args):
         u_nn_hidden_layers=3,
         u_nn_hidden_size=32,
         controller_period=controller_period,
-        clbf_relaxation_penalty=10.0,
+        clbf_relaxation_penalty=50.0,
         primal_learning_rate=1e-3,
         epochs_per_episode=1000,
     )

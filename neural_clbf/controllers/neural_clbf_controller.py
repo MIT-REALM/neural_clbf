@@ -95,12 +95,12 @@ class NeuralCLBFController(pl.LightningModule):
         self.V_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.clbf_hidden_size
         )
-        self.V_layers["input_tanh"] = nn.Tanh()
+        self.V_layers["input_tanh"] = nn.ReLU()
         for i in range(self.clbf_hidden_layers):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
-            self.V_layers[f"layer_{i}_tanh"] = nn.Tanh()
+            self.V_layers[f"layer_{i}_tanh"] = nn.ReLU()
         self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
@@ -112,17 +112,17 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_NN_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.u_nn_hidden_size
         )
-        self.u_NN_layers["input_tanh"] = nn.Tanh()
+        self.u_NN_layers["input_tanh"] = nn.ReLU()
         for i in range(self.u_nn_hidden_layers):
             self.u_NN_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_NN_layers[f"layer_{i}_tanh"] = nn.Tanh()
+            self.u_NN_layers[f"layer_{i}_tanh"] = nn.ReLU()
         # No output layer, so the control saturates at [-1, 1]
         self.u_NN_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_NN_layers["output_tanh"] = nn.Tanh()
+        self.u_NN_layers["output_tanh"] = nn.ReLU()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
         # Also set up the objective and actuation limit constraints for the qp
@@ -298,7 +298,7 @@ class NeuralCLBFController(pl.LightningModule):
         Q = torch.zeros(bs, n_controls + 1, n_controls + 1).type_as(x)
         for j in range(n_controls):
             Q[:, j, j] = 1.0
-        Q[:, -1, -1] = 0 * self.clbf_relaxation_penalty + 0.01
+        Q[:, -1, -1] = self.clbf_relaxation_penalty + 0.01
         Q *= 2.0
         p = torch.zeros(bs, n_controls + 1).type_as(x)
         p[:, :-1] = -2.0 * self.dynamics_model.u_nominal(x)
@@ -394,7 +394,6 @@ class NeuralCLBFController(pl.LightningModule):
         # We compute the change in V by simulating x forward in time and checking if V
         # decreases
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        u_nn = self.u(x)
         for s in self.scenarios:
             next_num_timesteps = round(self.controller_period / self.dynamics_model.dt)
             x_next = self.simulator_fn(x, next_num_timesteps, use_qp=False)[:, -1, :]
@@ -416,6 +415,7 @@ class NeuralCLBFController(pl.LightningModule):
         # TODO @dawsonc do we need dynamics learning here?
         Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
+        u_nn = self.u(x)
         u_nn = u_nn.unsqueeze(-1)
         for i, s in enumerate(self.scenarios):
             # Use these dynamics to compute the derivative of V
