@@ -341,7 +341,7 @@ class Quad2D(ControlAffineSystem):
             u_nominal: bs x self.n_controls tensor of controls
         """
         # Compute nominal control from feedback + equilibrium control
-        u_nominal = -(self.K.type_as(x) @ x.T).T
+        u_nominal = -(self.K.type_as(x) @ (x - self.goal_point.squeeze()).T).T
         u_eq = torch.zeros_like(u_nominal) + self.nominal_params["m"] * grav / 2.0
 
         return u_nominal + u_eq

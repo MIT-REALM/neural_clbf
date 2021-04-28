@@ -138,6 +138,10 @@ class ControlAffineSystem(ABC):
         """
         pass
 
+    @property
+    def goal_point(self):
+        return torch.zeros((1, self.n_dims))
+
     def sample_state_space(self, num_samples: int) -> torch.Tensor:
         """Sample uniformly from the state space"""
         x_max, x_min = self.state_limits

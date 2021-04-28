@@ -30,7 +30,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn_hidden_size: int = 8,
         clbf_lambda: float = 0.1,
         safety_level: float = 1.0,
-        clbf_relaxation_penalty: float = 10.0,
+        clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
@@ -362,21 +362,31 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         V0 = V[goal_mask]
         goal_term = F.relu(eps + V0)
-        loss.append(("CLBF goal term", goal_term.mean()))
 
-        #   2.) 0 <= V <= safe_level in the safe region
+        #   1b.) CLBF should be minimized on the goal point
+        V_goal_pt = self.V(self.dynamics_model.goal_point)
+        goal_term = goal_term.mean() + V_goal_pt.mean()
+        loss.append(("CLBF goal term", goal_term))
+
+        #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
-        safe_clbf_term = F.relu(eps + V_safe - self.safe_level) + F.relu(eps - V_safe)
-        loss.append(("CLBF safe region term", 100 * safe_clbf_term.mean()))
+        safe_clbf_term = F.relu(eps + V_safe - self.safe_level).mean()
+        #   2b.) V >= 0 in the safe region minus the goal
+        safe_minus_goal_mask = torch.logical_and(
+            safe_mask, torch.logical_not(goal_mask)
+        )
+        V_safe_ex_goal = V[safe_minus_goal_mask]
+        safe_clbf_term += F.relu(eps - V_safe_ex_goal).mean()
+        loss.append(("CLBF safe region term", safe_clbf_term))
 
-        # #   2b.) for tuning, V >= dist_to_goal in the safe region
+        # #   2c.) for tuning, V >= dist_to_goal in the safe region
         # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
         # loss.append(("CLBF tuning term", safe_tuning_term.mean()))
 
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
         unsafe_clbf_term = F.relu(eps + self.unsafe_level - V_unsafe)
-        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term.mean()))
+        loss.append(("CLBF unsafe region term", unsafe_clbf_term.mean()))
 
         #   4a.) A term to encourage satisfaction of CLBF decrease condition
         # We compute the change in V by simulating x forward in time and checking if V

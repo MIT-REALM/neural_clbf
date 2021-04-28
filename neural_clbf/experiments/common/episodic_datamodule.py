@@ -107,11 +107,8 @@ class EpisodicDataModule(pl.LightningDataModule):
             int(self.fixed_samples * region_min) for region_min in self.quotas
         )
 
-        print("safe")
         samples.append(self.model.sample_safe(min_safe))
-        print("unsafe")
         samples.append(self.model.sample_unsafe(min_unsafe))
-        print("goal")
         samples.append(self.model.sample_goal(min_goal))
 
         # Sample all remaining points uniformly at random
@@ -128,8 +125,6 @@ class EpisodicDataModule(pl.LightningDataModule):
 
         # Augment those points with samples from the fixed range
         x_sample = self.sample_fixed()
-        print(x_sim.shape)
-        print(x_sample.shape)
         x = torch.cat((x_sim, x_sample), dim=0)
 
         # Randomly split data into training and test sets
