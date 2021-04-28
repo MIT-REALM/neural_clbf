@@ -363,22 +363,25 @@ class NeuralCLBFController(pl.LightningModule):
         #   1.) CLBF value should be negative on the goal set.
         V = self.V(x)
         V0 = V[goal_mask]
-        goal_term = F.relu(eps + V0).sum()
+        goal_region_violation = F.relu(eps + V0)
+        goal_term = goal_region_violation.mean() + goal_region_violation.max()
 
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point) + 1e-1
-        goal_term += (V_goal_pt ** 2).sum()
+        goal_term += (V_goal_pt ** 2).mean()
         loss.append(("CLBF goal term", goal_term))
 
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
-        safe_clbf_term = F.relu(eps + V_safe - self.safe_level).sum()
+        safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
+        safe_clbf_term = safe_V_too_big.mean() + safe_V_too_big.max()
         #   2b.) V >= 0 in the safe region minus the goal
         safe_minus_goal_mask = torch.logical_and(
             safe_mask, torch.logical_not(goal_mask)
         )
         V_safe_ex_goal = V[safe_minus_goal_mask]
-        safe_clbf_term += F.relu(eps - V_safe_ex_goal).sum()
+        safe_V_too_small = F.relu(eps - V_safe_ex_goal)
+        safe_clbf_term += safe_V_too_small.mean() + safe_V_too_small.max()
         loss.append(("CLBF safe region term", 100 * safe_clbf_term))
 
         # #   2c.) for tuning, V >= dist_to_goal in the safe region
@@ -387,8 +390,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
-        unsafe_clbf_term = F.relu(eps + self.unsafe_level - V_unsafe)
-        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term.sum()))
+        unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
+        unsafe_clbf_term = unsafe_V_too_small.mean() + unsafe_V_too_small.max()
+        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term)
 
         # #   4a.) A term to encourage satisfaction of CLBF decrease condition
         # # We compute the change in V by simulating x forward in time and checking if V
