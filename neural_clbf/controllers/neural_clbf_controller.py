@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from matplotlib.pyplot import figure
+import matplotlib.pyplot as plt
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
@@ -557,7 +558,7 @@ class NeuralCLBFController(pl.LightningModule):
             plots.append(plot)
         self.logger.experiment.close()
         self.logger.experiment.flush()
-        [plot.close() for plot in plots]
+        [plt.close(plot) for plot in plots]
 
     @pl.core.decorators.auto_move_data
     def simulator_fn(self, x_init: torch.Tensor, num_steps: int, use_qp: bool = True):
