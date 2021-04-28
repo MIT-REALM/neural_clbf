@@ -285,10 +285,10 @@ class NeuralCLBFController(pl.LightningModule):
         #
         #       Gz <= h
         #
-        # where h = [-L_f V - lambda V, 0]^T and G = [L_g V, -1
-        #                                             ... repeated for each scenario
-        #                                             0,     -1
-        #                                             G_u,    0]
+        # where h = [-L_f V - lambda V, 0, h_u]^T and G = [L_g V, -1
+        #                                                  ...repeated for each scenario
+        #                                                  0,     -1
+        #                                                  G_u,    0]
         # We can optionally add the user-specified inequality constraints as G_u
         n_controls = self.dynamics_model.n_controls
         n_scenarios = self.n_scenarios
@@ -298,7 +298,7 @@ class NeuralCLBFController(pl.LightningModule):
         Q = torch.zeros(bs, n_controls + 1, n_controls + 1).type_as(x)
         for j in range(n_controls):
             Q[:, j, j] = 1.0
-        Q[:, -1, -1] = self.clbf_relaxation_penalty + 0.01
+        Q[:, -1, -1] = 2 * self.clbf_relaxation_penalty + 0.01
         Q *= 2.0
         p = torch.zeros(bs, n_controls + 1).type_as(x)
         p[:, :-1] = -2.0 * self.dynamics_model.u_nominal(x)
@@ -363,22 +363,22 @@ class NeuralCLBFController(pl.LightningModule):
         #   1.) CLBF value should be negative on the goal set.
         V = self.V(x)
         V0 = V[goal_mask]
-        goal_term = F.relu(eps + V0).mean()
+        goal_term = F.relu(eps + V0).sum()
 
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point) + 1e-1
-        goal_term += (V_goal_pt ** 2).mean()
+        goal_term += (V_goal_pt ** 2).sum()
         loss.append(("CLBF goal term", goal_term))
 
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
-        safe_clbf_term = F.relu(eps + V_safe - self.safe_level).mean()
+        safe_clbf_term = F.relu(eps + V_safe - self.safe_level).sum()
         #   2b.) V >= 0 in the safe region minus the goal
         safe_minus_goal_mask = torch.logical_and(
             safe_mask, torch.logical_not(goal_mask)
         )
         V_safe_ex_goal = V[safe_minus_goal_mask]
-        safe_clbf_term += F.relu(eps - V_safe_ex_goal).mean()
+        safe_clbf_term += F.relu(eps - V_safe_ex_goal).sum()
         loss.append(("CLBF safe region term", 100 * safe_clbf_term))
 
         # #   2c.) for tuning, V >= dist_to_goal in the safe region
@@ -388,7 +388,7 @@ class NeuralCLBFController(pl.LightningModule):
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
         unsafe_clbf_term = F.relu(eps + self.unsafe_level - V_unsafe)
-        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term.mean()))
+        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term.sum()))
 
         # #   4a.) A term to encourage satisfaction of CLBF decrease condition
         # # We compute the change in V by simulating x forward in time and checking if V
