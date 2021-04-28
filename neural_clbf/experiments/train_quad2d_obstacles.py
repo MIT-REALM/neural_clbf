@@ -77,7 +77,7 @@ def main(args):
         max_points=10000000,
         val_split=0.1,
         batch_size=1024,
-        safe_unsafe_goal_quotas=(0.2, 0.2, 0.2)
+        safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
     )
 
     # Define the scenarios
@@ -109,7 +109,7 @@ def main(args):
         controller_period=controller_period,
         clbf_relaxation_penalty=10.0,
         primal_learning_rate=1e-3,
-        epochs_per_episode=100,
+        epochs_per_episode=1000,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
