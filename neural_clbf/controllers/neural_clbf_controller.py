@@ -297,7 +297,8 @@ class NeuralCLBFController(pl.LightningModule):
         Q = torch.zeros(bs, n_controls + 1, n_controls + 1).type_as(x)
         for j in range(n_controls):
             Q[:, j, j] = 1.0
-        Q[:, -1, -1] = self.clbf_relaxation_penalty + 0.01
+        Q[:, -1, -1] = 0 * self.clbf_relaxation_penalty + 0.01
+        Q *= 2.0
         p = torch.zeros(bs, n_controls + 1).type_as(x)
         p[:, :-1] = -2.0 * self.dynamics_model.u_nominal(x)
 
@@ -361,11 +362,11 @@ class NeuralCLBFController(pl.LightningModule):
         #   1.) CLBF value should be negative on the goal set.
         V = self.V(x)
         V0 = V[goal_mask]
-        goal_term = F.relu(eps + V0)
+        goal_term = F.relu(eps + V0).mean()
 
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point)
-        goal_term = goal_term.mean() + V_goal_pt.mean()
+        goal_term += V_goal_pt.mean()
         loss.append(("CLBF goal term", goal_term))
 
         #   2.) V <= safe_level in the safe region
@@ -547,13 +548,16 @@ class NeuralCLBFController(pl.LightningModule):
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of every validation epoch, using arbitrary plotting callbacks!
 
+        plots = []
         for plot_fn in self.plotting_callbacks:
             plot_name, plot = plot_fn(self)
             self.logger.experiment.add_figure(
                 plot_name, plot, global_step=self.current_epoch
             )
+            plots.append(plot)
         self.logger.experiment.close()
         self.logger.experiment.flush()
+        [plot.close() for plot in plots]
 
     @pl.core.decorators.auto_move_data
     def simulator_fn(self, x_init: torch.Tensor, num_steps: int, use_qp: bool = True):
