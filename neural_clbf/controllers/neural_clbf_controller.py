@@ -363,8 +363,10 @@ class NeuralCLBFController(pl.LightningModule):
         #   1.) CLBF value should be negative on the goal set.
         V = self.V(x)
         V0 = V[goal_mask]
-        goal_region_violation = F.relu(eps + V0)
-        goal_term = goal_region_violation.mean() + goal_region_violation.max()
+        goal_term = torch.tensor(0.0).type_as(x)
+        if V0.nelements() > 0:
+            goal_region_violation = F.relu(eps + V0)
+            goal_term += goal_region_violation.mean() + goal_region_violation.max()
 
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point) + 1e-1
