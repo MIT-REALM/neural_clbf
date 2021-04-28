@@ -73,11 +73,11 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=1,
         trajectory_length=1,
-        fixed_samples=100000,
+        fixed_samples=10000,
         max_points=10000000,
         val_split=0.1,
         batch_size=1024,
-        safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
+        safe_unsafe_goal_quotas=(0.0, 0.0, 0.0),
     )
 
     # Define the scenarios
@@ -93,7 +93,7 @@ def main(args):
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
         # This plotting function simulates rollouts of the controller
-        rollout_plotting_cb,
+        # rollout_plotting_cb,
     ]
 
     # Initialize the controller
