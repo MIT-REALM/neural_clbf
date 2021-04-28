@@ -95,12 +95,12 @@ class NeuralCLBFController(pl.LightningModule):
         self.V_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.clbf_hidden_size
         )
-        self.V_layers["input_tanh"] = nn.ReLU()
+        self.V_layers["input_activation"] = nn.ReLU()
         for i in range(self.clbf_hidden_layers):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
-            self.V_layers[f"layer_{i}_tanh"] = nn.ReLU()
+            self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
@@ -112,17 +112,17 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_NN_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.u_nn_hidden_size
         )
-        self.u_NN_layers["input_tanh"] = nn.ReLU()
+        self.u_NN_layers["input_activation"] = nn.ReLU()
         for i in range(self.u_nn_hidden_layers):
             self.u_NN_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_NN_layers[f"layer_{i}_tanh"] = nn.ReLU()
+            self.u_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
         # No output layer, so the control saturates at [-1, 1]
         self.u_NN_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_NN_layers["output_tanh"] = nn.ReLU()
+        self.u_NN_layers["output_activation"] = nn.ReLU()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
         # Also set up the objective and actuation limit constraints for the qp
@@ -366,8 +366,8 @@ class NeuralCLBFController(pl.LightningModule):
         goal_term = F.relu(eps + V0).mean()
 
         #   1b.) CLBF should be minimized on the goal point
-        V_goal_pt = self.V(self.dynamics_model.goal_point)
-        goal_term += V_goal_pt.mean()
+        V_goal_pt = self.V(self.dynamics_model.goal_point) + 1e-1
+        goal_term += (V_goal_pt ** 2).mean()
         loss.append(("CLBF goal term", goal_term))
 
         #   2.) V <= safe_level in the safe region
@@ -379,7 +379,7 @@ class NeuralCLBFController(pl.LightningModule):
         )
         V_safe_ex_goal = V[safe_minus_goal_mask]
         safe_clbf_term += F.relu(eps - V_safe_ex_goal).mean()
-        loss.append(("CLBF safe region term", safe_clbf_term))
+        loss.append(("CLBF safe region term", 100 * safe_clbf_term))
 
         # #   2c.) for tuning, V >= dist_to_goal in the safe region
         # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
@@ -388,40 +388,40 @@ class NeuralCLBFController(pl.LightningModule):
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
         unsafe_clbf_term = F.relu(eps + self.unsafe_level - V_unsafe)
-        loss.append(("CLBF unsafe region term", unsafe_clbf_term.mean()))
+        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term.mean()))
 
-        #   4a.) A term to encourage satisfaction of CLBF decrease condition
-        # We compute the change in V by simulating x forward in time and checking if V
-        # decreases
-        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        for s in self.scenarios:
-            next_num_timesteps = round(self.controller_period / self.dynamics_model.dt)
-            x_next = self.simulator_fn(x, next_num_timesteps, use_qp=False)[:, -1, :]
-            V_next = self.V(x_next)
-            # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
-            # simplifies to V_next - V + dt * lambda V \leq 0
-            # simplifies to V_next - (1 + dt * lambda) V \leq 0
-            clbf_descent_term_sim += F.relu(
-                eps + V_next - (1 - self.clbf_lambda * self.controller_period) * V
-            ).mean()
-        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+        # #   4a.) A term to encourage satisfaction of CLBF decrease condition
+        # # We compute the change in V by simulating x forward in time and checking if V
+        # # decreases
+        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        # for s in self.scenarios:
+        #     next_num_timesteps = round(self.controller_period / self.dynamics_model.dt)
+        #     x_next = self.simulator_fn(x, next_num_timesteps, use_qp=False)[:, -1, :]
+        #     V_next = self.V(x_next)
+        #     # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
+        #     # simplifies to V_next - V + dt * lambda V \leq 0
+        #     # simplifies to V_next - (1 + dt * lambda) V \leq 0
+        #     clbf_descent_term_sim += F.relu(
+        #         eps + V_next - (1 - self.clbf_lambda * self.controller_period) * V
+        #     ).mean()
+        # loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
-        #   4b.) A term to encourage satisfaction of CLBF decrease condition
-        # This time, we compute the decrease using linearization, which provides a
-        # training signal for the controller
-        clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
-        # Get the current value of the CLBF and its Lie derivatives
-        # (Lie derivatives are computed using a linear fit of the dynamics)
-        # TODO @dawsonc do we need dynamics learning here?
-        Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u(x)
-        u_nn = u_nn.unsqueeze(-1)
-        for i, s in enumerate(self.scenarios):
-            # Use these dynamics to compute the derivative of V
-            Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :].unsqueeze(1), u_nn)
-            clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
-        loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
+        # #   4b.) A term to encourage satisfaction of CLBF decrease condition
+        # # This time, we compute the decrease using linearization, which provides a
+        # # training signal for the controller
+        # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
+        # # Get the current value of the CLBF and its Lie derivatives
+        # # (Lie derivatives are computed using a linear fit of the dynamics)
+        # # TODO @dawsonc do we need dynamics learning here?
+        # Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # # Get the control and reshape it to bs x n_controls x 1
+        # u_nn = self.u(x)
+        # u_nn = u_nn.unsqueeze(-1)
+        # for i, s in enumerate(self.scenarios):
+        #     # Use these dynamics to compute the derivative of V
+        #     Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :].unsqueeze(1), u_nn)
+        #     clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
+        # loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
         return loss
 
