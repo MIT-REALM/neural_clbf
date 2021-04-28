@@ -364,7 +364,7 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         V0 = V[goal_mask]
         goal_term = torch.tensor(0.0).type_as(x)
-        if V0.nelements() > 0:
+        if V0.numel() > 0:
             goal_region_violation = F.relu(eps + V0)
             goal_term += goal_region_violation.mean() + goal_region_violation.max()
 
