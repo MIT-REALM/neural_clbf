@@ -29,10 +29,11 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_hidden_size: int = 48,
         u_nn_hidden_layers: int = 1,
         u_nn_hidden_size: int = 8,
-        clbf_lambda: float = 0.1,
+        clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
         clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
+        lookahead: float = 0.1,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
         plotting_callbacks: Optional[
@@ -52,6 +53,7 @@ class NeuralCLBFController(pl.LightningModule):
             safety_level: safety level set value for the CLBF
             clbf_relaxation_penalty: the penalty for relaxing CLBF conditions.
             controller_period: the timestep to use in simulating forward Vdot
+            lookahead: how far to simulate forward to gauge decrease in V
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
             epochs_per_episode: the number of epochs to include in each episode
@@ -75,6 +77,7 @@ class NeuralCLBFController(pl.LightningModule):
         self.unsafe_level = safety_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
         self.controller_period = controller_period
+        self.lookahead = lookahead
         self.primal_learning_rate = primal_learning_rate
         self.epochs_per_episode = epochs_per_episode
 
@@ -460,21 +463,22 @@ class NeuralCLBFController(pl.LightningModule):
         # objective_term = objective.mean()
         # loss.append(("CLBF QP objective", objective_term))
 
-        # #   1.) A term to encourage satisfaction of CLBF decrease condition
-        # # We compute the change in V by simulating x forward in time and checking if V
-        # # decreases
-        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        # for s in self.scenarios:
-        #     sim_timesteps = round(self.controller_period / self.dynamics_model.dt)
-        #     x_next = self.simulator_fn(x, sim_timesteps, use_qp=True)[:, -1, :]
-        #     V_next = self.V(x_next)
-        #     # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
-        #     # simplifies to V_next - V + dt * lambda V \leq 0
-        #     # simplifies to V_next - (1 + dt * lambda) V \leq 0
-        #     clbf_descent_term_sim += F.relu(
-        #         eps + V_next - (1 - self.clbf_lambda * self.controller_period) * V
-        #     ).mean()
-        # loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+        #   3.) A term to encourage satisfaction of CLBF decrease condition
+        # We compute the change in V by simulating x forward in time and checking if V
+        # decreases
+        V = self.V(x)
+        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        for s in self.scenarios:
+            sim_timesteps = round(self.lookahead / self.dynamics_model.dt)
+            x_next = self.simulator_fn(x, sim_timesteps, use_qp=True)[:, -1, :]
+            V_next = self.V(x_next)
+            # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
+            # simplifies to V_next - V + dt * lambda V \leq 0
+            # simplifies to V_next - (1 - dt * lambda) V \leq 0
+            clbf_descent_term_sim += F.relu(
+                V_next - (1 - self.clbf_lambda * self.lookahead) * V
+            ).mean()
+        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
         # #   4b.) A term to encourage satisfaction of CLBF decrease condition
         # # This time, we compute the decrease using linearization, which provides a
