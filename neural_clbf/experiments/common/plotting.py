@@ -264,6 +264,7 @@ def rollout_CLBF(
     x_sim = torch.zeros(num_timesteps, n_sims, clbf_net.dynamics_model.n_dims).type_as(
         start_x
     )
+    unsafe_mask_sim = torch.zeros_like(x_sim[:, :, 0], dtype=torch.bool)
     x_sim[0, :, :] = x_sim_start
     u_sim = torch.zeros(
         num_timesteps, n_sims, clbf_net.dynamics_model.n_controls
@@ -313,6 +314,10 @@ def rollout_CLBF(
                     out_of_bounds = True
                     print(f"out of bounds at\n{x_sim[tstep, :, :]}")
                     break
+            # Also check if we're in the unsafe region
+            unsafe_mask_sim[tstep, :] = clbf_net.dynamics_model.unsafe_mask(
+                x_sim[tstep, :, :]
+            )
 
     except (Exception, RuntimeError, OverflowError):
         controller_failed = True
@@ -327,6 +332,14 @@ def rollout_CLBF(
             x_sim[:t_final, :, plot_x_indices[i_trace]].cpu(),
             label=plot_x_labels[i_trace],
         )
+
+    # Plot markers indicating where the simulations were unsafe
+    zeros = np.zeros((num_timesteps,))
+    ax1.plot(
+        t[unsafe_mask_sim.any(dim=-1)],
+        zeros[unsafe_mask_sim.any(dim=-1)],
+        label="Unsafe",
+    )
 
     # If the controller fails, mark that on the plot
     if goal_reached:
