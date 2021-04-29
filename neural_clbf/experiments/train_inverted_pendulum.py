@@ -19,7 +19,7 @@ from neural_clbf.systems import InvertedPendulum
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-start_x = torch.tensor([[0.5, -0.5]])
+start_x = torch.tensor([[0.5, 0.5]])
 controller_period = 0.01
 simulation_dt = 0.001
 
@@ -43,7 +43,7 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-1.0, 1.0), (-0.5, 1.0)],  # plot for x, z
+        domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
         n_grid=15,
         x_axis_index=InvertedPendulum.THETA,
         y_axis_index=InvertedPendulum.THETA_DOT,
@@ -69,7 +69,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=1,
         trajectory_length=1,
-        fixed_samples=500000,
+        fixed_samples=10000,
         max_points=1000000,
         val_split=0.1,
         batch_size=64,

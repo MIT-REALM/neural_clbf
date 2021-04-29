@@ -126,8 +126,8 @@ class InvertedPendulum(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[InvertedPendulum.THETA] = np.pi
-        upper_limit[InvertedPendulum.THETA_DOT] = 2.0 * np.pi
+        upper_limit[InvertedPendulum.THETA] = 2.0
+        upper_limit[InvertedPendulum.THETA_DOT] = 2.0
 
         lower_limit = -1.0 * upper_limit
 
@@ -158,6 +158,11 @@ class InvertedPendulum(ControlAffineSystem):
         angle_small_enough = x[:, InvertedPendulum.THETA].abs() <= theta_max_safe
         safe_mask.logical_and_(angle_small_enough)
 
+        # Avoid speeds that are too large
+        dtheta_max_safe = 1.0
+        speed_small_enough = x[:, InvertedPendulum.THETA_DOT].abs() <= dtheta_max_safe
+        safe_mask.logical_and_(speed_small_enough)
+
         return safe_mask
 
     def unsafe_mask(self, x):
@@ -171,7 +176,12 @@ class InvertedPendulum(ControlAffineSystem):
         # Avoid angles that are too large
         theta_min_unsafe = np.pi / 3
         angle_too_big = x[:, InvertedPendulum.THETA].abs() >= theta_min_unsafe
-        unsafe_mask.logical_and_(angle_too_big)
+        unsafe_mask.logical_or_(angle_too_big)
+
+        # Avoid speeds that are too large
+        dtheta_min_unsafe = 1.3
+        speed_too_big = x[:, InvertedPendulum.THETA_DOT].abs() >= dtheta_min_unsafe
+        unsafe_mask.logical_or_(speed_too_big)
 
         return unsafe_mask
 
@@ -226,7 +236,9 @@ class InvertedPendulum(ControlAffineSystem):
         f[:, InvertedPendulum.THETA, 0] = theta_dot
 
         # Acceleration in theta depends on theta via gravity and theta_dot via damping
-        f[:, 5, 0] = grav / L * torch.sin(theta) - b / (m * L ** 2) * theta_dot
+        f[:, InvertedPendulum.THETA_DOT, 0] = (
+            grav / L * torch.sin(theta) - b / (m * L ** 2) * theta_dot
+        )
 
         return f
 
