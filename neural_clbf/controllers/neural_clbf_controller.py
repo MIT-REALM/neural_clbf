@@ -507,7 +507,13 @@ class NeuralCLBFController(pl.LightningModule):
             component_losses.update(
                 self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
             )
+            component_losses.update(
+                self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            )
         elif self.opt_idx_dict[optimizer_idx] == "boundary":
+            component_losses.update(
+                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            )
             component_losses.update(
                 self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
             )
