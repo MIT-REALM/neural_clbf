@@ -1,6 +1,5 @@
 from typing import Tuple, List, Optional, Callable
 from collections import OrderedDict
-import itertools
 
 from qpth.qp import QPFunction
 import torch
@@ -35,7 +34,6 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-4,
-        primal_learning_rate_bcs: float = 1e-4,
         epochs_per_episode: int = 5,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
@@ -56,8 +54,6 @@ class NeuralCLBFController(pl.LightningModule):
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
-            primal_learning_rate_bcs: the learning rate applied to the
-                                                      boundary conditions on V.
             epochs_per_episode: the number of epochs to include in each episode
             plotting_callbacks: a list of plotting functions that each take a
                                 NeuralCLBFController and return a tuple of a string
@@ -80,7 +76,6 @@ class NeuralCLBFController(pl.LightningModule):
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
         self.controller_period = controller_period
         self.primal_learning_rate = primal_learning_rate
-        self.primal_learning_rate_bcs = primal_learning_rate_bcs
         self.epochs_per_episode = epochs_per_episode
 
         # Compute and save the center and range of the state variables
@@ -496,21 +491,19 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
 
         # Compute the losses
         component_losses = {}
-        if self.opt_idx_dict[optimizer_idx] == "descent":
-            component_losses.update(
-                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
-        elif self.opt_idx_dict[optimizer_idx] == "boundary":
-            component_losses.update(
-                self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
+        component_losses.update(
+            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(
+            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -525,9 +518,6 @@ class NeuralCLBFController(pl.LightningModule):
 
     def training_epoch_end(self, outputs):
         """This function is called after every epoch is completed."""
-        # Outputs contains a list for each optimizer, and we need to collect the losses
-        # from all of them
-        outputs = itertools.chain(*outputs)
         # Gather up all of the losses for each component from all batches
         losses = {}
         for batch_output in outputs:
@@ -656,12 +646,6 @@ class NeuralCLBFController(pl.LightningModule):
             weight_decay=1e-6,
         )
 
-        primal_bcs_opt = torch.optim.SGD(
-            self.V_nn.parameters(),
-            lr=self.primal_learning_rate_bcs,
-            weight_decay=1e-6,
-        )
+        # self.opt_idx_dict = {0: "descent", 1: "boundary"}
 
-        self.opt_idx_dict = {0: "descent", 1: "boundary"}
-
-        return [primal_opt, primal_bcs_opt]
+        return [primal_opt]
