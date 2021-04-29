@@ -54,7 +54,7 @@ def clbf_plotting_cb(clbf_net):
 
 def main(args):
     # Define the dynamics model
-    nominal_params = {"m": 1.0, "L": 1.0, "b": 0.1}
+    nominal_params = {"m": 1.0, "L": 1.0, "b": 0.01}
     dynamics_model = InvertedPendulum(
         nominal_params, dt=simulation_dt, controller_dt=controller_period
     )
