@@ -33,7 +33,7 @@ class NeuralCLBFController(pl.LightningModule):
         safety_level: float = 1.0,
         clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
-        primal_learning_rate: float = 1e-4,
+        primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
@@ -81,7 +81,10 @@ class NeuralCLBFController(pl.LightningModule):
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
         self.x_center = (x_max + x_min) / 2.0
-        self.x_range = x_max - x_min
+        self.x_range = (x_max - x_min) / 2.0
+        # Scale to get the input between (-k, k), centered at 0
+        k = 10.0
+        self.x_range = self.x_range / k
 
         # Get plotting callbacks
         if plotting_callbacks is None:
@@ -390,12 +393,12 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         V0 = V[goal_mask]
         goal_region_violation = F.relu(eps + V0)
-        goal_term = 100 * goal_region_violation.mean()
+        goal_term = goal_region_violation.mean()
 
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point) + 1e-1
         goal_term += (V_goal_pt ** 2).mean()
-        loss.append(("CLBF goal term", 100 * goal_term))
+        loss.append(("CLBF goal term", goal_term))
 
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
@@ -408,7 +411,7 @@ class NeuralCLBFController(pl.LightningModule):
         V_safe_ex_goal = V[safe_minus_goal_mask]
         safe_V_too_small = F.relu(eps - V_safe_ex_goal)
         safe_clbf_term += safe_V_too_small.mean()
-        loss.append(("CLBF safe region term", 100 * safe_clbf_term))
+        loss.append(("CLBF safe region term", safe_clbf_term))
 
         # #   2c.) for tuning, V >= dist_to_goal in the safe region
         # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
@@ -418,7 +421,7 @@ class NeuralCLBFController(pl.LightningModule):
         V_unsafe = V[unsafe_mask]
         unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
         unsafe_clbf_term = unsafe_V_too_small.mean()
-        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term))
+        loss.append(("CLBF unsafe region term", 10 * unsafe_clbf_term))
 
         return loss
 
@@ -448,13 +451,14 @@ class NeuralCLBFController(pl.LightningModule):
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # by minimizing the relaxation in the CLBF conditions needed to solve the QP
         u, relax, objective = self.solve_CLBF_QP(x)
-        relax_term = self.clbf_relaxation_penalty * relax.mean()
+        # relax_term = self.clbf_relaxation_penalty * relax.mean()
+        relax_term = relax.mean()
         loss.append(("CLBF QP relaxation", relax_term))
 
-        #   2.) Also minimize the objective of the QP. This should push in mostly the
-        # same direction as (1), since the objective includes a relax^2 term.
-        objective_term = objective.mean()
-        loss.append(("CLBF QP objective", objective_term))
+        # #   2.) Also minimize the objective of the QP. This should push in mostly the
+        # # same direction as (1), since the objective includes a relax^2 term.
+        # objective_term = objective.mean()
+        # loss.append(("CLBF QP objective", objective_term))
 
         # #   1.) A term to encourage satisfaction of CLBF decrease condition
         # # We compute the change in V by simulating x forward in time and checking if V
