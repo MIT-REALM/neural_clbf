@@ -108,7 +108,6 @@ def main(args):
         u_nn_hidden_size=32,
         controller_period=controller_period,
         clbf_relaxation_penalty=50.0,
-        primal_learning_rate=1e-3,
         epochs_per_episode=1000,
     )
     # Add the DataModule hooks

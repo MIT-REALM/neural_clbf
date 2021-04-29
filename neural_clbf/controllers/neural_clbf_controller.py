@@ -34,8 +34,8 @@ class NeuralCLBFController(pl.LightningModule):
         safety_level: float = 1.0,
         clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
-        primal_learning_rate: float = 1e-3,
-        primal_learning_rate_bcs: float = 1e-3,
+        primal_learning_rate: float = 1e-4,
+        primal_learning_rate_bcs: float = 1e-4,
         epochs_per_episode: int = 5,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
@@ -507,13 +507,7 @@ class NeuralCLBFController(pl.LightningModule):
             component_losses.update(
                 self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
             )
-            component_losses.update(
-                self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
         elif self.opt_idx_dict[optimizer_idx] == "boundary":
-            component_losses.update(
-                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
             component_losses.update(
                 self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
             )
