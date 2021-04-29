@@ -163,6 +163,10 @@ class InvertedPendulum(ControlAffineSystem):
         speed_small_enough = x[:, InvertedPendulum.THETA_DOT].abs() <= dtheta_max_safe
         safe_mask.logical_and_(speed_small_enough)
 
+        # Also don't let angles go too negative
+        angle_positive = x[:, InvertedPendulum.THETA].abs() >= -0.1
+        safe_mask.logical_and_(angle_positive)
+
         return safe_mask
 
     def unsafe_mask(self, x):
@@ -182,6 +186,10 @@ class InvertedPendulum(ControlAffineSystem):
         dtheta_min_unsafe = 1.3
         speed_too_big = x[:, InvertedPendulum.THETA_DOT].abs() >= dtheta_min_unsafe
         unsafe_mask.logical_or_(speed_too_big)
+
+        # Also don't let angles go too negative
+        angle_negative = x[:, InvertedPendulum.THETA].abs() <= -0.15
+        unsafe_mask.logical_or_(angle_negative)
 
         return unsafe_mask
 
@@ -207,6 +215,9 @@ class InvertedPendulum(ControlAffineSystem):
         # Define the goal region as being near the goal
         near_goal = x.norm(dim=-1) <= 0.2
         goal_mask.logical_and_(near_goal)
+
+        # The goal set has to be a subset of the safe set
+        goal_mask.logical_and_(self.safe_mask(x))
 
         return goal_mask
 
