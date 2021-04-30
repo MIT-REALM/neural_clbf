@@ -163,9 +163,9 @@ class InvertedPendulum(ControlAffineSystem):
         speed_small_enough = x[:, InvertedPendulum.THETA_DOT].abs() <= dtheta_max_safe
         safe_mask.logical_and_(speed_small_enough)
 
-        # Also don't let angles go too negative
-        angle_positive = x[:, InvertedPendulum.THETA] >= -0.1
-        safe_mask.logical_and_(angle_positive)
+        # # Also don't let angles go too negative
+        # angle_positive = x[:, InvertedPendulum.THETA] >= -0.1
+        # safe_mask.logical_and_(angle_positive)
 
         return safe_mask
 
@@ -187,9 +187,9 @@ class InvertedPendulum(ControlAffineSystem):
         speed_too_big = x[:, InvertedPendulum.THETA_DOT].abs() >= dtheta_min_unsafe
         unsafe_mask.logical_or_(speed_too_big)
 
-        # Also don't let angles go too negative
-        angle_negative = x[:, InvertedPendulum.THETA] <= -0.15
-        unsafe_mask.logical_or_(angle_negative)
+        # # Also don't let angles go too negative
+        # angle_negative = x[:, InvertedPendulum.THETA] <= -0.15
+        # unsafe_mask.logical_or_(angle_negative)
 
         return unsafe_mask
 
