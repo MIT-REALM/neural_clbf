@@ -102,12 +102,12 @@ class NeuralCLBFController(pl.LightningModule):
         self.V_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.clbf_hidden_size
         )
-        self.V_layers["input_activation"] = nn.Tanh()
+        self.V_layers["input_activation"] = nn.ReLU()
         for i in range(self.clbf_hidden_layers):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
-            self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
@@ -119,17 +119,17 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_NN_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.u_nn_hidden_size
         )
-        self.u_NN_layers["input_activation"] = nn.Tanh()
+        self.u_NN_layers["input_activation"] = nn.ReLU()
         for i in range(self.u_nn_hidden_layers):
             self.u_NN_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.u_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
         # No output layer, so the control saturates at [-1, 1]
         self.u_NN_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_NN_layers["output_activation"] = nn.Tanh()
+        self.u_NN_layers["output_activation"] = nn.ReLU()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
         # Also set up the objective and actuation limit constraints for the qp
@@ -463,22 +463,22 @@ class NeuralCLBFController(pl.LightningModule):
         # objective_term = objective.mean()
         # loss.append(("CLBF QP objective", objective_term))
 
-        #   3.) A term to encourage satisfaction of CLBF decrease condition
-        # We compute the change in V by simulating x forward in time and checking if V
-        # decreases
-        V = self.V(x)
-        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        for s in self.scenarios:
-            sim_timesteps = round(self.lookahead / self.dynamics_model.dt)
-            x_next = self.simulator_fn(x, sim_timesteps, use_qp=True)[:, -1, :]
-            V_next = self.V(x_next)
-            # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
-            # simplifies to V_next - V + dt * lambda V \leq 0
-            # simplifies to V_next - (1 - dt * lambda) V \leq 0
-            clbf_descent_term_sim += F.relu(
-                V_next - (1 - self.clbf_lambda * self.lookahead) * V
-            ).mean()
-        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+        # #   3.) A term to encourage satisfaction of CLBF decrease condition
+        # # We compute the change in V by simulating x forward in time and checking if V
+        # # decreases
+        # V = self.V(x)
+        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        # for s in self.scenarios:
+        #     sim_timesteps = round(self.lookahead / self.dynamics_model.dt)
+        #     x_next = self.simulator_fn(x, sim_timesteps, use_qp=True)[:, -1, :]
+        #     V_next = self.V(x_next)
+        #     # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
+        #     # simplifies to V_next - V + dt * lambda V \leq 0
+        #     # simplifies to V_next - (1 - dt * lambda) V \leq 0
+        #     clbf_descent_term_sim += F.relu(
+        #         V_next - (1 - self.clbf_lambda * self.lookahead) * V
+        #     ).mean()
+        # loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
         # #   4b.) A term to encourage satisfaction of CLBF decrease condition
         # # This time, we compute the decrease using linearization, which provides a
