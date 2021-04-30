@@ -343,11 +343,11 @@ def rollout_CLBF(
 
     # If the controller fails, mark that on the plot
     if goal_reached:
-        ax1.set_title("Goal reached!")
+        ax1.set_title(f"Goal reached! s[0] = {random_scenarios[0]}")
     if out_of_bounds:
-        ax1.set_title("Out of bounds!")
+        ax1.set_title(f"Out of bounds! s[0] = {random_scenarios[0]}")
     if controller_failed:
-        ax1.set_title("Controller failure!")
+        ax1.set_title(f"Controller failure! s[0] = {random_scenarios[0]}")
 
     ax1.set_xlabel("$t$")
     ax1.legend()

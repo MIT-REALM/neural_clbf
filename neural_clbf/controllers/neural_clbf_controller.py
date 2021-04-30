@@ -474,9 +474,7 @@ class NeuralCLBFController(pl.LightningModule):
             V_next = self.V(x_next)
             # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
             V_dot = (V_next - V) / self.lookahead
-            clbf_descent_term_sim += F.relu(
-                V_dot + self.clbf_lambda * V
-            ).mean()
+            clbf_descent_term_sim += F.relu(V_dot + self.clbf_lambda * V).mean()
         loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
         # #   4b.) A term to encourage satisfaction of CLBF decrease condition
