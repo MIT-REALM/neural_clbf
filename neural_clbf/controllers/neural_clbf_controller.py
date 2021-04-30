@@ -451,44 +451,33 @@ class NeuralCLBFController(pl.LightningModule):
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
 
-        # #   1.) A term to encourage satisfaction of the CLBF decrease condition,
-        # # by minimizing the relaxation in the CLBF conditions needed to solve the QP
-        # u, relax, objective = self.solve_CLBF_QP(x)
-        # # relax_term = self.clbf_relaxation_penalty * relax.mean()
-        # relax_term = relax.mean()
-        # loss.append(("CLBF QP relaxation", relax_term))
-
-        #   1.) A term to encourage feasibility of CLBF-QP
-        # by enforcing that either ||LgV|| is large enough of LfV is negative enough
-        V = self.V(x)
-        Lf_V, Lg_V = self.V_lie_derivatives(x)
-        eps = 0.1
-        Lg_V_big_enough = F.relu(eps - Lg_V.norm(dim=-1))
-        Lf_V_negative_enough = F.relu(Lf_V.squeeze() + self.clbf_lambda * V)
-        feasibility_term = Lg_V_big_enough * Lf_V_negative_enough
-        loss.append(("CLBF feasibility", feasibility_term.mean()))
+        #   1.) A term to encourage satisfaction of the CLBF decrease condition,
+        # by minimizing the relaxation in the CLBF conditions needed to solve the QP
+        u, relax, objective = self.solve_CLBF_QP(x)
+        # relax_term = self.clbf_relaxation_penalty * relax.mean()
+        relax_term = relax.mean()
+        loss.append(("CLBF QP relaxation", relax_term))
 
         # #   2.) Also minimize the objective of the QP. This should push in mostly the
         # # same direction as (1), since the objective includes a relax^2 term.
         # objective_term = objective.mean()
         # loss.append(("CLBF QP objective", objective_term))
 
-        # #   3.) A term to encourage satisfaction of CLBF decrease condition
-        # # We compute the change in V by simulating x forward in time and checking if V
-        # # decreases
-        # V = self.V(x)
-        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        # for s in self.scenarios:
-        #     sim_timesteps = round(self.lookahead / self.dynamics_model.dt)
-        #     x_next = self.simulator_fn(x, sim_timesteps, use_qp=True)[:, -1, :]
-        #     V_next = self.V(x_next)
-        #     # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
-        #     # simplifies to V_next - V + dt * lambda V \leq 0
-        #     # simplifies to V_next - (1 - dt * lambda) V \leq 0
-        #     clbf_descent_term_sim += F.relu(
-        #         V_next - (1 - self.clbf_lambda * self.lookahead) * V
-        #     ).mean()
-        # loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+        #   3.) A term to encourage satisfaction of CLBF decrease condition
+        # We compute the change in V by simulating x forward in time and checking if V
+        # decreases
+        V = self.V(x)
+        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        for s in self.scenarios:
+            sim_timesteps = round(self.lookahead / self.dynamics_model.dt)
+            x_next = self.simulator_fn(x, sim_timesteps, use_qp=True)[:, -1, :]
+            V_next = self.V(x_next)
+            # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
+            V_dot = (V_next - V) / self.lookahead
+            clbf_descent_term_sim += F.relu(
+                V_dot + self.clbf_lambda * V
+            ).mean()
+        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
         # #   4b.) A term to encourage satisfaction of CLBF decrease condition
         # # This time, we compute the decrease using linearization, which provides a
@@ -653,7 +642,7 @@ class NeuralCLBFController(pl.LightningModule):
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
             # Use the models simulation function with this controller
             def simulator_fn(x_init: torch.Tensor, num_steps: int):
-                return self.dynamics_model.simulate(x_init, num_steps, self.u)
+                return self.dynamics_model.simulate(x_init, num_steps, self.forward)
 
             self.datamodule.add_data(simulator_fn)
 

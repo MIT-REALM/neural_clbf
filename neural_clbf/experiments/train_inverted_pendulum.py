@@ -61,16 +61,16 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-np.pi / 4, np.pi / 4),  # x
-        (-1.0, 1.0),  # z
+        (-np.pi / 4, np.pi / 4),  # theta
+        (-1.0, 1.0),  # theta_dot
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=1,
-        trajectory_length=1,
+        trajectories_per_episode=10,
+        trajectory_length=1000,
         fixed_samples=10000,
-        max_points=1000000,
+        max_points=100000,
         val_split=0.1,
         batch_size=64,
         safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
@@ -98,14 +98,14 @@ def main(args):
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=5,
-        clbf_hidden_size=128,
-        u_nn_hidden_layers=5,
-        u_nn_hidden_size=128,
+        clbf_hidden_layers=3,
+        clbf_hidden_size=64,
+        u_nn_hidden_layers=3,
+        u_nn_hidden_size=64,
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_relaxation_penalty=50.0,
-        epochs_per_episode=1000,
+        epochs_per_episode=10,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
