@@ -253,6 +253,7 @@ class ControlAffineSystem(ABC):
         controller: Callable[[torch.Tensor], torch.Tensor],
         controller_period: Optional[float] = None,
         guard: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+        params: Optional[Scenario] = None,
     ) -> torch.Tensor:
         """
         Simulate the system for the specified number of steps using the given controller
@@ -265,6 +266,8 @@ class ControlAffineSystem(ABC):
                                 (in seconds). If none, defaults to self.dt
             guard - a function that takes a bs x n_dims tensor and returns a length bs
                     mask that's True for any trajectories that should be reset to x_init
+            params - a dictionary giving the parameter values for the system. If None,
+                     default to the nominal parameters used at initialization
         returns
             a bs x num_steps x self.n_dims tensor of simulated trajectories. If an error
             occurs on any trajectory, the simulation of all trajectories will stop and
@@ -291,7 +294,7 @@ class ControlAffineSystem(ABC):
                     u = controller(x_current)
 
                 # Simulate forward using the dynamics
-                xdot = self.closed_loop_dynamics(x_current, u)
+                xdot = self.closed_loop_dynamics(x_current, u, params)
                 x_sim[:, tstep, :] = x_current + self.dt * xdot
 
                 # If the guard is activated for any trajectory, reset that trajectory
