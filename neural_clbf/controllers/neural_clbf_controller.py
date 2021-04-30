@@ -451,12 +451,22 @@ class NeuralCLBFController(pl.LightningModule):
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
 
-        #   1.) A term to encourage satisfaction of the CLBF decrease condition,
-        # by minimizing the relaxation in the CLBF conditions needed to solve the QP
-        u, relax, objective = self.solve_CLBF_QP(x)
-        # relax_term = self.clbf_relaxation_penalty * relax.mean()
-        relax_term = relax.mean()
-        loss.append(("CLBF QP relaxation", relax_term))
+        # #   1.) A term to encourage satisfaction of the CLBF decrease condition,
+        # # by minimizing the relaxation in the CLBF conditions needed to solve the QP
+        # u, relax, objective = self.solve_CLBF_QP(x)
+        # # relax_term = self.clbf_relaxation_penalty * relax.mean()
+        # relax_term = relax.mean()
+        # loss.append(("CLBF QP relaxation", relax_term))
+
+        #   1.) A term to encourage feasibility of CLBF-QP
+        # by enforcing that either ||LgV|| is large enough of LfV is negative enough
+        V = self.V(x)
+        Lf_V, Lg_V = self.V_lie_derivatives(x)
+        eps = 0.1
+        Lg_V_big_enough = F.relu(eps - Lg_V.norm(dim=-1))
+        Lf_V_negative_enough = F.relu(Lf_V.squeeze() + self.clbf_lambda * V)
+        feasibility_term = Lg_V_big_enough * Lf_V_negative_enough
+        loss.append(("CLBF feasibility", feasibility_term.mean()))
 
         # #   2.) Also minimize the objective of the QP. This should push in mostly the
         # # same direction as (1), since the objective includes a relax^2 term.
