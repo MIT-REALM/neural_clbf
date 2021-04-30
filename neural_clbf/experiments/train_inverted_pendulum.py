@@ -20,7 +20,7 @@ from neural_clbf.systems import InvertedPendulum
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 start_x = torch.tensor([[0.5, -1.0]])
-controller_period = 0.05
+controller_period = 0.01
 simulation_dt = 0.001
 
 
@@ -103,7 +103,7 @@ def main(args):
         u_nn_hidden_layers=3,
         u_nn_hidden_size=32,
         controller_period=controller_period,
-        lookahead=2 * controller_period,
+        lookahead=controller_period,
         clbf_relaxation_penalty=50.0,
         epochs_per_episode=1000,
     )
