@@ -239,7 +239,7 @@ class KSCar(ControlAffineSystem):
                 KSCar.PSI_E,
             ],
         ]
-        near_goal = tracking_error.norm(dim=-1) <= 1.0
+        near_goal = tracking_error.norm(dim=-1) <= 0.5
         goal_mask.logical_and_(near_goal)
 
         # We need slightly lower heading angle to be "close"
@@ -296,16 +296,8 @@ class KSCar(ControlAffineSystem):
 
         # We want to express the error in x and y in the reference path frame, so
         # we need to get the dynamics of the rotated global frame error
-        dsxe_r = (
-            dsxe * c_psi_ref
-            - dsye * s_psi_ref
-            + omega_ref * sye
-        )
-        dsye_r = (
-            -dsxe * s_psi_ref
-            + dsye * c_psi_ref
-            - omega_ref * sxe
-        )
+        dsxe_r = dsxe * c_psi_ref - dsye * s_psi_ref + omega_ref * sye
+        dsye_r = -dsxe * s_psi_ref + dsye * c_psi_ref - omega_ref * sxe
 
         f[:, KSCar.SXE, 0] = dsxe_r
         f[:, KSCar.SYE, 0] = dsye_r
