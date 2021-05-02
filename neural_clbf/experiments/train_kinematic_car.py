@@ -87,7 +87,7 @@ def main(args):
 
     # Define the scenarios (we need 2^3 = 6)
     scenarios = []
-    omega_ref_vals = [-1.0, 1.0]
+    omega_ref_vals = [-0.3, 0.3]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
