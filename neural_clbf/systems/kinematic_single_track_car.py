@@ -25,7 +25,10 @@ class KSCar(ControlAffineSystem):
         x = [s_x - x_ref, s_y - y_ref, delta, v - v_ref, psi - psi_ref]
 
     where s_x and s_y are the x and y position, delta is the steering angle, v is the
-    longitudinal velocity, and psi is the heading. The control inputs are
+    longitudinal velocity, and psi is the heading. The errors in x and y are expressed
+    in the reference path frame
+
+    The control inputs are
 
         u = [v_delta, a_long]
 
@@ -62,7 +65,7 @@ class KSCar(ControlAffineSystem):
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
-                            Requires keys ["psi_ref_c", "psi_ref_s", "v_ref", "a_ref",
+                            Requires keys ["psi_ref", "v_ref", "a_ref",
                             "omega_ref"] (_c and _s denote cosine and sine)
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
@@ -89,8 +92,7 @@ class KSCar(ControlAffineSystem):
         """
         valid = True
         # Make sure all needed parameters were provided
-        valid = valid and "psi_ref_c" in params
-        valid = valid and "psi_ref_s" in params
+        valid = valid and "psi_ref" in params
         valid = valid and "v_ref" in params
         valid = valid and "a_ref" in params
         valid = valid and "omega_ref" in params
@@ -174,6 +176,10 @@ class KSCar(ControlAffineSystem):
         )
         safe_mask.logical_and_(tracking_error_small_enough)
 
+        # We need slightly lower heading angle to be "close"
+        psi_err_small_enough = x[:, KSCar.PSI_E].abs() <= np.pi / 3
+        safe_mask.logical_and_(psi_err_small_enough)
+
         return safe_mask
 
     def unsafe_mask(self, x):
@@ -233,8 +239,12 @@ class KSCar(ControlAffineSystem):
                 KSCar.PSI_E,
             ],
         ]
-        near_goal = tracking_error.norm(dim=-1) <= 0.5
+        near_goal = tracking_error.norm(dim=-1) <= 1.0
         goal_mask.logical_and_(near_goal)
+
+        # We need slightly lower heading angle to be "close"
+        near_goal_psi = x[:, KSCar.PSI_E].abs() <= 0.5
+        goal_mask.logical_and_(near_goal_psi)
 
         # The goal set has to be a subset of the safe set
         goal_mask.logical_and_(self.safe_mask(x))
@@ -258,9 +268,9 @@ class KSCar(ControlAffineSystem):
         f = f.type_as(x)
 
         # Extract the parameters
-        psi_ref_c = torch.tensor(params["psi_ref_c"])
-        psi_ref_s = torch.tensor(params["psi_ref_s"])
-        psi_ref = torch.atan2(psi_ref_s, psi_ref_c)
+        psi_ref = torch.tensor(params["psi_ref"])
+        c_psi_ref = torch.cos(psi_ref)
+        s_psi_ref = torch.sin(psi_ref)
         v_ref = torch.tensor(params["v_ref"])
         a_ref = torch.tensor(params["a_ref"])
         omega_ref = torch.tensor(params["omega_ref"])
@@ -269,12 +279,38 @@ class KSCar(ControlAffineSystem):
         v = x[:, KSCar.VE] + v_ref
         psi = x[:, KSCar.PSI_E] + psi_ref
         delta = x[:, KSCar.DELTA]
+        sxe = x[:, KSCar.SXE]
+        sye = x[:, KSCar.SYE]
 
         # Compute the dynamics
         wheelbase = self.car_params.a + self.car_params.b
-        f[:, KSCar.SXE, 0] = v * torch.cos(psi) - v_ref * psi_ref_c
-        f[:, KSCar.SYE, 0] = v * torch.sin(psi) - v_ref * psi_ref_s
+
+        # Get dynamics for x and y of the car and reference path
+        dx = v * torch.cos(psi)
+        dx_ref = v_ref * c_psi_ref
+        dy = v * torch.sin(psi)
+        dy_ref = v_ref * s_psi_ref
+        # Use these to compute dynamics of global-frame error
+        dsxe = dx - dx_ref
+        dsye = dy - dy_ref
+
+        # We want to express the error in x and y in the reference path frame, so
+        # we need to get the dynamics of the rotated global frame error
+        dsxe_r = (
+            dsxe * c_psi_ref
+            - dsye * s_psi_ref
+            + omega_ref * sye
+        )
+        dsye_r = (
+            -dsxe * s_psi_ref
+            + dsye * c_psi_ref
+            - omega_ref * sxe
+        )
+
+        f[:, KSCar.SXE, 0] = dsxe_r
+        f[:, KSCar.SYE, 0] = dsye_r
         f[:, KSCar.VE, 0] = -a_ref
+        f[:, KSCar.DELTA, 0] = 0.0
         f[:, KSCar.PSI_E, 0] = v / wheelbase * torch.tan(delta) - omega_ref
 
         return f
@@ -337,14 +373,18 @@ class KSCar(ControlAffineSystem):
         # u_eq = torch.zeros_like(u_nominal)
 
         # Compute nominal control from feedback + equilibrium control
-        k_delta = 10
-        k_delta_d = 2.0
-        k_a = 10.0
+        k_delta_psi = 10
+        k_delta_d = 10
+        k_delta_y = 1  # sye is the cross-track error in the path-centered coords
+        k_a_v = 10.0
+        k_a_x = 10.0
         u_nominal = torch.zeros(x.shape[0], self.n_controls).type_as(x)
         u_nominal[:, KSCar.VDELTA] = (
-            -k_delta * x[:, KSCar.PSI_E] - k_delta_d * x[:, KSCar.DELTA]
+            -k_delta_psi * x[:, KSCar.PSI_E]
+            - k_delta_d * x[:, KSCar.DELTA]
+            - k_delta_y * x[:, KSCar.SYE]
         )
-        u_nominal[:, KSCar.ALONG] = -k_a * x[:, KSCar.VE]
+        u_nominal[:, KSCar.ALONG] = -k_a_v * x[:, KSCar.VE] - k_a_x * x[:, KSCar.SXE]
         u_eq = torch.zeros_like(u_nominal)
 
         return u_nominal + u_eq

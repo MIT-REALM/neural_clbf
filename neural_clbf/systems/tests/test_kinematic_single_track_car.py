@@ -13,8 +13,7 @@ def test_kscar_init():
     """Test initialization of kinematic car"""
     # Test instantiation with valid parameters
     valid_params = {
-        "psi_ref_c": 0.5403,
-        "psi_ref_s": 0.8415,
+        "psi_ref": 1.0,
         "v_ref": 1.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
@@ -29,8 +28,7 @@ def plot_kscar_straight_path():
     """Test the dynamics of the kinematic car tracking a straight path"""
     # Create the system
     params = {
-        "psi_ref_c": 0.5403,
-        "psi_ref_s": 0.8415,
+        "psi_ref": 0.5,
         "v_ref": 10.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
@@ -44,7 +42,7 @@ def plot_kscar_straight_path():
     n_sims = 1
     controller_period = dt
     num_timesteps = int(t_sim // dt)
-    start_x = torch.tensor([[0.0, 3.0, 0.0, -10.0, 1.0]])
+    start_x = torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
     x_sim = torch.zeros(num_timesteps, n_sims, kscar.n_dims).type_as(start_x)
     for i in range(n_sims):
         x_sim[0, i, :] = start_x
@@ -72,15 +70,23 @@ def plot_kscar_straight_path():
 
         t_final = tstep
 
+    # Get reference path
     t = np.linspace(0, t_sim, num_timesteps)
-    x_ref = t * params["v_ref"] * params["psi_ref_c"]
-    y_ref = t * params["v_ref"] * params["psi_ref_s"]
-    fig, axs = plt.subplots(2, 1)
+    psi_ref = params["psi_ref"]
+    x_ref = t * params["v_ref"] * np.cos(psi_ref)
+    y_ref = t * params["v_ref"] * np.sin(psi_ref)
+
+    # Convert trajectory from path-centric to world coordinates
+    x_err_path = x_sim[:, :, kscar.SXE].cpu().squeeze().numpy()
+    y_err_path = x_sim[:, :, kscar.SYE].cpu().squeeze().numpy()
+    x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
+    y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
+    fig, axs = plt.subplots(3, 1)
     fig.set_size_inches(10, 12)
     ax1 = axs[0]
     ax1.plot(
-        x_sim[:t_final, :, kscar.SXE].cpu().squeeze() + x_ref[:t_final],
-        x_sim[:t_final, :, kscar.SYE].cpu().squeeze() + y_ref[:t_final],
+        x_world[:t_final],
+        y_world[:t_final],
         linestyle="-",
         label="Tracking",
     )
@@ -90,10 +96,22 @@ def plot_kscar_straight_path():
         linestyle=":",
         label="Reference",
     )
-
     ax1.set_xlabel("$x$")
     ax1.set_ylabel("$y$")
     ax1.legend()
+    ax1.set_ylim([-t_sim * params["v_ref"], t_sim * params["v_ref"]])
+    ax1.set_xlim([-t_sim * params["v_ref"], t_sim * params["v_ref"]])
+    ax1.set_aspect("equal")
+
+    # psi_err_path = x_sim[:, :, kscar.PSI_E].cpu().squeeze().numpy()
+    # delta_path = x_sim[:, :, kscar.DELTA].cpu().squeeze().numpy()
+    # v_err_path = x_sim[:, :, kscar.VE].cpu().squeeze().numpy()
+    # ax1.plot(t[:t_final], y_err_path[:t_final])
+    # ax1.plot(t[:t_final], x_err_path[:t_final])
+    # ax1.plot(t[:t_final], psi_err_path[:t_final])
+    # ax1.plot(t[:t_final], delta_path[:t_final])
+    # ax1.plot(t[:t_final], v_err_path[:t_final])
+    # ax1.legend(["y", "x", "psi", "delta", "ve"])
 
     ax2 = axs[1]
     plot_u_indices = [kscar.VDELTA, kscar.ALONG]
@@ -104,6 +122,16 @@ def plot_kscar_straight_path():
             u_sim[1:t_final, :, plot_u_indices[i_trace]].cpu(),
             label=plot_u_labels[i_trace],
         )
+    ax2.legend()
+
+    ax3 = axs[2]
+    ax3.plot(
+        t[:t_final],
+        x_sim[:t_final, :, :].norm(dim=-1).squeeze().numpy(),
+        label="Tracking Error",
+    )
+    ax3.legend()
+    ax3.set_xlabel("$t$")
 
     plt.show()
 
@@ -112,8 +140,7 @@ def plot_kscar_circle_path():
     """Test the dynamics of the kinematic car tracking a circle path"""
     # Create the system
     params = {
-        "psi_ref_c": 0.5403,
-        "psi_ref_s": 0.8415,
+        "psi_ref": 1.0,
         "v_ref": 10.0,
         "a_ref": 0.0,
         "omega_ref": 0.5,
@@ -136,9 +163,10 @@ def plot_kscar_circle_path():
     controller_update_freq = int(controller_period / dt)
 
     # And create a place to store the reference path
-    psi_ref_0 = 1.0
     x_ref = np.zeros(num_timesteps)
     y_ref = np.zeros(num_timesteps)
+    psi_ref = np.zeros(num_timesteps)
+    psi_ref[0] = 1.0
 
     # Simulate!
     for tstep in range(1, num_timesteps):
@@ -153,12 +181,11 @@ def plot_kscar_circle_path():
             u_sim[tstep, :, :] = u
 
         # Get the path parameters at this point
-        psi_ref_t = tstep * dt * params["omega_ref"] + psi_ref_0
+        psi_ref[tstep] = dt * params["omega_ref"] + psi_ref[tstep - 1]
         pt = copy(params)
-        pt["psi_ref_c"] = np.cos(psi_ref_t)
-        pt["psi_ref_s"] = np.sin(psi_ref_t)
-        x_ref[tstep] = x_ref[tstep - 1] + dt * pt["v_ref"] * pt["psi_ref_c"]
-        y_ref[tstep] = y_ref[tstep - 1] + dt * pt["v_ref"] * pt["psi_ref_s"]
+        pt["psi_ref"] = psi_ref[tstep]
+        x_ref[tstep] = x_ref[tstep - 1] + dt * pt["v_ref"] * np.cos(psi_ref[tstep])
+        y_ref[tstep] = y_ref[tstep - 1] + dt * pt["v_ref"] * np.sin(psi_ref[tstep])
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
@@ -171,13 +198,20 @@ def plot_kscar_circle_path():
 
         t_final = tstep
 
+    # Get reference path
     t = np.linspace(0, t_sim, num_timesteps)
+
+    # Convert trajectory from path-centric to world coordinates
+    x_err_path = x_sim[:, :, kscar.SXE].cpu().squeeze().numpy()
+    y_err_path = x_sim[:, :, kscar.SYE].cpu().squeeze().numpy()
+    x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
+    y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
     fig, axs = plt.subplots(2, 1)
     fig.set_size_inches(10, 12)
     ax1 = axs[0]
     ax1.plot(
-        x_sim[:t_final, :, kscar.SXE].cpu().squeeze() + x_ref[:t_final],
-        x_sim[:t_final, :, kscar.SYE].cpu().squeeze() + y_ref[:t_final],
+        x_world[:t_final],
+        y_world[:t_final],
         linestyle="-",
         label="Tracking",
     )
@@ -201,6 +235,7 @@ def plot_kscar_circle_path():
             u_sim[1:t_final, :, plot_u_indices[i_trace]].cpu(),
             label=plot_u_labels[i_trace],
         )
+    ax2.legend()
 
     plt.show()
 
@@ -209,8 +244,7 @@ def plot_kscar_s_path():
     """Test the dynamics of the kinematic car tracking a S path"""
     # Create the system
     params = {
-        "psi_ref_c": 0.5403,
-        "psi_ref_s": 0.8415,
+        "psi_ref": 1.0,
         "v_ref": 10.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
@@ -220,7 +254,7 @@ def plot_kscar_s_path():
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 20.0
+    t_sim = 50.0
     n_sims = 1
     controller_period = dt
     num_timesteps = int(t_sim // dt)
@@ -235,10 +269,11 @@ def plot_kscar_s_path():
     # And create a place to store the reference path
     x_ref = np.zeros(num_timesteps)
     y_ref = np.zeros(num_timesteps)
+    psi_ref = np.zeros(num_timesteps)
+    psi_ref[0] = 1.0
 
     # Simulate!
     pt = copy(params)
-    psi_ref_t = 1.0
     for tstep in range(1, num_timesteps):
         # Get the current state
         x_current = x_sim[tstep - 1, :, :]
@@ -252,13 +287,12 @@ def plot_kscar_s_path():
 
         # Get the path parameters at this point
         omega_ref_t = 1.5 * np.sin(tstep * dt) + params["omega_ref"]
-        psi_ref_t = dt * omega_ref_t + psi_ref_t
+        psi_ref[tstep] = dt * omega_ref_t + psi_ref[tstep - 1]
         pt = copy(pt)
-        pt["psi_ref_c"] = np.cos(psi_ref_t)
-        pt["psi_ref_s"] = np.sin(psi_ref_t)
+        pt["psi_ref"] = psi_ref[tstep]
+        x_ref[tstep] = x_ref[tstep - 1] + dt * pt["v_ref"] * np.cos(psi_ref[tstep])
+        y_ref[tstep] = y_ref[tstep - 1] + dt * pt["v_ref"] * np.sin(psi_ref[tstep])
         pt["omega_ref"] = omega_ref_t
-        x_ref[tstep] = x_ref[tstep - 1] + dt * pt["v_ref"] * pt["psi_ref_c"]
-        y_ref[tstep] = y_ref[tstep - 1] + dt * pt["v_ref"] * pt["psi_ref_s"]
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
@@ -272,12 +306,18 @@ def plot_kscar_s_path():
         t_final = tstep
 
     t = np.linspace(0, t_sim, num_timesteps)
+
+    # Convert trajectory from path-centric to world coordinates
+    x_err_path = x_sim[:, :, kscar.SXE].cpu().squeeze().numpy()
+    y_err_path = x_sim[:, :, kscar.SYE].cpu().squeeze().numpy()
+    x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
+    y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
     fig, axs = plt.subplots(2, 1)
     fig.set_size_inches(10, 12)
     ax1 = axs[0]
     ax1.plot(
-        x_sim[:t_final, :, kscar.SXE].cpu().squeeze() + x_ref[:t_final],
-        x_sim[:t_final, :, kscar.SYE].cpu().squeeze() + y_ref[:t_final],
+        x_world[:t_final],
+        y_world[:t_final],
         linestyle="-",
         label="Tracking",
     )
@@ -301,6 +341,7 @@ def plot_kscar_s_path():
             u_sim[1:t_final, :, plot_u_indices[i_trace]].cpu(),
             label=plot_u_labels[i_trace],
         )
+    ax2.legend()
 
     plt.show()
 
