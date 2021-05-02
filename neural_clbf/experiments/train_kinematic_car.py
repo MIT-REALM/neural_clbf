@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from copy import copy
 
+import numpy as np
 import torch
 import torch.multiprocessing
 import pytorch_lightning as pl
@@ -19,7 +20,7 @@ from neural_clbf.systems import KSCar
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-start_x = torch.tensor([[0.0, 3.0, 0.0, -1.0, 1.0]])
+start_x = torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
 controller_period = 0.01
 simulation_dt = 0.001
 
@@ -55,8 +56,7 @@ def clbf_plotting_cb(clbf_net):
 def main(args):
     # Define the dynamics model
     nominal_params = {
-        "psi_ref_c": 0.5403,
-        "psi_ref_s": 0.8415,
+        "psi_ref": 0.5,
         "v_ref": 10.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
@@ -87,18 +87,12 @@ def main(args):
 
     # Define the scenarios (we need 2^3 = 6)
     scenarios = []
-    psi_ref_s_vals = [-1.0, 1.0]
-    psi_ref_c_vals = [-1.0, 1.0]
     omega_ref_vals = [-1.0, 1.0]
-    for psi_ref_s in psi_ref_s_vals:
-        for psi_ref_c in psi_ref_c_vals:
-            for omega_ref in omega_ref_vals:
-                s = copy(nominal_params)
-                s["psi_ref_s"] = psi_ref_s
-                s["psi_ref_c"] = psi_ref_c
-                s["omega_ref"] = omega_ref
+    for omega_ref in omega_ref_vals:
+        s = copy(nominal_params)
+        s["omega_ref"] = omega_ref
 
-                scenarios.append(s)
+        scenarios.append(s)
 
     # Define the plotting callbacks
     plotting_callbacks = [
@@ -121,7 +115,7 @@ def main(args):
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_relaxation_penalty=50.0,
-        epochs_per_episode=10,
+        epochs_per_episode=50,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
