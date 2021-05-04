@@ -298,9 +298,11 @@ class ControlAffineSystem(ABC):
                 x_sim[:, tstep, :] = x_current + self.dt * xdot
 
                 # If the guard is activated for any trajectory, reset that trajectory
+                # to a random state in the safe region
                 if guard is not None:
                     guard_activations = guard(x_sim[:, tstep, :])
-                    x_sim[guard_activations, tstep, :] = x_init[guard_activations, :]
+                    n_to_resample = int(guard_activations.sum().item())
+                    x_sim[guard_activations, tstep, :] = self.sample_safe(n_to_resample)
 
                 # Update the final simulation time if the step was successful
                 t_sim_final = tstep
