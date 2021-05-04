@@ -35,6 +35,7 @@ def plot_kscar_straight_path():
     }
     dt = 0.01
     kscar = KSCar(params, dt)
+    upper_u_lim, lower_u_lim = kscar.control_limits
 
     # Simulate!
     # (but first make somewhere to save the results)
@@ -55,6 +56,11 @@ def plot_kscar_straight_path():
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             u = kscar.u_nominal(x_current)
+            for dim_idx in range(kscar.n_controls):
+                u[:, dim_idx] = torch.clamp(
+                    u[:, dim_idx], min=lower_u_lim[dim_idx], max=upper_u_lim[dim_idx]
+                )
+
             u_sim[tstep, :, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
@@ -147,6 +153,7 @@ def plot_kscar_circle_path():
     }
     dt = 0.01
     kscar = KSCar(params, dt)
+    upper_u_lim, lower_u_lim = kscar.control_limits
 
     # Simulate!
     # (but first make somewhere to save the results)
@@ -175,6 +182,11 @@ def plot_kscar_circle_path():
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             u = kscar.u_nominal(x_current)
+            for dim_idx in range(kscar.n_controls):
+                u[:, dim_idx] = torch.clamp(
+                    u[:, dim_idx], min=lower_u_lim[dim_idx], max=upper_u_lim[dim_idx]
+                )
+
             u_sim[tstep, :, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
@@ -251,6 +263,7 @@ def plot_kscar_s_path():
     }
     dt = 0.01
     kscar = KSCar(params, dt)
+    upper_u_lim, lower_u_lim = kscar.control_limits
 
     # Simulate!
     # (but first make somewhere to save the results)
@@ -280,6 +293,11 @@ def plot_kscar_s_path():
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             u = kscar.u_nominal(x_current)
+            for dim_idx in range(kscar.n_controls):
+                u[:, dim_idx] = torch.clamp(
+                    u[:, dim_idx], min=lower_u_lim[dim_idx], max=upper_u_lim[dim_idx]
+                )
+
             u_sim[tstep, :, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
