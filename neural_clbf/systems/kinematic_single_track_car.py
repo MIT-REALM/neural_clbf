@@ -268,16 +268,13 @@ class KSCar(ControlAffineSystem):
         f = f.type_as(x)
 
         # Extract the parameters
-        psi_ref = torch.tensor(params["psi_ref"])
-        c_psi_ref = torch.cos(psi_ref)
-        s_psi_ref = torch.sin(psi_ref)
         v_ref = torch.tensor(params["v_ref"])
         a_ref = torch.tensor(params["a_ref"])
         omega_ref = torch.tensor(params["omega_ref"])
 
         # Extract the state variables and adjust for the reference
         v = x[:, KSCar.VE] + v_ref
-        psi = x[:, KSCar.PSI_E] + psi_ref
+        psi_e = x[:, KSCar.PSI_E]
         delta = x[:, KSCar.DELTA]
         sxe = x[:, KSCar.SXE]
         sye = x[:, KSCar.SYE]
@@ -285,19 +282,10 @@ class KSCar(ControlAffineSystem):
         # Compute the dynamics
         wheelbase = self.car_params.a + self.car_params.b
 
-        # Get dynamics for x and y of the car and reference path
-        dx = v * torch.cos(psi)
-        dx_ref = v_ref * c_psi_ref
-        dy = v * torch.sin(psi)
-        dy_ref = v_ref * s_psi_ref
-        # Use these to compute dynamics of global-frame error
-        dsxe = dx - dx_ref
-        dsye = dy - dy_ref
-
         # We want to express the error in x and y in the reference path frame, so
         # we need to get the dynamics of the rotated global frame error
-        dsxe_r = dsxe * c_psi_ref - dsye * s_psi_ref + omega_ref * sye
-        dsye_r = -dsxe * s_psi_ref + dsye * c_psi_ref - omega_ref * sxe
+        dsxe_r = v * torch.cos(psi_e) - v_ref + omega_ref * sye
+        dsye_r = v * torch.sin(psi_e) - omega_ref * sxe
 
         f[:, KSCar.SXE, 0] = dsxe_r
         f[:, KSCar.SYE, 0] = dsye_r

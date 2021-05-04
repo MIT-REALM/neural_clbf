@@ -72,6 +72,15 @@ def plot_kscar_straight_path():
                 x_current[i, :].unsqueeze(0),
                 u[i, :].unsqueeze(0),
             )
+            # check that the dynamics are rotation invariant
+            for j in range(10):
+                psi_ref_new = params["psi_ref"] + j * np.pi / 10
+                test_params = copy(params)
+                test_params["psi_ref"] = psi_ref_new
+                xdot_test = kscar.closed_loop_dynamics(
+                    x_current[i, :].unsqueeze(0), u[i, :].unsqueeze(0), test_params
+                )
+                assert torch.allclose(xdot, xdot_test)
             x_sim[tstep, i, :] = x_current[i, :] + dt * xdot.squeeze()
 
         t_final = tstep
@@ -304,7 +313,7 @@ def plot_kscar_s_path():
             u_sim[tstep, :, :] = u
 
         # Get the path parameters at this point
-        omega_ref_t = 1.5 * np.sin(tstep * dt) + params["omega_ref"]
+        omega_ref_t = 1.8 * np.sin(tstep * dt) + params["omega_ref"]
         psi_ref[tstep] = dt * omega_ref_t + psi_ref[tstep - 1]
         pt = copy(pt)
         pt["psi_ref"] = psi_ref[tstep]
