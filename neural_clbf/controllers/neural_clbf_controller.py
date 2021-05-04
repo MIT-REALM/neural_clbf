@@ -36,6 +36,7 @@ class NeuralCLBFController(pl.LightningModule):
         lookahead: float = 0.1,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
+        penalty_scheduling_rate: float = 100.0,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
         ] = None,
@@ -57,6 +58,8 @@ class NeuralCLBFController(pl.LightningModule):
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
             epochs_per_episode: the number of epochs to include in each episode
+            penalty_scheduling_rate: the rate at which to ramp the rollout relaxation
+                                     penalty up to clbf_relaxation_penalty
             plotting_callbacks: a list of plotting functions that each take a
                                 NeuralCLBFController and return a tuple of a string
                                 name and figure object to log
@@ -80,6 +83,7 @@ class NeuralCLBFController(pl.LightningModule):
         self.lookahead = lookahead
         self.primal_learning_rate = primal_learning_rate
         self.epochs_per_episode = epochs_per_episode
+        self.penalty_scheduling_rate = penalty_scheduling_rate
 
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
@@ -250,11 +254,15 @@ class NeuralCLBFController(pl.LightningModule):
         # return the Lie derivatives
         return Lf_V, Lg_V
 
-    def solve_CLBF_QP(self, x) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def solve_CLBF_QP(
+        self, x, relaxation_penalty: Optional[float] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Determine the control input for a given state using a QP
 
         args:
             x: bs x self.dynamics_model.n_dims tensor of state
+            relaxation_penalty: the penalty to use for CLBF relaxation, defaults to
+                                self.clbf_relaxation_penalty
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control inputs
             relaxation: bs x 1 tensor of how much the CLBF had to be relaxed in each
@@ -264,6 +272,10 @@ class NeuralCLBFController(pl.LightningModule):
         # Get the value of the CLBF and its Lie derivatives
         V = self.V(x)
         Lf_V, Lg_V = self.V_lie_derivatives(x)
+
+        # Apply default penalty if needed
+        if relaxation_penalty is None:
+            relaxation_penalty = self.clbf_relaxation_penalty
 
         # To find the control input, we want to solve a QP constrained by
         #
@@ -308,7 +320,7 @@ class NeuralCLBFController(pl.LightningModule):
         Q = torch.zeros(bs, n_controls + 1, n_controls + 1).type_as(x)
         for j in range(n_controls):
             Q[:, j, j] = 1.0
-        Q[:, -1, -1] = self.clbf_relaxation_penalty + 0.01
+        Q[:, -1, -1] = relaxation_penalty + 0.01
         Q *= 2.0
         p = torch.zeros(bs, n_controls + 1).type_as(x)
         u_nominal = self.dynamics_model.u_nominal(x)
@@ -620,11 +632,23 @@ class NeuralCLBFController(pl.LightningModule):
         [plt.close(plot) for plot in plots]
 
     @pl.core.decorators.auto_move_data
-    def simulator_fn(self, x_init: torch.Tensor, num_steps: int, use_qp: bool = True):
+    def simulator_fn(
+        self,
+        x_init: torch.Tensor,
+        num_steps: int,
+        use_qp: bool = True,
+        relaxation_penalty: Optional[float] = None,
+    ):
         if use_qp:
-            controller_fn = self.forward
+
+            def controller_fn(x):
+                u, _, _ = self.solve_CLBF_QP(x, relaxation_penalty)
+                return u
+
         else:
-            controller_fn = self.u
+
+            def controller_fn(x):
+                return self.u(x)
 
         return self.dynamics_model.simulate(
             x_init,
@@ -638,11 +662,23 @@ class NeuralCLBFController(pl.LightningModule):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
-            # Use the models simulation function with this controller
-            def simulator_fn(x_init: torch.Tensor, num_steps: int):
-                return self.dynamics_model.simulate(x_init, num_steps, self.forward)
+            # Figure out the relaxation penalty for this rollout
+            relaxation_penalty = (
+                self.clbf_relaxation_penalty
+                * self.current_epoch
+                / self.penalty_scheduling_rate
+            )
 
-            self.datamodule.add_data(simulator_fn)
+            # Use the models simulation function with this controller
+            def simulator_fn_wrapper(x_init: torch.Tensor, num_steps: int):
+                return self.simulator_fn(
+                    x_init,
+                    num_steps,
+                    use_qp=True,
+                    relaxation_penalty=relaxation_penalty,
+                )
+
+            self.datamodule.add_data(simulator_fn_wrapper)
 
     def configure_optimizers(self):
         primal_opt = torch.optim.SGD(

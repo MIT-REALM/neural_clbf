@@ -78,7 +78,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=10,
         trajectory_length=1000,
-        fixed_samples=100000,
+        fixed_samples=10000,
         max_points=500000,
         val_split=0.1,
         batch_size=64,
@@ -115,7 +115,7 @@ def main(args):
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_relaxation_penalty=50.0,
-        epochs_per_episode=1000,
+        epochs_per_episode=1,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
