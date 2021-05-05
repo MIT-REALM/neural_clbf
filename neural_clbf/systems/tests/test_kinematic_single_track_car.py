@@ -33,15 +33,15 @@ def plot_kscar_straight_path():
         "a_ref": 0.0,
         "omega_ref": 0.0,
     }
-    dt = 0.01
+    dt = 0.001
     kscar = KSCar(params, dt)
     upper_u_lim, lower_u_lim = kscar.control_limits
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 10.0
+    t_sim = 1.0
     n_sims = 1
-    controller_period = dt
+    controller_period = 0.01
     num_timesteps = int(t_sim // dt)
     start_x = torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
     x_sim = torch.zeros(num_timesteps, n_sims, kscar.n_dims).type_as(start_x)
@@ -72,15 +72,15 @@ def plot_kscar_straight_path():
                 x_current[i, :].unsqueeze(0),
                 u[i, :].unsqueeze(0),
             )
-            # check that the dynamics are rotation invariant
-            for j in range(10):
-                psi_ref_new = params["psi_ref"] + j * np.pi / 10
-                test_params = copy(params)
-                test_params["psi_ref"] = psi_ref_new
-                xdot_test = kscar.closed_loop_dynamics(
-                    x_current[i, :].unsqueeze(0), u[i, :].unsqueeze(0), test_params
-                )
-                assert torch.allclose(xdot, xdot_test)
+            # # check that the dynamics are rotation invariant
+            # for j in range(10):
+            #     psi_ref_new = params["psi_ref"] + j * np.pi / 10
+            #     test_params = copy(params)
+            #     test_params["psi_ref"] = psi_ref_new
+            #     xdot_test = kscar.closed_loop_dynamics(
+            #         x_current[i, :].unsqueeze(0), u[i, :].unsqueeze(0), test_params
+            #     )
+            #     assert torch.allclose(xdot, xdot_test)
             x_sim[tstep, i, :] = x_current[i, :] + dt * xdot.squeeze()
 
         t_final = tstep
@@ -227,7 +227,7 @@ def plot_kscar_circle_path():
     y_err_path = x_sim[:, :, kscar.SYE].cpu().squeeze().numpy()
     x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
     y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
-    fig, axs = plt.subplots(2, 1)
+    fig, axs = plt.subplots(3, 1)
     fig.set_size_inches(10, 12)
     ax1 = axs[0]
     ax1.plot(
@@ -257,6 +257,15 @@ def plot_kscar_circle_path():
             label=plot_u_labels[i_trace],
         )
     ax2.legend()
+
+    ax3 = axs[2]
+    ax3.plot(
+        t[:t_final],
+        x_sim[:t_final, :, :].norm(dim=-1).squeeze().numpy(),
+        label="Tracking Error",
+    )
+    ax3.legend()
+    ax3.set_xlabel("$t$")
 
     plt.show()
 
@@ -339,7 +348,7 @@ def plot_kscar_s_path():
     y_err_path = x_sim[:, :, kscar.SYE].cpu().squeeze().numpy()
     x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
     y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
-    fig, axs = plt.subplots(2, 1)
+    fig, axs = plt.subplots(3, 1)
     fig.set_size_inches(10, 12)
     ax1 = axs[0]
     ax1.plot(
@@ -369,6 +378,15 @@ def plot_kscar_s_path():
             label=plot_u_labels[i_trace],
         )
     ax2.legend()
+
+    ax3 = axs[2]
+    ax3.plot(
+        t[:t_final],
+        x_sim[:t_final, :, :].norm(dim=-1).squeeze().numpy(),
+        label="Tracking Error",
+    )
+    ax3.legend()
+    ax3.set_xlabel("$t$")
 
     plt.show()
 

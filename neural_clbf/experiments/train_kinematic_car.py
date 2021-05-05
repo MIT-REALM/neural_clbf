@@ -83,12 +83,12 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=50,
-        trajectory_length=500,
-        fixed_samples=0,
-        max_points=500000,
+        trajectories_per_episode=10,
+        trajectory_length=1000,
+        fixed_samples=10000,
+        max_points=100000,
         val_split=0.1,
-        batch_size=256,
+        batch_size=64,
         safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
     )
 
@@ -124,7 +124,7 @@ def main(args):
         clbf_lambda=0.1,
         clbf_relaxation_penalty=50.0,
         penalty_scheduling_rate=25.0,
-        epochs_per_episode=5,
+        epochs_per_episode=1,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
