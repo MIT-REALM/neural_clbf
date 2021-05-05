@@ -336,8 +336,8 @@ def rollout_CLBF(
     # Plot markers indicating where the simulations were unsafe
     zeros = np.zeros((num_timesteps,))
     ax1.plot(
-        t[unsafe_mask_sim.any(dim=-1)],
-        zeros[unsafe_mask_sim.any(dim=-1)],
+        t[unsafe_mask_sim.any(dim=-1).cpu().numpy()],
+        zeros[unsafe_mask_sim.any(dim=-1).cpu().numpy()],
         label="Unsafe",
     )
 
