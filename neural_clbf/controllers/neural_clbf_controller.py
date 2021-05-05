@@ -65,6 +65,7 @@ class NeuralCLBFController(pl.LightningModule):
                                 name and figure object to log
         """
         super().__init__()
+        self.save_hyperparameters()
 
         # Save the provided model
         self.dynamics_model = dynamics_model
