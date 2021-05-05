@@ -351,7 +351,7 @@ def rollout_CLBF(
         ax1.set_title(f"Controller failure! s[0] = {random_scenarios[0]}")
 
     ax1.set_xlabel("$t$")
-    ax1.legend(loc="lower", ncol=n_sims * len(plot_x_labels) + 1)
+    ax1.legend(loc="lower center", ncol=n_sims * len(plot_x_labels) + 1)
 
     ax2 = axs[1]
     for i_trace in range(len(plot_u_indices)):
@@ -362,7 +362,7 @@ def rollout_CLBF(
         )
 
     ax2.set_xlabel("$t$")
-    ax2.legend(loc="lower", ncol=n_sims * len(plot_x_labels))
+    ax2.legend(loc="lower center", ncol=n_sims * len(plot_x_labels))
 
     ax3 = axs[2]
     ax3.plot(
