@@ -139,13 +139,13 @@ class KSCar(ControlAffineSystem):
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.tensor(
             [
-                self.car_params.steering.v_max,
+                5.0,  # self.car_params.steering.v_max,
                 self.car_params.longitudinal.a_max,
             ]
         )
         lower_limit = torch.tensor(
             [
-                self.car_params.steering.v_min,
+                - 5.0,  # self.car_params.steering.v_min,
                 -self.car_params.longitudinal.a_max,
             ]
         )
