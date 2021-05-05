@@ -20,12 +20,14 @@ from neural_clbf.systems import KSCar
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-start_x = torch.tensor([
-    [0.0, 1.0, 0.0, 1.0, -np.pi / 6],
-    [1.0, 0.0, 0.0, 1.0, -np.pi / 6],
-    [0.0, 1.0, 0.0, 1.0, np.pi / 6],
-    [1.0, 0.0, 0.0, 1.0, np.pi / 6],
-])
+start_x = torch.tensor(
+    [
+        [0.0, 1.0, 0.0, 1.0, -np.pi / 6],
+        [1.0, 0.0, 0.0, 1.0, -np.pi / 6],
+        [0.0, 1.0, 0.0, 1.0, np.pi / 6],
+        [1.0, 0.0, 0.0, 1.0, np.pi / 6],
+    ]
+)
 controller_period = 0.01
 simulation_dt = 0.001
 
