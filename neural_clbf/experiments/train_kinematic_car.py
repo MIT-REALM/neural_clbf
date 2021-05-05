@@ -83,16 +83,16 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
+        trajectories_per_episode=200,
         trajectory_length=500,
-        fixed_samples=50000,
+        fixed_samples=0,
         max_points=500000,
         val_split=0.1,
         batch_size=64,
         safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
     )
 
-    # Define the scenarios (we need 2^3 = 6)
+    # Define the scenarios
     scenarios = []
     omega_ref_vals = [-0.3, 0.3]
     for omega_ref in omega_ref_vals:
@@ -121,6 +121,7 @@ def main(args):
         u_nn_hidden_size=64,
         controller_period=controller_period,
         lookahead=controller_period,
+        clbf_lambda=0.1,
         clbf_relaxation_penalty=50.0,
         penalty_scheduling_rate=25.0,
         epochs_per_episode=5,

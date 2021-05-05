@@ -74,7 +74,7 @@ def single_rollout_straight_path():
     )
 
     # Test a bunch of relaxation penalties
-    clbf_relaxation_penalties = [0.0, 1.0, 5.0, 10.0, 20.0, 50.0, 100.0]
+    clbf_relaxation_penalties = [0.0, 5.0, 20.0, 50.0]
 
     # Simulate!
     # (but first make somewhere to save the results)
@@ -117,63 +117,56 @@ def single_rollout_straight_path():
 
         t_final = tstep
 
+    # Plot!
+    fig, axs = plt.subplots(1, 1)
+    fig.set_size_inches(10, 12)
+
     # Get reference path
     t = np.linspace(0, t_sim, num_timesteps)
-    psi_ref = nominal_params["psi_ref"]
-    x_ref = t * nominal_params["v_ref"] * np.cos(psi_ref)
-    y_ref = t * nominal_params["v_ref"] * np.sin(psi_ref)
-    x_ref = np.tile(x_ref, (n_sims, 1)).T
-    y_ref = np.tile(y_ref, (n_sims, 1)).T
+    # psi_ref = nominal_params["psi_ref"]
+    # x_ref = t * nominal_params["v_ref"] * np.cos(psi_ref)
+    # y_ref = t * nominal_params["v_ref"] * np.sin(psi_ref)
+    # x_ref = np.tile(x_ref, (n_sims, 1)).T
+    # y_ref = np.tile(y_ref, (n_sims, 1)).T
 
-    # Convert trajectory from path-centric to world coordinates
-    x_err_path = x_sim[:, :, kscar.SXE].cpu().squeeze().numpy()
-    y_err_path = x_sim[:, :, kscar.SYE].cpu().squeeze().numpy()
-    x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
-    y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
-    fig, axs = plt.subplots(3, 1)
-    fig.set_size_inches(10, 12)
-    ax1 = axs[0]
-    ax1.plot([], [], linestyle="-", label="Tracking")
-    ax1.plot(
-        x_world[:t_final],
-        y_world[:t_final],
-        linestyle="-",
-    )
-    ax1.plot(
-        x_ref[:t_final, 0],
-        y_ref[:t_final, 0],
-        linestyle=":",
-        label="Reference",
-    )
-    ax1.set_xlabel("$x$")
-    ax1.set_ylabel("$y$")
-    ax1.legend()
-    ax1.set_ylim([-t_sim * nominal_params["v_ref"], t_sim * nominal_params["v_ref"]])
-    ax1.set_xlim([-t_sim * nominal_params["v_ref"], t_sim * nominal_params["v_ref"]])
-    ax1.set_aspect("equal")
+    # # Convert trajectory from path-centric to world coordinates
+    # x_err_path = x_sim[:, :, kscar.SXE].cpu().squeeze().numpy()
+    # y_err_path = x_sim[:, :, kscar.SYE].cpu().squeeze().numpy()
+    # x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
+    # y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
+    # ax1 = axs[0]
+    # ax1.plot([], [], linestyle="-", label="Tracking")
+    # ax1.plot(
+    #     x_world[:t_final],
+    #     y_world[:t_final],
+    #     linestyle="-",
+    # )
+    # ax1.plot(
+    #     x_ref[:t_final, 0],
+    #     y_ref[:t_final, 0],
+    #     linestyle=":",
+    #     label="Reference",
+    # )
+    # ax1.set_xlabel("$x$")
+    # ax1.set_ylabel("$y$")
+    # ax1.legend()
+    # ax1.set_ylim([-t_sim * nominal_params["v_ref"], t_sim * nominal_params["v_ref"]])
+    # ax1.set_xlim([-t_sim * nominal_params["v_ref"], t_sim * nominal_params["v_ref"]])
+    # ax1.set_aspect("equal")
 
-    # psi_err_path = x_sim[:, :, kscar.PSI_E].cpu().squeeze().numpy()
-    # delta_path = x_sim[:, :, kscar.DELTA].cpu().squeeze().numpy()
-    # v_err_path = x_sim[:, :, kscar.VE].cpu().squeeze().numpy()
-    # ax1.plot(t[:t_final], y_err_path[:t_final])
-    # ax1.plot(t[:t_final], x_err_path[:t_final])
-    # ax1.plot(t[:t_final], psi_err_path[:t_final])
-    # ax1.plot(t[:t_final], delta_path[:t_final])
-    # ax1.plot(t[:t_final], v_err_path[:t_final])
-    # ax1.legend(["y", "x", "psi", "delta", "ve"])
+    # ax2 = axs[1]
+    # plot_u_indices = [kscar.VDELTA, kscar.ALONG]
+    # plot_u_labels = ["$v_\\delta$", "$a_{long}$"]
+    # for i_trace in range(len(plot_u_indices)):
+    #     ax2.plot(
+    #         t[1:t_final],
+    #         u_sim[1:t_final, :, plot_u_indices[i_trace]].cpu(),
+    #         label=plot_u_labels[i_trace],
+    #     )
+    # ax2.legend()
 
-    ax2 = axs[1]
-    plot_u_indices = [kscar.VDELTA, kscar.ALONG]
-    plot_u_labels = ["$v_\\delta$", "$a_{long}$"]
-    for i_trace in range(len(plot_u_indices)):
-        ax2.plot(
-            t[1:t_final],
-            u_sim[1:t_final, :, plot_u_indices[i_trace]].cpu(),
-            label=plot_u_labels[i_trace],
-        )
-    ax2.legend()
-
-    ax3 = axs[2]
+    # ax3 = axs[2]
+    ax3 = axs
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
