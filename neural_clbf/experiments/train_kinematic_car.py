@@ -51,7 +51,7 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-10.0, 10.0), (-10.0, 10.0)],  # plot for theta, theta_dot
+        domain=[(-5.0, 5.0), (-5.0, 5.0)],  # plot for theta, theta_dot
         n_grid=15,
         x_axis_index=KSCar.SXE,
         y_axis_index=KSCar.SYE,
@@ -83,7 +83,7 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=200,
+        trajectories_per_episode=50,
         trajectory_length=500,
         fixed_samples=0,
         max_points=500000,
