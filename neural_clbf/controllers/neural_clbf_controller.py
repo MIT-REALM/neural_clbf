@@ -185,10 +185,8 @@ class NeuralCLBFController(pl.LightningModule):
         # Now step through each layer in V
         V = x
         for layer in self.V_nn:
-            try:
-                V = layer(V)
-            except:
-                import pdb; pdb.set_trace()
+            V = layer(V)
+
             if isinstance(layer, nn.Linear):
                 JV = torch.matmul(layer.weight, JV)
             elif isinstance(layer, nn.Tanh):
@@ -415,7 +413,7 @@ class NeuralCLBFController(pl.LightningModule):
         goal_term = goal_region_violation.mean()
 
         #   1b.) CLBF should be minimized on the goal point
-        V_goal_pt = self.V(self.dynamics_model.goal_point) + 1e-1
+        V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x)) + 1e-1
         goal_term += (V_goal_pt ** 2).mean()
         loss.append(("CLBF goal term", goal_term))
 
