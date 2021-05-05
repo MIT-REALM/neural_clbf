@@ -119,10 +119,10 @@ class KSCar(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[KSCar.SXE] = 10.0
-        upper_limit[KSCar.SYE] = 10.0
+        upper_limit[KSCar.SXE] = 5.0
+        upper_limit[KSCar.SYE] = 5.0
         upper_limit[KSCar.DELTA] = self.car_params.steering.max
-        upper_limit[KSCar.VE] = 10.0
+        upper_limit[KSCar.VE] = 5.0
         upper_limit[KSCar.PSI_E] = np.pi / 2
 
         lower_limit = -1.0 * upper_limit
@@ -161,7 +161,7 @@ class KSCar(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 4.0
+        max_safe_tracking_error = 2.0
         tracking_error = x[
             :,
             [
@@ -192,7 +192,7 @@ class KSCar(ControlAffineSystem):
 
         # Avoid angles that are too large
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 4.0
+        max_safe_tracking_error = 2.0
         unsafe_buffer = 1.0
         tracking_error = x[
             :,
@@ -239,11 +239,11 @@ class KSCar(ControlAffineSystem):
                 KSCar.PSI_E,
             ],
         ]
-        near_goal = tracking_error.norm(dim=-1) <= 0.5
+        near_goal = tracking_error.norm(dim=-1) <= 0.4
         goal_mask.logical_and_(near_goal)
 
         # We need slightly lower heading angle to be "close"
-        near_goal_psi = x[:, KSCar.PSI_E].abs() <= 0.5
+        near_goal_psi = x[:, KSCar.PSI_E].abs() <= 0.4
         goal_mask.logical_and_(near_goal_psi)
 
         # The goal set has to be a subset of the safe set
