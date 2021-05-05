@@ -76,8 +76,8 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=10,
-        trajectory_length=1000,
+        trajectories_per_episode=20,
+        trajectory_length=500,
         fixed_samples=10000,
         max_points=500000,
         val_split=0.1,
@@ -103,7 +103,8 @@ def main(args):
     ]
 
     # Initialize the controller
-    clbf_controller = NeuralCLBFController(
+    clbf_controller = NeuralCLBFController.load_from_checkpoint(
+        'logs/kinematic_car/qp_in_loop/version_5/checkpoints/epoch=32-step=139043.ckpt',
         dynamics_model,
         scenarios,
         data_module,
@@ -115,7 +116,8 @@ def main(args):
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_relaxation_penalty=50.0,
-        epochs_per_episode=1,
+        penalty_scheduling_rate=25.0,
+        epochs_per_episode=5,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
