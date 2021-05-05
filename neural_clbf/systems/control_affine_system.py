@@ -302,7 +302,8 @@ class ControlAffineSystem(ABC):
                 if guard is not None:
                     guard_activations = guard(x_sim[:, tstep, :])
                     n_to_resample = int(guard_activations.sum().item())
-                    x_sim[guard_activations, tstep, :] = self.sample_safe(n_to_resample)
+                    x_new = self.sample_safe(n_to_resample).type_as(x_sim)
+                    x_sim[guard_activations, tstep, :] = x_new
 
                 # Update the final simulation time if the step was successful
                 t_sim_final = tstep
