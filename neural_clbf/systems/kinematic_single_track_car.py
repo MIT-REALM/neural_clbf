@@ -145,7 +145,7 @@ class KSCar(ControlAffineSystem):
         )
         lower_limit = torch.tensor(
             [
-                - 5.0,  # self.car_params.steering.v_min,
+                -5.0,  # self.car_params.steering.v_min,
                 -self.car_params.longitudinal.a_max,
             ]
         )
