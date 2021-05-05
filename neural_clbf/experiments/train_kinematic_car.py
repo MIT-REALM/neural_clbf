@@ -20,7 +20,12 @@ from neural_clbf.systems import KSCar
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-start_x = torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
+start_x = torch.tensor([
+    [0.0, 1.0, 0.0, 1.0, -np.pi / 6],
+    [1.0, 0.0, 0.0, 1.0, -np.pi / 6],
+    [0.0, 1.0, 0.0, 1.0, np.pi / 6],
+    [1.0, 0.0, 0.0, 1.0, np.pi / 6],
+])
 controller_period = 0.01
 simulation_dt = 0.001
 
@@ -71,14 +76,14 @@ def main(args):
         (-2.0, 2.0),  # sye
         (-1.0, 1.0),  # delta
         (-2.0, 2.0),  # ve
-        (-2.0, 2.0),  # psi_e
+        (-1.0, 1.0),  # psi_e
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=20,
+        trajectories_per_episode=100,
         trajectory_length=500,
-        fixed_samples=10000,
+        fixed_samples=100000,
         max_points=500000,
         val_split=0.1,
         batch_size=64,
