@@ -88,7 +88,7 @@ def main(args):
         fixed_samples=0,
         max_points=500000,
         val_split=0.1,
-        batch_size=64,
+        batch_size=256,
         safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
     )
 
