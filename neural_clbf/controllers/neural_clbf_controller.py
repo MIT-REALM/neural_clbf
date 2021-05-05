@@ -185,6 +185,7 @@ class NeuralCLBFController(pl.LightningModule):
         # Now step through each layer in V
         V = x
         for layer in self.V_nn:
+            import pdb; pdb.set_trace()
             V = layer(V)
             if isinstance(layer, nn.Linear):
                 JV = torch.matmul(layer.weight, JV)
