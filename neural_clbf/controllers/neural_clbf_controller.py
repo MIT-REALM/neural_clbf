@@ -415,7 +415,7 @@ class NeuralCLBFController(pl.LightningModule):
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x)) + 1e-1
         goal_term += (V_goal_pt ** 2).mean()
-        loss.append(("CLBF goal term", 100 * goal_term))
+        loss.append(("CLBF goal term", goal_term))
 
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
@@ -428,7 +428,7 @@ class NeuralCLBFController(pl.LightningModule):
         V_safe_ex_goal = V[safe_minus_goal_mask]
         safe_V_too_small = F.relu(eps - V_safe_ex_goal)
         safe_clbf_term += safe_V_too_small.mean()
-        loss.append(("CLBF safe region term", 100 * safe_clbf_term))
+        loss.append(("CLBF safe region term", safe_clbf_term))
 
         # #   2c.) for tuning, V >= dist_to_goal in the safe region
         # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
@@ -438,7 +438,7 @@ class NeuralCLBFController(pl.LightningModule):
         V_unsafe = V[unsafe_mask]
         unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
         unsafe_clbf_term = unsafe_V_too_small.mean()
-        loss.append(("CLBF unsafe region term", 100 * unsafe_clbf_term))
+        loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
         return loss
 
@@ -622,6 +622,15 @@ class NeuralCLBFController(pl.LightningModule):
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of every validation epoch, using arbitrary plotting callbacks!
 
+        # Figure out the relaxation penalty for this rollout
+        relaxation_penalty = (
+            self.clbf_relaxation_penalty
+            * self.current_epoch
+            / self.penalty_scheduling_rate
+        )
+        old_relaxation_penalty = self.clbf_relaxation_penalty
+        self.clbf_relaxation_penalty = relaxation_penalty
+
         plots = []
         for plot_fn in self.plotting_callbacks:
             plot_name, plot = plot_fn(self)
@@ -632,6 +641,9 @@ class NeuralCLBFController(pl.LightningModule):
         self.logger.experiment.close()
         self.logger.experiment.flush()
         [plt.close(plot) for plot in plots]
+
+        # Restore the nominal relaxation penalty
+        self.clbf_relaxation_penalty = old_relaxation_penalty
 
     @pl.core.decorators.auto_move_data
     def simulator_fn(
