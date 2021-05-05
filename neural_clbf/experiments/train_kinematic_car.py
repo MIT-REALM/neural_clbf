@@ -103,8 +103,7 @@ def main(args):
     ]
 
     # Initialize the controller
-    clbf_controller = NeuralCLBFController.load_from_checkpoint(
-        'logs/kinematic_car/qp_in_loop/version_5/checkpoints/epoch=32-step=139043.ckpt',
+    clbf_controller = NeuralCLBFController(
         dynamics_model,
         scenarios,
         data_module,
