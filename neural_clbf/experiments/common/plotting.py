@@ -244,8 +244,9 @@ def rollout_CLBF(
 
     # Generate a tensor of start states
     x_sim_start = torch.zeros(n_sims, clbf_net.dynamics_model.n_dims).type_as(start_x)
-    for i in range(0, n_sims, n_sims_per_start):
-        x_sim_start[i : i + n_sims_per_start, :] = start_x
+    for i in range(0, start_x.shape[0]):
+        for j in range(0, n_sims_per_start):
+            x_sim_start[i * n_sims_per_start + j, :] = start_x[i, :]
 
     # Generate a random scenario for each rollout from the given scenarios
     random_scenarios = []
