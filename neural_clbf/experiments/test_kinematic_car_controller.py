@@ -456,7 +456,7 @@ def single_rollout_circle_path(
     fig.tight_layout()
 
     # Return the figure along with its name
-    return "Circle Line Tracking", fig
+    return "Circle Tracking", fig
 
 
 @torch.no_grad()
@@ -632,11 +632,11 @@ def single_rollout_s_path(
             label="Tracking Error (nominal)",
         )
         break
-    ax3.plot(
-        t[:t_final],
-        V_sim[:t_final, :, :].squeeze().cpu().numpy(),
-        label="V",
-    )
+    # ax3.plot(
+    #     t[:t_final],
+    #     V_sim[:t_final, :, :].squeeze().cpu().numpy(),
+    #     label="V",
+    # )
     # # Plot markers indicating where the simulations were unsafe
     # zeros = np.zeros((num_timesteps,))
     # ax3.plot(
@@ -650,7 +650,7 @@ def single_rollout_s_path(
     fig.tight_layout()
 
     # Return the figure along with its name
-    return "S-Curve Line Tracking", fig
+    return "S-Curve Tracking", fig
 
 
 if __name__ == "__main__":
