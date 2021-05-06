@@ -10,9 +10,13 @@ from neural_clbf.experiments.common.episodic_datamodule import (
     EpisodicDataModule,
 )
 from neural_clbf.systems import KSCar
+from neural_clbf.experiments.train_kinematic_car import (  # noqa
+    rollout_plotting_cb,  # noqa
+    clbf_plotting_cb,  # noqa
+)
 
 
-checkpoint = "logs/kinematic_car/qp_in_loop/penalty_sched_checkpoint/checkpoint.ckpt"
+checkpoint = "logs/kinematic_car/qp_in_loop/penalty_sched_checkpoint/v8.ckpt"
 
 controller_period = 0.01
 simulation_dt = 0.001
@@ -68,18 +72,18 @@ def single_rollout_straight_path():
         u_nn_hidden_size=64,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_relaxation_penalty=0.0,
+        clbf_relaxation_penalty=10.0,
         penalty_scheduling_rate=25.0,
         epochs_per_episode=5,
     )
 
-    # Test a bunch of relaxation penalties
-    clbf_relaxation_penalties = [0.0, 5.0, 20.0, 50.0]
+    # Test a bunch of hyperparams if you want
+    clbf_lambdas = [1.0]
 
     # Simulate!
     # (but first make somewhere to save the results)
     t_sim = 5.0
-    n_sims = len(clbf_relaxation_penalties)
+    n_sims = len(clbf_lambdas)
     num_timesteps = int(t_sim // simulation_dt)
     start_x = torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
     x_sim = torch.zeros(num_timesteps, n_sims, kscar.n_dims).type_as(start_x)
@@ -87,6 +91,9 @@ def single_rollout_straight_path():
     for i in range(n_sims):
         x_sim[0, i, :] = start_x
         V_sim[0, i, 0] = clbf_controller.V(start_x)
+
+    x_nominal = torch.clone(x_sim)
+    V_nominal = torch.clone(V_sim)
 
     u_sim = torch.zeros(num_timesteps, n_sims, kscar.n_controls).type_as(start_x)
     controller_update_freq = int(controller_period / simulation_dt)
@@ -96,7 +103,7 @@ def single_rollout_straight_path():
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
-                clbf_controller.clbf_relaxation_penalty = clbf_relaxation_penalties[j]
+                clbf_controller.clbf_lambda = clbf_lambdas[j]
                 u = clbf_controller(x_current[j, :].unsqueeze(0))
                 u_sim[tstep, j, :] = u
         else:
@@ -115,64 +122,96 @@ def single_rollout_straight_path():
         # Get the CLBF values
         V_sim[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
 
+        # and repeat for the nominal controller
+        # Get the current state
+        x_current = x_nominal[tstep - 1, :, :]
+        # Get the control input at the current state if it's time
+        if tstep == 1 or tstep % controller_update_freq == 0:
+            for j in range(n_sims):
+                u = kscar.u_nominal(x_current[j, :].unsqueeze(0))
+                u_sim[tstep, j, :] = u
+        else:
+            u = u_sim[tstep - 1, :, :]
+            u_sim[tstep, :, :] = u
+
+        # Simulate forward using the dynamics
+        for i in range(n_sims):
+            xdot = kscar.closed_loop_dynamics(
+                x_current[i, :].unsqueeze(0),
+                u_sim[tstep, i, :].unsqueeze(0),
+                nominal_params,
+            )
+            x_nominal[tstep, i, :] = x_current[i, :] + simulation_dt * xdot.squeeze()
+
+        # Get the CLBF values
+        V_nominal[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
+
         t_final = tstep
 
     # Plot!
-    fig, axs = plt.subplots(1, 1)
+    fig, axs = plt.subplots(2, 1)
     fig.set_size_inches(10, 12)
 
     # Get reference path
     t = np.linspace(0, t_sim, num_timesteps)
-    # psi_ref = nominal_params["psi_ref"]
-    # x_ref = t * nominal_params["v_ref"] * np.cos(psi_ref)
-    # y_ref = t * nominal_params["v_ref"] * np.sin(psi_ref)
-    # x_ref = np.tile(x_ref, (n_sims, 1)).T
-    # y_ref = np.tile(y_ref, (n_sims, 1)).T
+    psi_ref = nominal_params["psi_ref"]
+    x_ref = t * nominal_params["v_ref"] * np.cos(psi_ref)
+    y_ref = t * nominal_params["v_ref"] * np.sin(psi_ref)
+    x_ref = np.tile(x_ref, (n_sims, 1)).T
+    y_ref = np.tile(y_ref, (n_sims, 1)).T
 
-    # # Convert trajectory from path-centric to world coordinates
-    # x_err_path = x_sim[:, :, kscar.SXE].cpu().squeeze().numpy()
-    # y_err_path = x_sim[:, :, kscar.SYE].cpu().squeeze().numpy()
-    # x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
-    # y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
-    # ax1 = axs[0]
-    # ax1.plot([], [], linestyle="-", label="Tracking")
-    # ax1.plot(
-    #     x_world[:t_final],
-    #     y_world[:t_final],
-    #     linestyle="-",
-    # )
-    # ax1.plot(
-    #     x_ref[:t_final, 0],
-    #     y_ref[:t_final, 0],
-    #     linestyle=":",
-    #     label="Reference",
-    # )
-    # ax1.set_xlabel("$x$")
-    # ax1.set_ylabel("$y$")
-    # ax1.legend()
-    # ax1.set_ylim([-t_sim * nominal_params["v_ref"], t_sim * nominal_params["v_ref"]])
-    # ax1.set_xlim([-t_sim * nominal_params["v_ref"], t_sim * nominal_params["v_ref"]])
-    # ax1.set_aspect("equal")
+    # Convert trajectory from path-centric to world coordinates
+    x_err_path = x_sim[:, :, kscar.SXE].cpu().numpy()
+    y_err_path = x_sim[:, :, kscar.SYE].cpu().numpy()
+    x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
+    y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
 
-    # ax2 = axs[1]
-    # plot_u_indices = [kscar.VDELTA, kscar.ALONG]
-    # plot_u_labels = ["$v_\\delta$", "$a_{long}$"]
-    # for i_trace in range(len(plot_u_indices)):
-    #     ax2.plot(
-    #         t[1:t_final],
-    #         u_sim[1:t_final, :, plot_u_indices[i_trace]].cpu(),
-    #         label=plot_u_labels[i_trace],
-    #     )
-    # ax2.legend()
+    x_err_nom = x_nominal[:, :, kscar.SXE].cpu().numpy()
+    y_err_nom = x_nominal[:, :, kscar.SYE].cpu().numpy()
+    x_world_nom = x_ref + x_err_nom * np.cos(psi_ref) - y_err_nom * np.sin(psi_ref)
+    y_world_nom = y_ref + x_err_nom * np.sin(psi_ref) + y_err_nom * np.cos(psi_ref)
 
-    # ax3 = axs[2]
-    ax3 = axs
+    ax1 = axs[0]
+    ax1.plot([], [], linestyle="-", label="CLBF Tracking")
+    ax1.plot(
+        x_world[:t_final],
+        y_world[:t_final],
+        linestyle="-",
+    )
+    ax1.plot(
+        x_world_nom[:t_final, 0],
+        y_world_nom[:t_final, 0],
+        linestyle="-.",
+        label="Nominal Tracking",
+    )
+    ax1.plot(
+        x_ref[:t_final, 0],
+        y_ref[:t_final, 0],
+        linestyle=":",
+        label="Reference",
+    )
+    ax1.set_xlabel("$x$")
+    ax1.set_ylabel("$y$")
+    ax1.legend()
+    ax1.set_ylim([np.min(y_ref) - 3, np.max(y_ref) + 3])
+    ax1.set_xlim([np.min(x_ref) - 3, np.max(x_ref) + 3])
+    ax1.set_aspect("equal")
+
+    ax3 = axs[1]
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
             x_sim[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
-            label=f"Tracking Error, r={clbf_relaxation_penalties[i]}",
+            label=f"Tracking Error, lambda={clbf_lambdas[i]}",
         )
+    for i in range(n_sims):
+        ax3.plot(
+            t[:t_final],
+            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            linestyle=":",
+            label="Tracking Error (nominal)",
+        )
+        break
     # ax3.plot(
     #     t[:t_final],
     #     V_sim[:t_final, :, :].squeeze().numpy(),
@@ -191,6 +230,383 @@ def single_rollout_straight_path():
     plt.show()
 
 
+def single_rollout_circle_path():
+    clbf_controller = NeuralCLBFController.load_from_checkpoint(
+        checkpoint,
+        dynamics_model=kscar,
+        scenarios=scenarios,
+        datamodule=data_module,
+        clbf_hidden_layers=3,
+        clbf_hidden_size=64,
+        u_nn_hidden_layers=3,
+        u_nn_hidden_size=64,
+        controller_period=controller_period,
+        lookahead=controller_period,
+        clbf_relaxation_penalty=10.0,
+        penalty_scheduling_rate=25.0,
+        epochs_per_episode=5,
+    )
+
+    # Test a bunch of hyperparams if you want
+    clbf_lambdas = [0.01]
+
+    # Simulate!
+    # (but first make somewhere to save the results)
+    t_sim = 10.0
+    n_sims = len(clbf_lambdas)
+    num_timesteps = int(t_sim // simulation_dt)
+    start_x = 0.0 * torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
+    x_sim = torch.zeros(num_timesteps, n_sims, kscar.n_dims).type_as(start_x)
+    V_sim = torch.zeros(num_timesteps, n_sims, 1).type_as(start_x)
+    for i in range(n_sims):
+        x_sim[0, i, :] = start_x
+        V_sim[0, i, 0] = clbf_controller.V(start_x)
+
+    x_nominal = torch.clone(x_sim)
+    V_nominal = torch.clone(V_sim)
+
+    # And create a place to store the reference path
+    params = copy(nominal_params)
+    params["omega_ref"] = 0.3
+    x_ref = np.zeros(num_timesteps)
+    y_ref = np.zeros(num_timesteps)
+    psi_ref = np.zeros(num_timesteps)
+    psi_ref[0] = 1.0
+
+    u_sim = torch.zeros(num_timesteps, n_sims, kscar.n_controls).type_as(start_x)
+    controller_update_freq = int(controller_period / simulation_dt)
+    for tstep in tqdm.trange(1, num_timesteps):
+        # Get the path parameters at this point
+        psi_ref[tstep] = simulation_dt * params["omega_ref"] + psi_ref[tstep - 1]
+        pt = copy(params)
+        pt["psi_ref"] = psi_ref[tstep]
+        x_ref[tstep] = x_ref[tstep - 1] + simulation_dt * pt["v_ref"] * np.cos(
+            psi_ref[tstep]
+        )
+        y_ref[tstep] = y_ref[tstep - 1] + simulation_dt * pt["v_ref"] * np.sin(
+            psi_ref[tstep]
+        )
+
+        # Get the current state
+        x_current = x_sim[tstep - 1, :, :]
+        # Get the control input at the current state if it's time
+        if tstep == 1 or tstep % controller_update_freq == 0:
+            for j in range(n_sims):
+                clbf_controller.clbf_lambda = clbf_lambdas[j]
+                u = clbf_controller(x_current[j, :].unsqueeze(0))
+                u_sim[tstep, j, :] = u
+        else:
+            u = u_sim[tstep - 1, :, :]
+            u_sim[tstep, :, :] = u
+
+        # Simulate forward using the dynamics
+        for i in range(n_sims):
+            xdot = kscar.closed_loop_dynamics(
+                x_current[i, :].unsqueeze(0),
+                u_sim[tstep, i, :].unsqueeze(0),
+                pt,
+            )
+            x_sim[tstep, i, :] = x_current[i, :] + simulation_dt * xdot.squeeze()
+
+        # Get the CLBF values
+        V_sim[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
+
+        # and repeat for the nominal controller
+        # Get the current state
+        x_current = x_nominal[tstep - 1, :, :]
+        # Get the control input at the current state if it's time
+        if tstep == 1 or tstep % controller_update_freq == 0:
+            for j in range(n_sims):
+                u = kscar.u_nominal(x_current[j, :].unsqueeze(0))
+                u_sim[tstep, j, :] = u
+        else:
+            u = u_sim[tstep - 1, :, :]
+            u_sim[tstep, :, :] = u
+
+        # Simulate forward using the dynamics
+        for i in range(n_sims):
+            xdot = kscar.closed_loop_dynamics(
+                x_current[i, :].unsqueeze(0),
+                u_sim[tstep, i, :].unsqueeze(0),
+                pt,
+            )
+            x_nominal[tstep, i, :] = x_current[i, :] + simulation_dt * xdot.squeeze()
+
+        # Get the CLBF values
+        V_nominal[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
+
+        t_final = tstep
+
+    # Plot!
+    fig, axs = plt.subplots(2, 1)
+    fig.set_size_inches(10, 12)
+
+    # Get reference path
+    t = np.linspace(0, t_sim, num_timesteps)
+    x_ref = np.tile(x_ref, (n_sims, 1)).T
+    y_ref = np.tile(y_ref, (n_sims, 1)).T
+    psi_ref = np.tile(psi_ref, (n_sims, 1)).T
+
+    # Convert trajectory from path-centric to world coordinates
+    x_err_path = x_sim[:, :, kscar.SXE].cpu().numpy()
+    y_err_path = x_sim[:, :, kscar.SYE].cpu().numpy()
+    x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
+    y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
+
+    x_err_nom = x_nominal[:, :, kscar.SXE].cpu().numpy()
+    y_err_nom = x_nominal[:, :, kscar.SYE].cpu().numpy()
+    x_world_nom = x_ref + x_err_nom * np.cos(psi_ref) - y_err_nom * np.sin(psi_ref)
+    y_world_nom = y_ref + x_err_nom * np.sin(psi_ref) + y_err_nom * np.cos(psi_ref)
+
+    ax1 = axs[0]
+    ax1.plot([], [], linestyle="-", label="CLBF Tracking")
+    ax1.plot(
+        x_world[:t_final],
+        y_world[:t_final],
+        linestyle="-",
+    )
+    ax1.plot(
+        x_world_nom[:t_final, 0],
+        y_world_nom[:t_final, 0],
+        linestyle="-.",
+        label="Nominal Tracking",
+    )
+    ax1.plot(
+        x_ref[:t_final, 0],
+        y_ref[:t_final, 0],
+        linestyle=":",
+        label="Reference",
+    )
+    ax1.set_xlabel("$x$")
+    ax1.set_ylabel("$y$")
+    ax1.legend()
+    ax1.set_ylim([np.min(y_ref) - 3, np.max(y_ref) + 3])
+    ax1.set_xlim([np.min(x_ref) - 3, np.max(x_ref) + 3])
+    ax1.set_aspect("equal")
+
+    ax3 = axs[1]
+    for i in range(n_sims):
+        ax3.plot(
+            t[:t_final],
+            x_sim[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            label=f"Tracking Error, lambda={clbf_lambdas[i]}",
+        )
+    for i in range(n_sims):
+        ax3.plot(
+            t[:t_final],
+            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            linestyle=":",
+            label="Tracking Error (nominal)",
+        )
+        break
+    # ax3.plot(
+    #     t[:t_final],
+    #     V_sim[:t_final, :, :].squeeze().numpy(),
+    #     label="V",
+    # )
+    # # Plot markers indicating where the simulations were unsafe
+    # zeros = np.zeros((num_timesteps,))
+    # ax3.plot(
+    #     t[:t_final],
+    #     zeros[:t_final],
+    # )
+
+    ax3.legend()
+    ax3.set_xlabel("$t$")
+
+    plt.show()
+
+
+def single_rollout_s_path():
+    clbf_controller = NeuralCLBFController.load_from_checkpoint(
+        checkpoint,
+        dynamics_model=kscar,
+        scenarios=scenarios,
+        datamodule=data_module,
+        clbf_hidden_layers=3,
+        clbf_hidden_size=64,
+        u_nn_hidden_layers=3,
+        u_nn_hidden_size=64,
+        controller_period=controller_period,
+        lookahead=controller_period,
+        clbf_relaxation_penalty=2000.0,
+        penalty_scheduling_rate=25.0,
+        epochs_per_episode=5,
+    )
+
+    # Test a bunch of hyperparams if you want
+    penalties = [1.0, 10.0, 100.0, 1000.0, 5000.0]
+
+    # Simulate!
+    # (but first make somewhere to save the results)
+    t_sim = 5.0
+    n_sims = len(penalties)
+    num_timesteps = int(t_sim // simulation_dt)
+    start_x = 0.0 * torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
+    x_sim = torch.zeros(num_timesteps, n_sims, kscar.n_dims).type_as(start_x)
+    V_sim = torch.zeros(num_timesteps, n_sims, 1).type_as(start_x)
+    for i in range(n_sims):
+        x_sim[0, i, :] = start_x
+        V_sim[0, i, 0] = clbf_controller.V(start_x)
+
+    x_nominal = torch.clone(x_sim)
+    V_nominal = torch.clone(V_sim)
+
+    # And create a place to store the reference path
+    params = copy(nominal_params)
+    params["omega_ref"] = 0.3
+    x_ref = np.zeros(num_timesteps)
+    y_ref = np.zeros(num_timesteps)
+    psi_ref = np.zeros(num_timesteps)
+    psi_ref[0] = 1.0
+
+    u_sim = torch.zeros(num_timesteps, n_sims, kscar.n_controls).type_as(start_x)
+    controller_update_freq = int(controller_period / simulation_dt)
+    for tstep in tqdm.trange(1, num_timesteps):
+        # Get the path parameters at this point
+        omega_ref_t = 0.3 * np.sign(np.sin(tstep * simulation_dt))
+        psi_ref[tstep] = simulation_dt * omega_ref_t + psi_ref[tstep - 1]
+        pt = copy(params)
+        pt["psi_ref"] = psi_ref[tstep]
+        x_ref[tstep] = x_ref[tstep - 1] + simulation_dt * pt["v_ref"] * np.cos(
+            psi_ref[tstep]
+        )
+        y_ref[tstep] = y_ref[tstep - 1] + simulation_dt * pt["v_ref"] * np.sin(
+            psi_ref[tstep]
+        )
+
+        # Get the current state
+        x_current = x_sim[tstep - 1, :, :]
+        # Get the control input at the current state if it's time
+        if tstep == 1 or tstep % controller_update_freq == 0:
+            for j in range(n_sims):
+                clbf_controller.clbf_relaxation_penalty = penalties[j]
+                u = clbf_controller(x_current[j, :].unsqueeze(0))
+                u_sim[tstep, j, :] = u
+        else:
+            u = u_sim[tstep - 1, :, :]
+            u_sim[tstep, :, :] = u
+
+        # Simulate forward using the dynamics
+        for i in range(n_sims):
+            xdot = kscar.closed_loop_dynamics(
+                x_current[i, :].unsqueeze(0),
+                u_sim[tstep, i, :].unsqueeze(0),
+                pt,
+            )
+            x_sim[tstep, i, :] = x_current[i, :] + simulation_dt * xdot.squeeze()
+
+        # Get the CLBF values
+        V_sim[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
+
+        # and repeat for the nominal controller
+        # Get the current state
+        x_current = x_nominal[tstep - 1, :, :]
+        # Get the control input at the current state if it's time
+        if tstep == 1 or tstep % controller_update_freq == 0:
+            for j in range(n_sims):
+                u = kscar.u_nominal(x_current[j, :].unsqueeze(0))
+                u_sim[tstep, j, :] = u
+        else:
+            u = u_sim[tstep - 1, :, :]
+            u_sim[tstep, :, :] = u
+
+        # Simulate forward using the dynamics
+        for i in range(n_sims):
+            xdot = kscar.closed_loop_dynamics(
+                x_current[i, :].unsqueeze(0),
+                u_sim[tstep, i, :].unsqueeze(0),
+                pt,
+            )
+            x_nominal[tstep, i, :] = x_current[i, :] + simulation_dt * xdot.squeeze()
+
+        # Get the CLBF values
+        V_nominal[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
+
+        t_final = tstep
+
+    # Plot!
+    fig, axs = plt.subplots(2, 1)
+    fig.set_size_inches(10, 12)
+
+    # Get reference path
+    t = np.linspace(0, t_sim, num_timesteps)
+    x_ref = np.tile(x_ref, (n_sims, 1)).T
+    y_ref = np.tile(y_ref, (n_sims, 1)).T
+    psi_ref = np.tile(psi_ref, (n_sims, 1)).T
+
+    # Convert trajectory from path-centric to world coordinates
+    x_err_path = x_sim[:, :, kscar.SXE].cpu().numpy()
+    y_err_path = x_sim[:, :, kscar.SYE].cpu().numpy()
+    x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
+    y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
+
+    x_err_nom = x_nominal[:, :, kscar.SXE].cpu().numpy()
+    y_err_nom = x_nominal[:, :, kscar.SYE].cpu().numpy()
+    x_world_nom = x_ref + x_err_nom * np.cos(psi_ref) - y_err_nom * np.sin(psi_ref)
+    y_world_nom = y_ref + x_err_nom * np.sin(psi_ref) + y_err_nom * np.cos(psi_ref)
+
+    ax1 = axs[0]
+    ax1.plot([], [], linestyle="-", label="CLBF Tracking")
+    ax1.plot(
+        x_world[:t_final],
+        y_world[:t_final],
+        linestyle="-",
+    )
+    ax1.plot(
+        x_world_nom[:t_final, 0],
+        y_world_nom[:t_final, 0],
+        linestyle="-.",
+        label="Nominal Tracking",
+    )
+    ax1.plot(
+        x_ref[:t_final, 0],
+        y_ref[:t_final, 0],
+        linestyle=":",
+        label="Reference",
+    )
+    ax1.set_xlabel("$x$")
+    ax1.set_ylabel("$y$")
+    ax1.legend()
+    ax1.set_ylim([np.min(y_ref) - 3, np.max(y_ref) + 3])
+    ax1.set_xlim([np.min(x_ref) - 3, np.max(x_ref) + 3])
+    ax1.set_aspect("equal")
+
+    ax3 = axs[1]
+    for i in range(n_sims):
+        ax3.plot(
+            t[:t_final],
+            x_sim[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            label=f"Tracking Error, r={penalties[i]}",
+        )
+    for i in range(n_sims):
+        ax3.plot(
+            t[:t_final],
+            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            linestyle=":",
+            label="Tracking Error (nominal)",
+        )
+        break
+    ax3.plot(
+        t[:t_final],
+        V_sim[:t_final, :, :].squeeze().numpy(),
+        label="V",
+    )
+    # # Plot markers indicating where the simulations were unsafe
+    # zeros = np.zeros((num_timesteps,))
+    # ax3.plot(
+    #     t[:t_final],
+    #     zeros[:t_final],
+    # )
+
+    ax3.legend()
+    ax3.set_xlabel("$t$")
+
+    plt.show()
+
+
 if __name__ == "__main__":
     with torch.no_grad():
-        single_rollout_straight_path()
+        # single_rollout_straight_path()
+        # single_rollout_circle_path()
+        single_rollout_s_path()

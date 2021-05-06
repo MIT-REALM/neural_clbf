@@ -158,7 +158,7 @@ def plot_kscar_circle_path():
         "psi_ref": 1.0,
         "v_ref": 10.0,
         "a_ref": 0.0,
-        "omega_ref": 0.5,
+        "omega_ref": 0.3,
     }
     dt = 0.01
     kscar = KSCar(params, dt)

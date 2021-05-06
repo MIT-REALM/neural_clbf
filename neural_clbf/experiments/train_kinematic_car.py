@@ -22,10 +22,10 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 start_x = torch.tensor(
     [
-        [0.0, 1.0, 0.0, 1.0, -np.pi / 6],
-        [1.0, 0.0, 0.0, 1.0, -np.pi / 6],
-        [0.0, 1.0, 0.0, 1.0, np.pi / 6],
-        [1.0, 0.0, 0.0, 1.0, np.pi / 6],
+        [0.0, 0.6, 0.0, 0.0, -np.pi / 6],
+        [0.6, 0.0, 0.0, 0.0, -np.pi / 6],
+        [0.0, 0.6, 0.0, 0.0, np.pi / 6],
+        [0.6, 0.0, 0.0, 0.0, np.pi / 6],
     ]
 )
 controller_period = 0.01
@@ -51,8 +51,8 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-5.0, 5.0), (-5.0, 5.0)],  # plot for theta, theta_dot
-        n_grid=15,
+        domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
+        n_grid=20,
         x_axis_index=KSCar.SXE,
         y_axis_index=KSCar.SYE,
         x_axis_label="$x - x_{ref}$",
@@ -94,7 +94,7 @@ def main(args):
 
     # Define the scenarios
     scenarios = []
-    omega_ref_vals = [-0.3, 0.3]
+    omega_ref_vals = [-0.5, 0.5]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
@@ -122,8 +122,8 @@ def main(args):
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_lambda=0.1,
-        clbf_relaxation_penalty=50.0,
-        penalty_scheduling_rate=100.0,
+        clbf_relaxation_penalty=1000.0,
+        penalty_scheduling_rate=50.0,
         epochs_per_episode=1,
     )
     # Add the DataModule hooks
