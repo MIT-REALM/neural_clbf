@@ -12,7 +12,7 @@ from neural_clbf.experiments.common.episodic_datamodule import (
 )
 from neural_clbf.systems import KSCar
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Import the plotting callbacks, which seem to be needed to load from the checkpoint
     from neural_clbf.experiments.train_kinematic_car import (  # noqa
         rollout_plotting_cb,  # noqa
