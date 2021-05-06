@@ -16,8 +16,8 @@ from neural_clbf.experiments.common.plotting import (
     rollout_CLBF,
 )
 from neural_clbf.experiments.test_kinematic_car_controller import (
-    single_rollout_straight_path,
-    single_rollout_circle_path,
+    # single_rollout_straight_path,
+    # single_rollout_circle_path,
     single_rollout_s_path,
 )
 from neural_clbf.systems import KSCar
@@ -113,8 +113,8 @@ def main(args):
         # This plotting function simulates rollouts of the controller
         rollout_plotting_cb,
         # Plot some rollouts
-        single_rollout_straight_path,
-        single_rollout_circle_path,
+        # single_rollout_straight_path,
+        # single_rollout_circle_path,
         single_rollout_s_path,
     ]
 
