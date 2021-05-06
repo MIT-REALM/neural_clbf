@@ -131,7 +131,7 @@ def main(args):
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_lambda=0.1,
-        clbf_relaxation_penalty=1000.0,
+        clbf_relaxation_penalty=50.0,
         penalty_scheduling_rate=50.0,
         epochs_per_episode=1,
     )
