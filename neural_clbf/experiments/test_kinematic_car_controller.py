@@ -234,13 +234,13 @@ def single_rollout_straight_path(
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
-            x_sim[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            x_sim[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             label=f"Tracking Error, lambda={clbf_lambdas[i]}",
         )
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
-            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             linestyle=":",
             label="Tracking Error (nominal)",
         )
@@ -427,13 +427,13 @@ def single_rollout_circle_path(
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
-            x_sim[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            x_sim[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             label=f"Tracking Error, lambda={clbf_lambdas[i]}",
         )
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
-            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             linestyle=":",
             label="Tracking Error (nominal)",
         )
@@ -621,13 +621,13 @@ def single_rollout_s_path(
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
-            x_sim[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            x_sim[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             label=f"Tracking Error, r={penalties[i]}",
         )
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
-            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().numpy(),
+            x_nominal[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             linestyle=":",
             label="Tracking Error (nominal)",
         )
