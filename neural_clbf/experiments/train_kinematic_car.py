@@ -57,7 +57,7 @@ def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
         domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
-        n_grid=20,
+        n_grid=50,
         x_axis_index=KSCar.SXE,
         y_axis_index=KSCar.SYE,
         x_axis_label="$x - x_{ref}$",
@@ -90,7 +90,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=10,
         trajectory_length=1000,
-        fixed_samples=10000,
+        fixed_samples=90000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
