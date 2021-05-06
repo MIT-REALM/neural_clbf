@@ -15,6 +15,11 @@ from neural_clbf.experiments.common.plotting import (
     plot_CLBF,
     rollout_CLBF,
 )
+from neural_clbf.experiments.test_kinematic_car_controller import (
+    single_rollout_straight_path,
+    single_rollout_circle_path,
+    single_rollout_s_path,
+)
 from neural_clbf.systems import KSCar
 
 
@@ -74,11 +79,11 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-2.0, 2.0),  # sxe
-        (-2.0, 2.0),  # sye
-        (-1.0, 1.0),  # delta
-        (-2.0, 2.0),  # ve
-        (-1.0, 1.0),  # psi_e
+        (-0.1, 0.1),  # sxe
+        (-0.1, 0.1),  # sye
+        (-0.1, 0.1),  # delta
+        (-0.1, 0.1),  # ve
+        (-0.1, 0.1),  # psi_e
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
@@ -107,6 +112,10 @@ def main(args):
         clbf_plotting_cb,
         # This plotting function simulates rollouts of the controller
         rollout_plotting_cb,
+        # Plot some rollouts
+        single_rollout_straight_path,
+        single_rollout_circle_path,
+        single_rollout_s_path,
     ]
 
     # Initialize the controller

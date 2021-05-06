@@ -1,4 +1,5 @@
 from copy import copy
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,57 +11,60 @@ from neural_clbf.experiments.common.episodic_datamodule import (
     EpisodicDataModule,
 )
 from neural_clbf.systems import KSCar
-from neural_clbf.experiments.train_kinematic_car import (  # noqa
-    rollout_plotting_cb,  # noqa
-    clbf_plotting_cb,  # noqa
-)
+
+if __name__ == '__main__':
+    # Import the plotting callbacks, which seem to be needed to load from the checkpoint
+    from neural_clbf.experiments.train_kinematic_car import (  # noqa
+        rollout_plotting_cb,  # noqa
+        clbf_plotting_cb,  # noqa
+    )
 
 
-checkpoint = "logs/kinematic_car/qp_in_loop/penalty_sched_checkpoint/v8.ckpt"
+def doMain():
+    checkpoint = "logs/kinematic_car/qp_in_loop/penalty_sched_checkpoint/v9.ckpt"
 
-controller_period = 0.01
-simulation_dt = 0.001
+    controller_period = 0.01
+    simulation_dt = 0.001
 
-# Define the dynamics model
-nominal_params = {
-    "psi_ref": 0.5,
-    "v_ref": 10.0,
-    "a_ref": 0.0,
-    "omega_ref": 0.0,
-}
-kscar = KSCar(nominal_params, dt=simulation_dt, controller_dt=controller_period)
+    # Define the dynamics model
+    nominal_params = {
+        "psi_ref": 0.5,
+        "v_ref": 10.0,
+        "a_ref": 0.0,
+        "omega_ref": 0.0,
+    }
+    kscar = KSCar(nominal_params, dt=simulation_dt, controller_dt=controller_period)
 
-# Initialize the DataModule
-initial_conditions = [
-    (-2.0, 2.0),  # sxe
-    (-2.0, 2.0),  # sye
-    (-1.0, 1.0),  # delta
-    (-2.0, 2.0),  # ve
-    (-1.0, 1.0),  # psi_e
-]
-data_module = EpisodicDataModule(
-    kscar,
-    initial_conditions,
-    trajectories_per_episode=100,
-    trajectory_length=500,
-    fixed_samples=100000,
-    max_points=500000,
-    val_split=0.1,
-    batch_size=64,
-    safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
-)
+    # Initialize the DataModule
+    initial_conditions = [
+        (-2.0, 2.0),  # sxe
+        (-2.0, 2.0),  # sye
+        (-1.0, 1.0),  # delta
+        (-2.0, 2.0),  # ve
+        (-1.0, 1.0),  # psi_e
+    ]
 
-# Define the scenarios (we need 2^3 = 6)
-scenarios = []
-omega_ref_vals = [-0.3, 0.3]
-for omega_ref in omega_ref_vals:
-    s = copy(nominal_params)
-    s["omega_ref"] = omega_ref
+    # Define the scenarios (we need 2^3 = 6)
+    scenarios = []
+    omega_ref_vals = [-0.5, 0.5]
+    for omega_ref in omega_ref_vals:
+        s = copy(nominal_params)
+        s["omega_ref"] = omega_ref
 
-    scenarios.append(s)
+        scenarios.append(s)
 
+    data_module = EpisodicDataModule(
+        kscar,
+        initial_conditions,
+        trajectories_per_episode=100,
+        trajectory_length=500,
+        fixed_samples=100000,
+        max_points=500000,
+        val_split=0.1,
+        batch_size=64,
+        safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
+    )
 
-def single_rollout_straight_path():
     clbf_controller = NeuralCLBFController.load_from_checkpoint(
         checkpoint,
         dynamics_model=kscar,
@@ -72,13 +76,33 @@ def single_rollout_straight_path():
         u_nn_hidden_size=64,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_relaxation_penalty=10.0,
-        penalty_scheduling_rate=25.0,
+        clbf_relaxation_penalty=1000.0,
+        clbf_lambda=0.1,
+        penalty_scheduling_rate=50.0,
         epochs_per_episode=5,
     )
 
+    single_rollout_straight_path(clbf_controller)
+    plt.show()
+    single_rollout_circle_path(clbf_controller)
+    plt.show()
+    single_rollout_s_path(clbf_controller)
+    plt.show()
+
+
+@torch.no_grad()
+def single_rollout_straight_path(
+    clbf_controller: "NeuralCLBFController",
+) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    clbf_lambdas = [1.0]
+    clbf_lambdas = [0.1]
+
+    simulation_dt = clbf_controller.dynamics_model.dt
+    controller_period = clbf_controller.controller_period
+
+    # Make sure the controller if for a KSCar
+    if not isinstance(clbf_controller.dynamics_model, KSCar):
+        raise ValueError()
 
     # Simulate!
     # (but first make somewhere to save the results)
@@ -86,7 +110,9 @@ def single_rollout_straight_path():
     n_sims = len(clbf_lambdas)
     num_timesteps = int(t_sim // simulation_dt)
     start_x = torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
-    x_sim = torch.zeros(num_timesteps, n_sims, kscar.n_dims).type_as(start_x)
+    x_sim = torch.zeros(
+        num_timesteps, n_sims, clbf_controller.dynamics_model.n_dims
+    ).type_as(start_x)
     V_sim = torch.zeros(num_timesteps, n_sims, 1).type_as(start_x)
     for i in range(n_sims):
         x_sim[0, i, :] = start_x
@@ -95,9 +121,12 @@ def single_rollout_straight_path():
     x_nominal = torch.clone(x_sim)
     V_nominal = torch.clone(V_sim)
 
-    u_sim = torch.zeros(num_timesteps, n_sims, kscar.n_controls).type_as(start_x)
+    u_sim = torch.zeros(
+        num_timesteps, n_sims, clbf_controller.dynamics_model.n_controls
+    ).type_as(start_x)
     controller_update_freq = int(controller_period / simulation_dt)
-    for tstep in tqdm.trange(1, num_timesteps):
+    prog_bar_range = tqdm.trange(1, num_timesteps, desc="Straight Curve", leave=True)
+    for tstep in prog_bar_range:
         # Get the current state
         x_current = x_sim[tstep - 1, :, :]
         # Get the control input at the current state if it's time
@@ -112,10 +141,10 @@ def single_rollout_straight_path():
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
-            xdot = kscar.closed_loop_dynamics(
+            xdot = clbf_controller.dynamics_model.closed_loop_dynamics(
                 x_current[i, :].unsqueeze(0),
                 u_sim[tstep, i, :].unsqueeze(0),
-                nominal_params,
+                clbf_controller.dynamics_model.nominal_params,
             )
             x_sim[tstep, i, :] = x_current[i, :] + simulation_dt * xdot.squeeze()
 
@@ -128,7 +157,9 @@ def single_rollout_straight_path():
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
-                u = kscar.u_nominal(x_current[j, :].unsqueeze(0))
+                u = clbf_controller.dynamics_model.u_nominal(
+                    x_current[j, :].unsqueeze(0)
+                )
                 u_sim[tstep, j, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
@@ -136,10 +167,10 @@ def single_rollout_straight_path():
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
-            xdot = kscar.closed_loop_dynamics(
+            xdot = clbf_controller.dynamics_model.closed_loop_dynamics(
                 x_current[i, :].unsqueeze(0),
                 u_sim[tstep, i, :].unsqueeze(0),
-                nominal_params,
+                clbf_controller.dynamics_model.nominal_params,
             )
             x_nominal[tstep, i, :] = x_current[i, :] + simulation_dt * xdot.squeeze()
 
@@ -150,24 +181,24 @@ def single_rollout_straight_path():
 
     # Plot!
     fig, axs = plt.subplots(2, 1)
-    fig.set_size_inches(10, 12)
+    fig.set_size_inches(10, 6)
 
     # Get reference path
     t = np.linspace(0, t_sim, num_timesteps)
-    psi_ref = nominal_params["psi_ref"]
-    x_ref = t * nominal_params["v_ref"] * np.cos(psi_ref)
-    y_ref = t * nominal_params["v_ref"] * np.sin(psi_ref)
+    psi_ref = clbf_controller.dynamics_model.nominal_params["psi_ref"]
+    x_ref = t * clbf_controller.dynamics_model.nominal_params["v_ref"] * np.cos(psi_ref)
+    y_ref = t * clbf_controller.dynamics_model.nominal_params["v_ref"] * np.sin(psi_ref)
     x_ref = np.tile(x_ref, (n_sims, 1)).T
     y_ref = np.tile(y_ref, (n_sims, 1)).T
 
     # Convert trajectory from path-centric to world coordinates
-    x_err_path = x_sim[:, :, kscar.SXE].cpu().numpy()
-    y_err_path = x_sim[:, :, kscar.SYE].cpu().numpy()
+    x_err_path = x_sim[:, :, clbf_controller.dynamics_model.SXE].cpu().numpy()
+    y_err_path = x_sim[:, :, clbf_controller.dynamics_model.SYE].cpu().numpy()
     x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
     y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
 
-    x_err_nom = x_nominal[:, :, kscar.SXE].cpu().numpy()
-    y_err_nom = x_nominal[:, :, kscar.SYE].cpu().numpy()
+    x_err_nom = x_nominal[:, :, clbf_controller.dynamics_model.SXE].cpu().numpy()
+    y_err_nom = x_nominal[:, :, clbf_controller.dynamics_model.SYE].cpu().numpy()
     x_world_nom = x_ref + x_err_nom * np.cos(psi_ref) - y_err_nom * np.sin(psi_ref)
     y_world_nom = y_ref + x_err_nom * np.sin(psi_ref) + y_err_nom * np.cos(psi_ref)
 
@@ -227,28 +258,25 @@ def single_rollout_straight_path():
     ax3.legend()
     ax3.set_xlabel("$t$")
 
-    plt.show()
+    fig.tight_layout()
+
+    # Return the figure along with its name
+    return "Straight Line Tracking", fig
 
 
-def single_rollout_circle_path():
-    clbf_controller = NeuralCLBFController.load_from_checkpoint(
-        checkpoint,
-        dynamics_model=kscar,
-        scenarios=scenarios,
-        datamodule=data_module,
-        clbf_hidden_layers=3,
-        clbf_hidden_size=64,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=64,
-        controller_period=controller_period,
-        lookahead=controller_period,
-        clbf_relaxation_penalty=10.0,
-        penalty_scheduling_rate=25.0,
-        epochs_per_episode=5,
-    )
-
+@torch.no_grad()
+def single_rollout_circle_path(
+    clbf_controller: "NeuralCLBFController",
+) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    clbf_lambdas = [0.01]
+    clbf_lambdas = [0.1]
+
+    simulation_dt = clbf_controller.dynamics_model.dt
+    controller_period = clbf_controller.controller_period
+
+    # Make sure the controller if for a KSCar
+    if not isinstance(clbf_controller.dynamics_model, KSCar):
+        raise ValueError()
 
     # Simulate!
     # (but first make somewhere to save the results)
@@ -256,7 +284,9 @@ def single_rollout_circle_path():
     n_sims = len(clbf_lambdas)
     num_timesteps = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
-    x_sim = torch.zeros(num_timesteps, n_sims, kscar.n_dims).type_as(start_x)
+    x_sim = torch.zeros(
+        num_timesteps, n_sims, clbf_controller.dynamics_model.n_dims
+    ).type_as(start_x)
     V_sim = torch.zeros(num_timesteps, n_sims, 1).type_as(start_x)
     for i in range(n_sims):
         x_sim[0, i, :] = start_x
@@ -266,16 +296,19 @@ def single_rollout_circle_path():
     V_nominal = torch.clone(V_sim)
 
     # And create a place to store the reference path
-    params = copy(nominal_params)
+    params = copy(clbf_controller.dynamics_model.nominal_params)
     params["omega_ref"] = 0.3
     x_ref = np.zeros(num_timesteps)
     y_ref = np.zeros(num_timesteps)
     psi_ref = np.zeros(num_timesteps)
     psi_ref[0] = 1.0
 
-    u_sim = torch.zeros(num_timesteps, n_sims, kscar.n_controls).type_as(start_x)
+    u_sim = torch.zeros(
+        num_timesteps, n_sims, clbf_controller.dynamics_model.n_controls
+    ).type_as(start_x)
     controller_update_freq = int(controller_period / simulation_dt)
-    for tstep in tqdm.trange(1, num_timesteps):
+    prog_bar_range = tqdm.trange(1, num_timesteps, desc="Circle Curve", leave=True)
+    for tstep in prog_bar_range:
         # Get the path parameters at this point
         psi_ref[tstep] = simulation_dt * params["omega_ref"] + psi_ref[tstep - 1]
         pt = copy(params)
@@ -301,7 +334,7 @@ def single_rollout_circle_path():
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
-            xdot = kscar.closed_loop_dynamics(
+            xdot = clbf_controller.dynamics_model.closed_loop_dynamics(
                 x_current[i, :].unsqueeze(0),
                 u_sim[tstep, i, :].unsqueeze(0),
                 pt,
@@ -317,7 +350,9 @@ def single_rollout_circle_path():
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
-                u = kscar.u_nominal(x_current[j, :].unsqueeze(0))
+                u = clbf_controller.dynamics_model.u_nominal(
+                    x_current[j, :].unsqueeze(0)
+                )
                 u_sim[tstep, j, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
@@ -325,7 +360,7 @@ def single_rollout_circle_path():
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
-            xdot = kscar.closed_loop_dynamics(
+            xdot = clbf_controller.dynamics_model.closed_loop_dynamics(
                 x_current[i, :].unsqueeze(0),
                 u_sim[tstep, i, :].unsqueeze(0),
                 pt,
@@ -348,13 +383,13 @@ def single_rollout_circle_path():
     psi_ref = np.tile(psi_ref, (n_sims, 1)).T
 
     # Convert trajectory from path-centric to world coordinates
-    x_err_path = x_sim[:, :, kscar.SXE].cpu().numpy()
-    y_err_path = x_sim[:, :, kscar.SYE].cpu().numpy()
+    x_err_path = x_sim[:, :, clbf_controller.dynamics_model.SXE].cpu().numpy()
+    y_err_path = x_sim[:, :, clbf_controller.dynamics_model.SYE].cpu().numpy()
     x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
     y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
 
-    x_err_nom = x_nominal[:, :, kscar.SXE].cpu().numpy()
-    y_err_nom = x_nominal[:, :, kscar.SYE].cpu().numpy()
+    x_err_nom = x_nominal[:, :, clbf_controller.dynamics_model.SXE].cpu().numpy()
+    y_err_nom = x_nominal[:, :, clbf_controller.dynamics_model.SYE].cpu().numpy()
     x_world_nom = x_ref + x_err_nom * np.cos(psi_ref) - y_err_nom * np.sin(psi_ref)
     y_world_nom = y_ref + x_err_nom * np.sin(psi_ref) + y_err_nom * np.cos(psi_ref)
 
@@ -414,28 +449,25 @@ def single_rollout_circle_path():
     ax3.legend()
     ax3.set_xlabel("$t$")
 
-    plt.show()
+    fig.tight_layout()
+
+    # Return the figure along with its name
+    return "Circle Line Tracking", fig
 
 
-def single_rollout_s_path():
-    clbf_controller = NeuralCLBFController.load_from_checkpoint(
-        checkpoint,
-        dynamics_model=kscar,
-        scenarios=scenarios,
-        datamodule=data_module,
-        clbf_hidden_layers=3,
-        clbf_hidden_size=64,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=64,
-        controller_period=controller_period,
-        lookahead=controller_period,
-        clbf_relaxation_penalty=2000.0,
-        penalty_scheduling_rate=25.0,
-        epochs_per_episode=5,
-    )
-
+@torch.no_grad()
+def single_rollout_s_path(
+    clbf_controller: "NeuralCLBFController",
+) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    penalties = [1.0, 10.0, 100.0, 1000.0, 5000.0]
+    penalties = [10, 100, 1000, 2e6]
+
+    simulation_dt = clbf_controller.dynamics_model.dt
+    controller_period = clbf_controller.controller_period
+
+    # Make sure the controller if for a KSCar
+    if not isinstance(clbf_controller.dynamics_model, KSCar):
+        raise ValueError()
 
     # Simulate!
     # (but first make somewhere to save the results)
@@ -443,7 +475,9 @@ def single_rollout_s_path():
     n_sims = len(penalties)
     num_timesteps = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
-    x_sim = torch.zeros(num_timesteps, n_sims, kscar.n_dims).type_as(start_x)
+    x_sim = torch.zeros(
+        num_timesteps, n_sims, clbf_controller.dynamics_model.n_dims
+    ).type_as(start_x)
     V_sim = torch.zeros(num_timesteps, n_sims, 1).type_as(start_x)
     for i in range(n_sims):
         x_sim[0, i, :] = start_x
@@ -453,18 +487,21 @@ def single_rollout_s_path():
     V_nominal = torch.clone(V_sim)
 
     # And create a place to store the reference path
-    params = copy(nominal_params)
+    params = copy(clbf_controller.dynamics_model.nominal_params)
     params["omega_ref"] = 0.3
     x_ref = np.zeros(num_timesteps)
     y_ref = np.zeros(num_timesteps)
     psi_ref = np.zeros(num_timesteps)
     psi_ref[0] = 1.0
 
-    u_sim = torch.zeros(num_timesteps, n_sims, kscar.n_controls).type_as(start_x)
+    u_sim = torch.zeros(
+        num_timesteps, n_sims, clbf_controller.dynamics_model.n_controls
+    ).type_as(start_x)
     controller_update_freq = int(controller_period / simulation_dt)
-    for tstep in tqdm.trange(1, num_timesteps):
+    prog_bar_range = tqdm.trange(1, num_timesteps, desc="S-Curve", leave=True)
+    for tstep in prog_bar_range:
         # Get the path parameters at this point
-        omega_ref_t = 0.3 * np.sign(np.sin(tstep * simulation_dt))
+        omega_ref_t = 1.5 * np.sign(np.sin(tstep * simulation_dt))
         psi_ref[tstep] = simulation_dt * omega_ref_t + psi_ref[tstep - 1]
         pt = copy(params)
         pt["psi_ref"] = psi_ref[tstep]
@@ -489,7 +526,7 @@ def single_rollout_s_path():
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
-            xdot = kscar.closed_loop_dynamics(
+            xdot = clbf_controller.dynamics_model.closed_loop_dynamics(
                 x_current[i, :].unsqueeze(0),
                 u_sim[tstep, i, :].unsqueeze(0),
                 pt,
@@ -505,7 +542,9 @@ def single_rollout_s_path():
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
-                u = kscar.u_nominal(x_current[j, :].unsqueeze(0))
+                u = clbf_controller.dynamics_model.u_nominal(
+                    x_current[j, :].unsqueeze(0)
+                )
                 u_sim[tstep, j, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
@@ -513,7 +552,7 @@ def single_rollout_s_path():
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
-            xdot = kscar.closed_loop_dynamics(
+            xdot = clbf_controller.dynamics_model.closed_loop_dynamics(
                 x_current[i, :].unsqueeze(0),
                 u_sim[tstep, i, :].unsqueeze(0),
                 pt,
@@ -536,13 +575,13 @@ def single_rollout_s_path():
     psi_ref = np.tile(psi_ref, (n_sims, 1)).T
 
     # Convert trajectory from path-centric to world coordinates
-    x_err_path = x_sim[:, :, kscar.SXE].cpu().numpy()
-    y_err_path = x_sim[:, :, kscar.SYE].cpu().numpy()
+    x_err_path = x_sim[:, :, clbf_controller.dynamics_model.SXE].cpu().numpy()
+    y_err_path = x_sim[:, :, clbf_controller.dynamics_model.SYE].cpu().numpy()
     x_world = x_ref + x_err_path * np.cos(psi_ref) - y_err_path * np.sin(psi_ref)
     y_world = y_ref + x_err_path * np.sin(psi_ref) + y_err_path * np.cos(psi_ref)
 
-    x_err_nom = x_nominal[:, :, kscar.SXE].cpu().numpy()
-    y_err_nom = x_nominal[:, :, kscar.SYE].cpu().numpy()
+    x_err_nom = x_nominal[:, :, clbf_controller.dynamics_model.SXE].cpu().numpy()
+    y_err_nom = x_nominal[:, :, clbf_controller.dynamics_model.SYE].cpu().numpy()
     x_world_nom = x_ref + x_err_nom * np.cos(psi_ref) - y_err_nom * np.sin(psi_ref)
     y_world_nom = y_ref + x_err_nom * np.sin(psi_ref) + y_err_nom * np.cos(psi_ref)
 
@@ -602,11 +641,11 @@ def single_rollout_s_path():
     ax3.legend()
     ax3.set_xlabel("$t$")
 
-    plt.show()
+    fig.tight_layout()
+
+    # Return the figure along with its name
+    return "S-Curve Line Tracking", fig
 
 
 if __name__ == "__main__":
-    with torch.no_grad():
-        # single_rollout_straight_path()
-        # single_rollout_circle_path()
-        single_rollout_s_path()
+    doMain()
