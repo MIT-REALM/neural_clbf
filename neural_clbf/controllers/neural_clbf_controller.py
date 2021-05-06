@@ -20,6 +20,8 @@ class NeuralCLBFController(pl.LightningModule):
     A neural rCLBF controller
     """
 
+    controller_period: float
+
     def __init__(
         self,
         dynamics_model: ControlAffineSystem,
@@ -347,9 +349,19 @@ class NeuralCLBFController(pl.LightningModule):
         G[:, 2 * n_scenarios :, :n_controls] = self.G_u.type_as(x)
         h[:, 2 * n_scenarios :, 0] = self.h_u.view(1, -1).type_as(x)
         h = h.squeeze()
-        # No equality constraints
-        A = torch.tensor([])
-        b = torch.tensor([])
+        # Only add equality constraints (relaxation = 0) if the relaxation penalty
+        # is greater than 10^6
+        if self.clbf_relaxation_penalty < 1e6:
+            A = torch.tensor([])
+            b = torch.tensor([])
+        else:
+            A = torch.zeros(bs, n_scenarios, n_vars).type_as(x)
+            b = torch.zeros(bs, n_scenarios, 1).type_as(x)
+            for i in range(n_scenarios):
+                A[:, i, n_controls + i] = 1.0
+
+            A = A.double()
+            b = b.double().squeeze()
 
         # Convert to double precision for solving
         Q = Q.double()
