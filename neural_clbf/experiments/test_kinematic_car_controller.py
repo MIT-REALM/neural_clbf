@@ -95,7 +95,7 @@ def single_rollout_straight_path(
     clbf_controller: "NeuralCLBFController",
 ) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    clbf_lambdas = [0.1]
+    penalties = [10, 100, 1000, 2e6]
 
     simulation_dt = clbf_controller.dynamics_model.dt
     controller_period = clbf_controller.controller_period
@@ -107,7 +107,7 @@ def single_rollout_straight_path(
     # Simulate!
     # (but first make somewhere to save the results)
     t_sim = 5.0
-    n_sims = len(clbf_lambdas)
+    n_sims = len(penalties)
     num_timesteps = int(t_sim // simulation_dt)
     start_x = torch.tensor(
         [[0.0, 1.0, 0.0, 1.0, -np.pi / 6]], device=clbf_controller.device
@@ -134,7 +134,7 @@ def single_rollout_straight_path(
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
-                clbf_controller.clbf_lambda = clbf_lambdas[j]
+                clbf_controller.clbf_relaxation_penalty = penalties[j]
                 u = clbf_controller(x_current[j, :].unsqueeze(0))
                 u_sim[tstep, j, :] = u
         else:
@@ -235,7 +235,7 @@ def single_rollout_straight_path(
         ax3.plot(
             t[:t_final],
             x_sim[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
-            label=f"Tracking Error, lambda={clbf_lambdas[i]}",
+            label=f"Tracking Error, r={penalties[i]}",
         )
     for i in range(n_sims):
         ax3.plot(
@@ -271,7 +271,7 @@ def single_rollout_circle_path(
     clbf_controller: "NeuralCLBFController",
 ) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    clbf_lambdas = [0.1]
+    penalties = [10, 100, 1000, 2e6]
 
     simulation_dt = clbf_controller.dynamics_model.dt
     controller_period = clbf_controller.controller_period
@@ -283,7 +283,7 @@ def single_rollout_circle_path(
     # Simulate!
     # (but first make somewhere to save the results)
     t_sim = 10.0
-    n_sims = len(clbf_lambdas)
+    n_sims = len(penalties)
     num_timesteps = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
         [[0.0, 1.0, 0.0, 1.0, -np.pi / 6]], device=clbf_controller.device
@@ -329,7 +329,7 @@ def single_rollout_circle_path(
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
-                clbf_controller.clbf_lambda = clbf_lambdas[j]
+                clbf_controller.clbf_relaxation_penalty = penalties[j]
                 u = clbf_controller(x_current[j, :].unsqueeze(0))
                 u_sim[tstep, j, :] = u
         else:
@@ -428,7 +428,7 @@ def single_rollout_circle_path(
         ax3.plot(
             t[:t_final],
             x_sim[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
-            label=f"Tracking Error, lambda={clbf_lambdas[i]}",
+            label=f"Tracking Error, r={penalties[i]}",
         )
     for i in range(n_sims):
         ax3.plot(
@@ -634,7 +634,7 @@ def single_rollout_s_path(
         break
     ax3.plot(
         t[:t_final],
-        V_sim[:t_final, :, :].squeeze().numpy(),
+        V_sim[:t_final, :, :].squeeze().cpu().numpy(),
         label="V",
     )
     # # Plot markers indicating where the simulations were unsafe
