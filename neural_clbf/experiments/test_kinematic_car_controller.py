@@ -109,7 +109,9 @@ def single_rollout_straight_path(
     t_sim = 5.0
     n_sims = len(clbf_lambdas)
     num_timesteps = int(t_sim // simulation_dt)
-    start_x = torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
+    start_x = torch.tensor(
+        [[0.0, 1.0, 0.0, 1.0, -np.pi / 6]], device=clbf_controller.device
+    )
     x_sim = torch.zeros(
         num_timesteps, n_sims, clbf_controller.dynamics_model.n_dims
     ).type_as(start_x)
@@ -283,7 +285,9 @@ def single_rollout_circle_path(
     t_sim = 10.0
     n_sims = len(clbf_lambdas)
     num_timesteps = int(t_sim // simulation_dt)
-    start_x = 0.0 * torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
+    start_x = 0.0 * torch.tensor(
+        [[0.0, 1.0, 0.0, 1.0, -np.pi / 6]], device=clbf_controller.device
+    )
     x_sim = torch.zeros(
         num_timesteps, n_sims, clbf_controller.dynamics_model.n_dims
     ).type_as(start_x)
@@ -474,7 +478,9 @@ def single_rollout_s_path(
     t_sim = 5.0
     n_sims = len(penalties)
     num_timesteps = int(t_sim // simulation_dt)
-    start_x = 0.0 * torch.tensor([[0.0, 1.0, 0.0, 1.0, -np.pi / 6]])
+    start_x = 0.0 * torch.tensor(
+        [[0.0, 1.0, 0.0, 1.0, -np.pi / 6]], device=clbf_controller.device
+    )
     x_sim = torch.zeros(
         num_timesteps, n_sims, clbf_controller.dynamics_model.n_dims
     ).type_as(start_x)
