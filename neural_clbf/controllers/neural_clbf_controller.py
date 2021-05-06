@@ -312,38 +312,40 @@ class NeuralCLBFController(pl.LightningModule):
         # where h = [-L_f V - lambda V, 0, h_u]^T and G = [L_g V, -1
         #                                                  ...repeated for each scenario
         #                                                  0,     -1
+        #                                                  ...repeated for each scenario
         #                                                  G_u,    0]
         # We can optionally add the user-specified inequality constraints as G_u
         n_controls = self.dynamics_model.n_controls
         n_scenarios = self.n_scenarios
+        n_vars = n_controls + n_scenarios
         bs = x.shape[0]
 
         # Start by building the cost
-        Q = torch.zeros(bs, n_controls + 1, n_controls + 1).type_as(x)
+        Q = torch.zeros(bs, n_vars, n_vars).type_as(x)
         for j in range(n_controls):
             Q[:, j, j] = 1.0
-        Q[:, -1, -1] = relaxation_penalty + 0.01
+        for j in range(n_controls, n_vars):
+            Q[:, j, j] = relaxation_penalty + 0.01
         Q *= 2.0
-        p = torch.zeros(bs, n_controls + 1).type_as(x)
+        p = torch.zeros(bs, n_vars).type_as(x)
         u_nominal = self.dynamics_model.u_nominal(x)
-        p[:, :-1] = -2.0 * u_nominal
+        p[:, :n_controls] = -2.0 * u_nominal
 
         # Now build the inequality constraints G @ [u r]^T <= h
-        G = torch.zeros(
-            bs, n_scenarios + 1 + self.G_u.shape[0], n_controls + 1
-        ).type_as(x)
-        h = torch.zeros(bs, n_scenarios + 1 + self.h_u.shape[0], 1).type_as(x)
+        G = torch.zeros(bs, 2 * n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
+        h = torch.zeros(bs, 2 * n_scenarios + self.h_u.shape[0], 1).type_as(x)
         # CLBF decrease condition in each scenario
         for i in range(n_scenarios):
             G[:, i, :n_controls] = Lg_V[:, i, :]
-            G[:, i, -1] = -1
+            G[:, i, n_controls + i] = -1
             h[:, i, :] = -Lf_V[:, i, :] - self.clbf_lambda * V
         # Positive relaxation
-        G[:, n_scenarios, -1] = -1
-        h[:, n_scenarios, 0] = 0.0
+        for i in range(n_scenarios):
+            G[:, n_scenarios + i, n_controls + i] = -1
+            h[:, n_scenarios + i, 0] = 0.0
         # Actuation limits
-        G[:, n_scenarios + 1 :, :n_controls] = self.G_u.type_as(x)
-        h[:, n_scenarios + 1 :, 0] = self.h_u.view(1, -1).type_as(x)
+        G[:, 2 * n_scenarios :, :n_controls] = self.G_u.type_as(x)
+        h[:, 2 * n_scenarios :, 0] = self.h_u.view(1, -1).type_as(x)
         h = h.squeeze()
         # No equality constraints
         A = torch.tensor([])
