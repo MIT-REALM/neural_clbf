@@ -79,7 +79,7 @@ def test_episodic_datamodule_quotas():
         fixed_samples=1000,
         val_split=0.1,
         batch_size=10,
-        safe_unsafe_goal_quotas=(0.1, 0.1, 0.1),
+        quotas={"safe": 0.1, "unsafe": 0.1, "goal": 0.1},
     )
     assert dm is not None
 
