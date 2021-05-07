@@ -34,6 +34,7 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
         clbf_relaxation_penalty: float = 50.0,
+        gamma: float = 1.0,
         controller_period: float = 0.01,
         lookahead: float = 0.1,
         primal_learning_rate: float = 1e-3,
@@ -55,6 +56,7 @@ class NeuralCLBFController(pl.LightningModule):
             clbf_lambda: convergence rate for the CLBF
             safety_level: safety level set value for the CLBF
             clbf_relaxation_penalty: the penalty for relaxing CLBF conditions.
+            gamma: cost scaling for difference from nominal controller.
             controller_period: the timestep to use in simulating forward Vdot
             lookahead: how far to simulate forward to gauge decrease in V
             primal_learning_rate: the learning rate for SGD for the network weights,
@@ -82,6 +84,7 @@ class NeuralCLBFController(pl.LightningModule):
         self.safe_level = safety_level
         self.unsafe_level = safety_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
+        self.gamma = gamma
         self.controller_period = controller_period
         self.lookahead = lookahead
         self.primal_learning_rate = primal_learning_rate
@@ -325,13 +328,17 @@ class NeuralCLBFController(pl.LightningModule):
         # Start by building the cost
         Q = torch.zeros(bs, n_vars, n_vars).type_as(x)
         for j in range(n_controls):
-            Q[:, j, j] = 1.0
+            Q[:, j, j] = 1.0 * self.gamma
         for j in range(n_controls, n_vars):
             Q[:, j, j] = relaxation_penalty + 0.01
         Q *= 2.0
         p = torch.zeros(bs, n_vars).type_as(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         p[:, :n_controls] = -2.0 * u_nominal
+
+        # Add cost term to minimize Vdot
+        for i in range(n_scenarios):
+            p[:, :n_controls] += Lg_V[:, i, :]
 
         # Now build the inequality constraints G @ [u r]^T <= h
         G = torch.zeros(bs, 2 * n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
