@@ -103,6 +103,7 @@ class STCar(ControlAffineSystem):
         R = np.eye(self.n_controls)
 
         # Get feedback matrix
+        # import pdb; pdb.set_trace()
         self.K = torch.tensor(lqr(A, B, Q, R))
 
     def validate_params(self, params: Scenario) -> bool:
@@ -187,7 +188,7 @@ class STCar(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.3
+        max_safe_tracking_error = 0.35
         tracking_error = x[
             :,
             [
@@ -201,10 +202,6 @@ class STCar(ControlAffineSystem):
             tracking_error.norm(dim=-1) <= max_safe_tracking_error
         )
         safe_mask.logical_and_(tracking_error_small_enough)
-
-        # We need slightly lower heading angle to be "close"
-        psi_err_small_enough = x[:, STCar.PSI_E].abs() <= np.pi / 3
-        safe_mask.logical_and_(psi_err_small_enough)
 
         return safe_mask
 
@@ -262,12 +259,8 @@ class STCar(ControlAffineSystem):
                 STCar.PSI_E,
             ],
         ]
-        near_goal = tracking_error.norm(dim=-1) <= 0.3
+        near_goal = tracking_error.norm(dim=-1) <= 0.25
         goal_mask.logical_and_(near_goal)
-
-        # We need slightly lower heading angle to be "close"
-        near_goal_psi = x[:, STCar.PSI_E].abs() <= 0.3
-        goal_mask.logical_and_(near_goal_psi)
 
         # The goal set has to be a subset of the safe set
         goal_mask.logical_and_(self.safe_mask(x))
@@ -420,10 +413,13 @@ class STCar(ControlAffineSystem):
         # Compute the LQR gain matrix for the nominal parameters
         # create equivalent bicycle parameters
         g = 9.81  # [m/s^2]
+        mu = self.car_params.tire.p_dy1
         C_Sf = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
         C_Sr = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
         lf = self.car_params.a
         lr = self.car_params.b
+        m = self.car_params.m
+        Iz = self.car_params.I_z
 
         # Linearize the system about the path
         x0 = self.goal_point
@@ -436,7 +432,54 @@ class STCar(ControlAffineSystem):
         x0[0, STCar.DELTA] /= lf * C_Sf * g * lr
         u0 = torch.zeros((1, self.n_controls)).type_as(x0)
         dynamics = lambda x: self.closed_loop_dynamics(x, u0, params).squeeze()
-        A = jacobian(dynamics, self.goal_point).squeeze().cpu().numpy()
+        with torch.enable_grad():
+            A = jacobian(dynamics, self.goal_point).squeeze().cpu().numpy()
+
+        A = np.zeros((self.n_dims, self.n_dims))
+        A[STCar.SXE, STCar.VE] = 1.0
+        A[STCar.SXE, STCar.SYE] = params["omega_ref"]
+
+        A[STCar.SYE, STCar.SXE] = -params["omega_ref"]
+        A[STCar.SYE, STCar.PSI_E] = params["v_ref"]
+        A[STCar.SYE, STCar.BETA] = params["v_ref"]
+
+        A[STCar.PSI_E, STCar.PSI_DOT] = 1.0
+
+        A[STCar.PSI_DOT, STCar.VE] = (
+            (mu * m / (params["v_ref"] ** 2 * Iz * (lr + lf)))
+            * (lf ** 2 * C_Sf * g * lr + lr ** 2 * C_Sr * g * lf)
+            * params["omega_ref"]
+        )
+        A[STCar.PSI_DOT, STCar.PSI_DOT] = -(
+            mu * m / (params["v_ref"] * Iz * (lr + lf))
+        ) * (lf ** 2 * C_Sf * g * lr + lr ** 2 * C_Sr * g * lf)
+        A[STCar.PSI_DOT, STCar.BETA] = +(mu * m / (Iz * (lr + lf))) * (
+            lr * C_Sr * g * lf - lf * C_Sf * g * lr
+        )
+        A[STCar.PSI_DOT, STCar.DELTA] = (mu * m / (Iz * (lr + lf))) * (
+            lf * C_Sf * g * lr
+        )
+
+        A[STCar.BETA, STCar.VE] = (
+            -2
+            * (mu / (params["v_ref"] ** 3 * (lr + lf)))
+            * (C_Sr * g * lf * lr - C_Sf * g * lr * lf)
+            * params["omega_ref"]
+            - mu
+            / (params["v_ref"] ** 2 * (lr + lf))
+            * (C_Sf * g * lr)
+            * x0[0, STCar.DELTA]
+        )
+        A[STCar.BETA, STCar.PSI_DOT] = (mu / (params["v_ref"] ** 2 * (lr + lf))) * (
+            C_Sr * g * lf * lr - C_Sf * g * lr * lf
+        ) - 1
+        A[STCar.BETA, STCar.BETA] = -(mu / (params["v_ref"] * (lr + lf))) * (
+            C_Sr * g * lf + C_Sf * g * lr
+        )
+        A[STCar.BETA, STCar.DELTA] = (
+            mu / (params["v_ref"] * (lr + lf)) * (C_Sf * g * lr)
+        )
+
         A = np.eye(self.n_dims) + self.controller_dt * A
 
         B = self._g(self.goal_point, self.nominal_params).squeeze().cpu().numpy()
@@ -450,8 +493,8 @@ class STCar(ControlAffineSystem):
         self.K = torch.tensor(lqr(A, B, Q, R))
 
         # Compute nominal control from feedback + equilibrium control
-        x_goal = self.goal_point.squeeze().type_as(x)
-        u_nominal = -(self.K.type_as(x) @ (x - x_goal).T).T
+        x0 = x0.type_as(x)
+        u_nominal = -(self.K.type_as(x) @ (x - x0).T).T
         u_eq = torch.zeros_like(u_nominal)
 
         return u_nominal + u_eq
