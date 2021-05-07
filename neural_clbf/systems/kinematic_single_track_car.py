@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 from .control_affine_system import ControlAffineSystem
-from neural_clbf.systems.utils import Scenario
+from neural_clbf.systems.utils import Scenario, lqr
 
 import neural_clbf.setup.commonroad as commonroad_loader  # type: ignore
 from vehiclemodels.parameters_vehicle2 import parameters_vehicle2  # type: ignore
@@ -80,6 +80,32 @@ class KSCar(ControlAffineSystem):
         if controller_dt is None:
             controller_dt = dt
         self.controller_dt = controller_dt
+
+        # Compute the LQR gain matrix for the nominal parameters
+        # Linearize the system about the x = 0, u = 0
+        wheelbase = self.car_params.a + self.car_params.b
+        A = np.zeros((self.n_dims, self.n_dims))
+        A[KSCar.SXE, KSCar.SYE] = self.nominal_params["omega_ref"]
+        A[KSCar.SXE, KSCar.VE] = 1
+
+        A[KSCar.SYE, KSCar.SXE] = -self.nominal_params["omega_ref"]
+        A[KSCar.SYE, KSCar.PSI_E] = self.nominal_params["v_ref"]
+
+        A[KSCar.PSI_E, KSCar.DELTA] = self.nominal_params["v_ref"] / wheelbase
+
+        B = np.zeros((self.n_dims, self.n_controls))
+        B[KSCar.DELTA, KSCar.VDELTA] = 1.0
+        B[KSCar.VE, KSCar.ALONG] = 1.0
+
+        A = np.eye(self.n_dims) + self.controller_dt * A
+        B = self.controller_dt * B
+
+        # Define cost matrices as identity
+        Q = np.eye(self.n_dims)
+        R = np.eye(self.n_controls)
+
+        # Get feedback matrix
+        self.K = torch.tensor(lqr(A, B, Q, R))
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -326,45 +352,23 @@ class KSCar(ControlAffineSystem):
         returns:
             u_nominal: bs x self.n_controls tensor of controls
         """
-        # # Compute the LQR gain matrix for the nominal parameters
-        # # Linearize the system about the x = 0, u = 0
-        # wheelbase = self.car_params.a + self.car_params.b
-        # A = np.zeros((self.n_dims, self.n_dims))
-        # A[KSCar.SXE, KSCar.PSI_E] = -2 * np.sin(self.nominal_params["psi_ref"])
-        # A[KSCar.SYE, KSCar.PSI_E] = 2 * np.cos(self.nominal_params["psi_ref"])
-        # A[KSCar.PSI_E, KSCar.DELTA] = self.nominal_params["v_ref"] / wheelbase
-
-        # B = np.zeros((self.n_dims, self.n_controls))
-        # B[KSCar.DELTA, KSCar.VDELTA] = 1.0
-        # B[KSCar.VE, KSCar.ALONG] = 1.0
-
-        # A = np.eye(self.n_dims) + self.controller_dt * A
-        # B = self.controller_dt * B
-
-        # # Define cost matrices as identity
-        # Q = np.eye(self.n_dims)
-        # R = np.eye(self.n_controls)
-
-        # # Get feedback matrix
-        # self.K = torch.tensor(lqr(A, B, Q, R))
+        # Compute nominal control from feedback + equilibrium control
+        u_nominal = -(self.K.type_as(x) @ (x - self.goal_point.squeeze()).T).T
+        u_eq = torch.zeros_like(u_nominal)
 
         # # Compute nominal control from feedback + equilibrium control
-        # u_nominal = -(self.K.type_as(x) @ (x - self.goal_point.squeeze()).T).T
+        # k_delta_psi = 10
+        # k_delta_d = 10
+        # k_delta_y = 1  # sye is the cross-track error in the path-centered coords
+        # k_a_v = 10.0
+        # k_a_x = 10.0
+        # u_nominal = torch.zeros(x.shape[0], self.n_controls).type_as(x)
+        # u_nominal[:, KSCar.VDELTA] = (
+        #     -k_delta_psi * x[:, KSCar.PSI_E]
+        #     - k_delta_d * x[:, KSCar.DELTA]
+        #     - k_delta_y * x[:, KSCar.SYE]
+        # )
+        # u_nominal[:, KSCar.ALONG] = -k_a_v * x[:, KSCar.VE] - k_a_x * x[:, KSCar.SXE]
         # u_eq = torch.zeros_like(u_nominal)
-
-        # Compute nominal control from feedback + equilibrium control
-        k_delta_psi = 10
-        k_delta_d = 10
-        k_delta_y = 1  # sye is the cross-track error in the path-centered coords
-        k_a_v = 10.0
-        k_a_x = 10.0
-        u_nominal = torch.zeros(x.shape[0], self.n_controls).type_as(x)
-        u_nominal[:, KSCar.VDELTA] = (
-            -k_delta_psi * x[:, KSCar.PSI_E]
-            - k_delta_d * x[:, KSCar.DELTA]
-            - k_delta_y * x[:, KSCar.SYE]
-        )
-        u_nominal[:, KSCar.ALONG] = -k_a_v * x[:, KSCar.VE] - k_a_x * x[:, KSCar.SXE]
-        u_eq = torch.zeros_like(u_nominal)
 
         return u_nominal + u_eq
