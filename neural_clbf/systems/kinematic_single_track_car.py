@@ -187,7 +187,7 @@ class KSCar(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.7
+        max_safe_tracking_error = 0.3
         tracking_error = x[
             :,
             [
@@ -218,8 +218,7 @@ class KSCar(ControlAffineSystem):
 
         # Avoid angles that are too large
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.7
-        unsafe_buffer = 0.3
+        max_safe_tracking_error = 0.4
         tracking_error = x[
             :,
             [
@@ -230,7 +229,7 @@ class KSCar(ControlAffineSystem):
             ],
         ]
         tracking_error_too_big = (
-            tracking_error.norm(dim=-1) >= max_safe_tracking_error + unsafe_buffer
+            tracking_error.norm(dim=-1) >= max_safe_tracking_error
         )
         unsafe_mask.logical_or_(tracking_error_too_big)
 
@@ -265,11 +264,11 @@ class KSCar(ControlAffineSystem):
                 KSCar.PSI_E,
             ],
         ]
-        near_goal = tracking_error.norm(dim=-1) <= 0.25
+        near_goal = tracking_error.norm(dim=-1) <= 0.2
         goal_mask.logical_and_(near_goal)
 
         # We need slightly lower heading angle to be "close"
-        near_goal_psi = x[:, KSCar.PSI_E].abs() <= 0.25
+        near_goal_psi = x[:, KSCar.PSI_E].abs() <= 0.2
         goal_mask.logical_and_(near_goal_psi)
 
         # The goal set has to be a subset of the safe set
