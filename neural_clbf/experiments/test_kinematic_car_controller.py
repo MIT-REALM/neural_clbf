@@ -62,7 +62,7 @@ def doMain():
         max_points=500000,
         val_split=0.1,
         batch_size=64,
-        safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
     )
 
     clbf_controller = NeuralCLBFController.load_from_checkpoint(
@@ -82,10 +82,10 @@ def doMain():
         epochs_per_episode=5,
     )
 
-    single_rollout_straight_path(clbf_controller)
-    plt.show()
-    single_rollout_circle_path(clbf_controller)
-    plt.show()
+    # single_rollout_straight_path(clbf_controller)
+    # plt.show()
+    # single_rollout_circle_path(clbf_controller)
+    # plt.show()
     single_rollout_s_path(clbf_controller)
     plt.show()
 
@@ -464,7 +464,7 @@ def single_rollout_s_path(
     clbf_controller: "NeuralCLBFController",
 ) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    penalties = [100, 2e6]
+    penalties = [100]
 
     simulation_dt = clbf_controller.dynamics_model.dt
     controller_period = clbf_controller.controller_period

@@ -339,7 +339,9 @@ class KSCar(ControlAffineSystem):
 
         return g
 
-    def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
+    def u_nominal(
+        self, x: torch.Tensor, params: Optional[Scenario] = None
+    ) -> torch.Tensor:
         """
         Compute the nominal control for the nominal parameters. For the inverted
         pendulum, the nominal controller is LQR
@@ -349,24 +351,44 @@ class KSCar(ControlAffineSystem):
         returns:
             u_nominal: bs x self.n_controls tensor of controls
         """
+        if params is None or not self.validate_params(params):
+            params = self.nominal_params
+
+        # Compute the LQR gain matrix
+
+        # Linearize the system about the path
+        wheelbase = self.car_params.a + self.car_params.b
+        x0 = self.goal_point
+        x0[0, KSCar.DELTA] = torch.atan(
+            torch.tensor(params["omega_ref"] * wheelbase / params["v_ref"])
+        )
+        A = np.zeros((self.n_dims, self.n_dims))
+        A[KSCar.SXE, KSCar.SYE] = self.nominal_params["omega_ref"]
+        A[KSCar.SXE, KSCar.VE] = 1
+
+        A[KSCar.SYE, KSCar.SXE] = -self.nominal_params["omega_ref"]
+        A[KSCar.SYE, KSCar.PSI_E] = self.nominal_params["v_ref"]
+
+        A[KSCar.PSI_E, KSCar.VE] = torch.tan(x0[0, KSCar.DELTA]) / wheelbase
+        A[KSCar.PSI_E, KSCar.DELTA] = self.nominal_params["v_ref"] / wheelbase
+
+        A = np.eye(self.n_dims) + self.controller_dt * A
+
+        B = np.zeros((self.n_dims, self.n_controls))
+        B[KSCar.DELTA, KSCar.VDELTA] = 1.0
+        B[KSCar.VE, KSCar.ALONG] = 1.0
+        B = self.controller_dt * B
+
+        # Define cost matrices as identity
+        Q = np.eye(self.n_dims)
+        R = np.eye(self.n_controls)
+
+        # Get feedback matrix
+        self.K = torch.tensor(lqr(A, B, Q, R))
+
         # Compute nominal control from feedback + equilibrium control
         x_goal = self.goal_point.squeeze().type_as(x)
         u_nominal = -(self.K.type_as(x) @ (x - x_goal).T).T
         u_eq = torch.zeros_like(u_nominal)
-
-        # # Compute nominal control from feedback + equilibrium control
-        # k_delta_psi = 10
-        # k_delta_d = 10
-        # k_delta_y = 1  # sye is the cross-track error in the path-centered coords
-        # k_a_v = 10.0
-        # k_a_x = 10.0
-        # u_nominal = torch.zeros(x.shape[0], self.n_controls).type_as(x)
-        # u_nominal[:, KSCar.VDELTA] = (
-        #     -k_delta_psi * x[:, KSCar.PSI_E]
-        #     - k_delta_d * x[:, KSCar.DELTA]
-        #     - k_delta_y * x[:, KSCar.SYE]
-        # )
-        # u_nominal[:, KSCar.ALONG] = -k_a_v * x[:, KSCar.VE] - k_a_x * x[:, KSCar.SXE]
-        # u_eq = torch.zeros_like(u_nominal)
 
         return u_nominal + u_eq
