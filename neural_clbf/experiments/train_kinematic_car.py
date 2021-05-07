@@ -133,6 +133,7 @@ def main(args):
         clbf_lambda=0.1,
         clbf_relaxation_penalty=50.0,
         penalty_scheduling_rate=50.0,
+        qp_in_loop=False,
         epochs_per_episode=1,
     )
     # Add the DataModule hooks
