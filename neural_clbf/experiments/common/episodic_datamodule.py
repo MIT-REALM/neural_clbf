@@ -4,7 +4,7 @@ sampling from fixed sets.
 Code based on the Pytorch Lightning example at
 pl_examples/domain_templates/reinforce_learn_Qnet.py
 """
-from typing import List, Callable, Tuple
+from typing import List, Callable, Tuple, Dict, Optional
 
 import torch
 import pytorch_lightning as pl
@@ -29,7 +29,7 @@ class EpisodicDataModule(pl.LightningDataModule):
         max_points: int = 10000000,
         val_split: float = 0.1,
         batch_size: int = 64,
-        safe_unsafe_goal_quotas: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        quotas: Optional[Dict[str, float]] = None,
     ):
         """Initialize the DataModule
 
@@ -42,9 +42,10 @@ class EpisodicDataModule(pl.LightningDataModule):
             fixed_samples: the number of uniform samples to collect
             val_split: the fraction of sampled data to reserve for validation
             batch_size: the batch size
-            safe_unsafe_goal_quotas: a tuple specifying the minimum percentage of the
-                                     fixed samples that should be taken from the safe,
-                                     unsafe, and goal sets, respectively.
+            quotas: a dictionary specifying the minimum percentage of the
+                    fixed samples that should be taken from the safe,
+                    unsafe, boundary, and goal sets. Expects keys to be either "safe",
+                    "unsafe", "boundary", or "goal".
         """
         super().__init__()
 
@@ -58,7 +59,10 @@ class EpisodicDataModule(pl.LightningDataModule):
         self.max_points = max_points
         self.val_split = val_split
         self.batch_size = batch_size
-        self.quotas = safe_unsafe_goal_quotas
+        if quotas is not None:
+            self.quotas = quotas
+        else:
+            self.quotas = {}
 
         # Define the sampling intervals for initial conditions as a hyper-rectangle
         assert len(initial_domain) == self.n_dims
@@ -103,16 +107,22 @@ class EpisodicDataModule(pl.LightningDataModule):
         samples = []
         # Figure out how many points are to be sampled at random, how many from the
         # goal, safe, or unsafe regions specifically
-        min_safe, min_unsafe, min_goal = (
-            int(self.fixed_samples * region_min) for region_min in self.quotas
-        )
+        allocated_samples = 0
+        for region_name, quota in self.quotas.items():
+            num_samples = int(self.fixed_samples * quota)
+            allocated_samples += num_samples
 
-        samples.append(self.model.sample_safe(min_safe))
-        samples.append(self.model.sample_unsafe(min_unsafe))
-        samples.append(self.model.sample_goal(min_goal))
+            if region_name == "goal":
+                samples.append(self.model.sample_goal(num_samples))
+            elif region_name == "safe":
+                samples.append(self.model.sample_safe(num_samples))
+            elif region_name == "unsafe":
+                samples.append(self.model.sample_unsafe(num_samples))
+            elif region_name == "boundary":
+                samples.append(self.model.sample_boundary(num_samples))
 
         # Sample all remaining points uniformly at random
-        free_samples = self.fixed_samples - (min_safe + min_unsafe + min_goal)
+        free_samples = self.fixed_samples - allocated_samples
         assert free_samples >= 0
         samples.append(self.model.sample_state_space(free_samples))
 
@@ -145,6 +155,8 @@ class EpisodicDataModule(pl.LightningDataModule):
         print(f"\t({self.model.safe_mask(self.x_validation).sum()} val)")
         print(f"\t{self.model.unsafe_mask(self.x_training).sum()} unsafe points")
         print(f"\t({self.model.unsafe_mask(self.x_validation).sum()} val)")
+        print(f"\t{self.model.boundary_mask(self.x_training).sum()} boundary points")
+        print(f"\t({self.model.boundary_mask(self.x_validation).sum()} val)")
 
         # Turn these into tensor datasets
         self.training_data = TensorDataset(
@@ -175,9 +187,8 @@ class EpisodicDataModule(pl.LightningDataModule):
         x_sim = self.sample_trajectories(simulator)
 
         # # Augment those points with samples from the fixed range
-        # x_sample = self.sample_fixed()
-        # x = torch.cat((x_sim.type_as(x_sample), x_sample), dim=0)
-        x = x_sim
+        x_sample = self.sample_fixed()
+        x = torch.cat((x_sim.type_as(x_sample), x_sample), dim=0)
         x = x.type_as(self.x_training)
 
         print(f"Sampled {x.shape[0]} new points")

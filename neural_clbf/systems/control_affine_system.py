@@ -118,6 +118,19 @@ class ControlAffineSystem(ABC):
         """
         pass
 
+    def boundary_mask(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating regions that are neither safe nor unsafe
+
+        args:
+            x: a tensor of points in the state space
+        """
+        return torch.logical_not(
+            torch.logical_or(
+                self.safe_mask(x),
+                self.unsafe_mask(x),
+            )
+        )
+
     @abstractmethod
     def distance_to_goal(self, x: torch.Tensor) -> torch.Tensor:
         """Return the distance from each point in x to the goal (positive for points
@@ -157,7 +170,7 @@ class ControlAffineSystem(ABC):
         self,
         num_samples: int,
         mask_fn: Callable[[torch.Tensor], torch.Tensor],
-        max_tries: int = 1000,
+        max_tries: int = 5000,
     ) -> torch.Tensor:
         """Sample num_samples so that mask_fn is True for all samples. Makes a
         best-effort attempt, but gives up after max_tries, so may return some points
@@ -178,23 +191,30 @@ class ControlAffineSystem(ABC):
 
         return samples
 
-    def sample_safe(self, num_samples: int, max_tries: int = 1000) -> torch.Tensor:
+    def sample_safe(self, num_samples: int, max_tries: int = 5000) -> torch.Tensor:
         """Sample uniformly from the safe space. May return some points that are not
         safe, so watch out (only a best-effort sampling).
         """
         return self.sample_with_mask(num_samples, self.safe_mask, max_tries)
 
-    def sample_unsafe(self, num_samples: int, max_tries: int = 1000) -> torch.Tensor:
+    def sample_unsafe(self, num_samples: int, max_tries: int = 5000) -> torch.Tensor:
         """Sample uniformly from the unsafe space. May return some points that are not
         unsafe, so watch out (only a best-effort sampling).
         """
         return self.sample_with_mask(num_samples, self.unsafe_mask, max_tries)
 
-    def sample_goal(self, num_samples: int, max_tries: int = 1000) -> torch.Tensor:
+    def sample_goal(self, num_samples: int, max_tries: int = 5000) -> torch.Tensor:
         """Sample uniformly from the goal. May return some points that are not in the
         goal, so watch out (only a best-effort sampling).
         """
         return self.sample_with_mask(num_samples, self.goal_mask, max_tries)
+
+    def sample_boundary(self, num_samples: int, max_tries: int = 5000) -> torch.Tensor:
+        """Sample uniformly from the state space between the safe and unsafe regions.
+        May return some points that are not in this region safe, so watch out (only a
+        best-effort sampling).
+        """
+        return self.sample_with_mask(num_samples, self.boundary_mask, max_tries)
 
     def control_affine_dynamics(
         self, x: torch.Tensor, params: Optional[Scenario] = None

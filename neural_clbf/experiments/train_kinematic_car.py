@@ -91,10 +91,10 @@ def main(args):
         trajectories_per_episode=10,
         trajectory_length=1000,
         fixed_samples=90000,
-        max_points=100000,
+        max_points=500000,
         val_split=0.1,
         batch_size=64,
-        safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
+        quotas={"safe": 0.3, "boundary": 0.5, "unsafe": 0.2},
     )
 
     # Define the scenarios
@@ -124,16 +124,15 @@ def main(args):
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=2,
-        clbf_hidden_size=8,
-        u_nn_hidden_layers=2,
-        u_nn_hidden_size=8,
+        clbf_hidden_layers=3,
+        clbf_hidden_size=64,
+        u_nn_hidden_layers=3,
+        u_nn_hidden_size=64,
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_lambda=0.1,
         clbf_relaxation_penalty=50.0,
         penalty_scheduling_rate=50.0,
-        qp_in_loop=False,
         epochs_per_episode=1,
     )
     # Add the DataModule hooks
