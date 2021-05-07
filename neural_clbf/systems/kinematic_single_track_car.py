@@ -353,7 +353,8 @@ class KSCar(ControlAffineSystem):
             u_nominal: bs x self.n_controls tensor of controls
         """
         # Compute nominal control from feedback + equilibrium control
-        u_nominal = -(self.K.type_as(x) @ (x - self.goal_point.squeeze()).T).T
+        x_goal = self.goal_point.squeeze().type_as(x)
+        u_nominal = -(self.K.type_as(x) @ (x - x_goal).T).T
         u_eq = torch.zeros_like(u_nominal)
 
         # # Compute nominal control from feedback + equilibrium control
