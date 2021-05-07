@@ -407,8 +407,6 @@ class STCar(ControlAffineSystem):
         returns:
             u_nominal: bs x self.n_controls tensor of controls
         """
-        import time
-        start = time.time()
         if params is None or not self.validate_params(params):
             params = self.nominal_params
 
@@ -498,8 +496,5 @@ class STCar(ControlAffineSystem):
         x0 = x0.type_as(x)
         u_nominal = -(self.K.type_as(x) @ (x - x0).T).T
         u_eq = torch.zeros_like(u_nominal)
-
-        end = time.time()
-        print(end - start)
 
         return u_nominal + u_eq
