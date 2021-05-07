@@ -464,7 +464,7 @@ def single_rollout_s_path(
     clbf_controller: "NeuralCLBFController",
 ) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    penalties = [100]
+    gammas = [0.0, 0.1, 0.5, 1.0]
 
     simulation_dt = clbf_controller.dynamics_model.dt
     controller_period = clbf_controller.controller_period
@@ -476,7 +476,7 @@ def single_rollout_s_path(
     # Simulate!
     # (but first make somewhere to save the results)
     t_sim = 5.0
-    n_sims = len(penalties)
+    n_sims = len(gammas)
     num_timesteps = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
         [[0.0, 1.0, 0.0, 1.0, -np.pi / 6]], device=clbf_controller.device
@@ -523,7 +523,7 @@ def single_rollout_s_path(
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
-                clbf_controller.clbf_relaxation_penalty = penalties[j]
+                clbf_controller.gamma = gammas[j]
                 u = clbf_controller(x_current[j, :].unsqueeze(0))
                 u_sim[tstep, j, :] = u
         else:
@@ -549,7 +549,8 @@ def single_rollout_s_path(
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
                 u = clbf_controller.dynamics_model.u_nominal(
-                    x_current[j, :].unsqueeze(0)
+                    x_current[j, :].unsqueeze(0),
+                    pt,
                 )
                 u_sim[tstep, j, :] = u
         else:
@@ -622,7 +623,7 @@ def single_rollout_s_path(
         ax3.plot(
             t[:t_final],
             x_sim[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
-            label=f"Tracking Error, r={penalties[i]}",
+            label=f"Tracking Error, gamma={gammas[i]}",
         )
     for i in range(n_sims):
         ax3.plot(
