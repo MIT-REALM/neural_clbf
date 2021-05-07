@@ -37,6 +37,7 @@ class NeuralCLBFController(pl.LightningModule):
         gamma: float = 1.0,
         controller_period: float = 0.01,
         lookahead: float = 0.1,
+        qp_in_loop: bool = True,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
         penalty_scheduling_rate: float = 100.0,
@@ -61,6 +62,7 @@ class NeuralCLBFController(pl.LightningModule):
             lookahead: how far to simulate forward to gauge decrease in V
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
+            qp_in_loop: if True, use the QP instead of the proof controller network
             epochs_per_episode: the number of epochs to include in each episode
             penalty_scheduling_rate: the rate at which to ramp the rollout relaxation
                                      penalty up to clbf_relaxation_penalty
@@ -88,6 +90,7 @@ class NeuralCLBFController(pl.LightningModule):
         self.controller_period = controller_period
         self.lookahead = lookahead
         self.primal_learning_rate = primal_learning_rate
+        self.qp_in_loop = qp_in_loop
         self.epochs_per_episode = epochs_per_episode
         self.penalty_scheduling_rate = penalty_scheduling_rate
 
@@ -485,13 +488,15 @@ class NeuralCLBFController(pl.LightningModule):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
+        eps = 0.01
 
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # by minimizing the relaxation in the CLBF conditions needed to solve the QP
-        u, relax, objective = self.solve_CLBF_QP(x)
-        # relax_term = self.clbf_relaxation_penalty * relax.mean()
-        relax_term = relax.mean()
-        loss.append(("CLBF QP relaxation", relax_term))
+        if self.qp_in_loop:
+            u, relax, objective = self.solve_CLBF_QP(x)
+            # relax_term = self.clbf_relaxation_penalty * relax.mean()
+            relax_term = relax.mean()
+            loss.append(("CLBF QP relaxation", relax_term))
 
         # #   2.) Also minimize the objective of the QP. This should push in mostly the
         # # same direction as (1), since the objective includes a relax^2 term.
@@ -505,29 +510,32 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
             sim_timesteps = round(self.lookahead / self.dynamics_model.dt)
-            x_next = self.simulator_fn(x, sim_timesteps, use_qp=True)[:, -1, :]
+            x_next = self.simulator_fn(x, sim_timesteps, use_qp=self.qp_in_loop)[
+                :, -1, :
+            ]
             V_next = self.V(x_next)
             # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
             V_dot = (V_next - V) / self.lookahead
-            clbf_descent_term_sim += F.relu(V_dot + self.clbf_lambda * V).mean()
+            clbf_descent_term_sim += F.relu(eps + V_dot + self.clbf_lambda * V).mean()
         loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
-        # #   4b.) A term to encourage satisfaction of CLBF decrease condition
-        # # This time, we compute the decrease using linearization, which provides a
-        # # training signal for the controller
-        # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
-        # # Get the current value of the CLBF and its Lie derivatives
-        # # (Lie derivatives are computed using a linear fit of the dynamics)
-        # # TODO @dawsonc do we need dynamics learning here?
-        # Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # # Get the control and reshape it to bs x n_controls x 1
-        # u_nn = self.u(x)
-        # u_nn = u_nn.unsqueeze(-1)
-        # for i, s in enumerate(self.scenarios):
-        #     # Use these dynamics to compute the derivative of V
-        #     Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :].unsqueeze(1), u_nn)
-        #     clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
-        # loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
+        if not self.qp_in_loop:
+            #   4.) A term to encourage satisfaction of CLBF decrease condition
+            # This time, we compute the decrease using linearization, which provides a
+            # training signal for the controller
+            clbf_descent_lin = torch.tensor(0.0).type_as(x)
+            # Get the current value of the CLBF and its Lie derivatives
+            # (Lie derivatives are computed using a linear fit of the dynamics)
+            # TODO @dawsonc do we need dynamics learning here?
+            Lf_V, Lg_V = self.V_lie_derivatives(x)
+            # Get the control and reshape it to bs x n_controls x 1
+            u_nn = self.u(x)
+            u_nn = u_nn.unsqueeze(-1)
+            for i, s in enumerate(self.scenarios):
+                # Use these dynamics to compute the derivative of V
+                Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :].unsqueeze(1), u_nn)
+                clbf_descent_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
+            loss.append(("CLBF descent term (linearized)", clbf_descent_lin))
 
         return loss
 
