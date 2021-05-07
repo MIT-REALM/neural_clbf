@@ -328,13 +328,13 @@ class NeuralCLBFController(pl.LightningModule):
         # Start by building the cost
         Q = torch.zeros(bs, n_vars, n_vars).type_as(x)
         for j in range(n_controls):
-            Q[:, j, j] = 1.0 * self.gamma
+            Q[:, j, j] = 1.0 * self.gamma + 0.01
         for j in range(n_controls, n_vars):
             Q[:, j, j] = relaxation_penalty + 0.01
         Q *= 2.0
         p = torch.zeros(bs, n_vars).type_as(x)
         u_nominal = self.dynamics_model.u_nominal(x)
-        p[:, :n_controls] = -2.0 * u_nominal
+        p[:, :n_controls] = -2.0 * self.gamma * u_nominal
 
         # Add cost term to minimize Vdot
         for i in range(n_scenarios):

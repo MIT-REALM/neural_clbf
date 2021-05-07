@@ -15,22 +15,20 @@ from neural_clbf.experiments.common.plotting import (
     plot_CLBF,
     rollout_CLBF,
 )
-from neural_clbf.experiments.test_kinematic_car_controller import (
+from neural_clbf.experiments.test_single_track_car_controller import (
     # single_rollout_straight_path,
     # single_rollout_circle_path,
     single_rollout_s_path,
 )
-from neural_clbf.systems import KSCar
+from neural_clbf.systems import STCar
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 start_x = torch.tensor(
     [
-        [0.0, 0.6, 0.0, 0.0, -np.pi / 6],
-        [0.6, 0.0, 0.0, 0.0, -np.pi / 6],
-        [0.0, 0.6, 0.0, 0.0, np.pi / 6],
-        [0.6, 0.0, 0.0, 0.0, np.pi / 6],
+        [0.0, 0.0, 0.0, 0.0, -np.pi / 6],
+        [0.0, 0.0, 0.0, 0.0, np.pi / 6],
     ]
 )
 controller_period = 0.01
@@ -41,9 +39,9 @@ def rollout_plotting_cb(clbf_net):
     return rollout_CLBF(
         clbf_net,
         start_x=start_x,
-        plot_x_indices=[KSCar.SXE, KSCar.SYE],
+        plot_x_indices=[STCar.SXE, STCar.SYE],
         plot_x_labels=["$x - x_{ref}$", "$y - y_{ref}$"],
-        plot_u_indices=[KSCar.VDELTA, KSCar.ALONG],
+        plot_u_indices=[STCar.VDELTA, STCar.ALONG],
         plot_u_labels=["$v_\\delta$", "$a_{long}$"],
         t_sim=6.0,
         n_sims_per_start=1,
@@ -58,8 +56,8 @@ def clbf_plotting_cb(clbf_net):
         clbf_net,
         domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
         n_grid=50,
-        x_axis_index=KSCar.SXE,
-        y_axis_index=KSCar.SYE,
+        x_axis_index=STCar.SXE,
+        y_axis_index=STCar.SYE,
         x_axis_label="$x - x_{ref}$",
         y_axis_label="$y - y_{ref}$",
     )
@@ -68,12 +66,12 @@ def clbf_plotting_cb(clbf_net):
 def main(args):
     # Define the dynamics model
     nominal_params = {
-        "psi_ref": 0.5,
+        "psi_ref": 1.0,
         "v_ref": 10.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
     }
-    dynamics_model = KSCar(
+    dynamics_model = STCar(
         nominal_params, dt=simulation_dt, controller_dt=controller_period
     )
 
@@ -84,6 +82,8 @@ def main(args):
         (-0.1, 0.1),  # delta
         (-0.1, 0.1),  # ve
         (-0.1, 0.1),  # psi_e
+        (-0.1, 0.1),  # psi_dot
+        (-0.1, 0.1),  # beta
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
@@ -94,7 +94,7 @@ def main(args):
         max_points=500000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.3, "boundary": 0.5, "unsafe": 0.2},
+        quotas={"safe": 0.2, "boundary": 0.2, "unsafe": 0.2, "goal": 0.2},
     )
 
     # Define the scenarios
@@ -131,7 +131,7 @@ def main(args):
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_lambda=0.1,
-        clbf_relaxation_penalty=50.0,
+        clbf_relaxation_penalty=100.0,
         penalty_scheduling_rate=50.0,
         epochs_per_episode=1,
     )
@@ -144,7 +144,7 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/kinematic_car/",
+        "logs/stcar/",
         name="qp_in_loop",
     )
     trainer = pl.Trainer.from_argparse_args(

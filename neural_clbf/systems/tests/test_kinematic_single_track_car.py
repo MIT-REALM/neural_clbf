@@ -306,11 +306,20 @@ def plot_kscar_s_path():
     # Simulate!
     pt = copy(params)
     for tstep in range(1, num_timesteps):
+        # Get the path parameters at this point
+        omega_ref_t = 1.5 * np.sin(tstep * dt) + params["omega_ref"]
+        psi_ref[tstep] = dt * omega_ref_t + psi_ref[tstep - 1]
+        pt = copy(pt)
+        pt["psi_ref"] = psi_ref[tstep]
+        x_ref[tstep] = x_ref[tstep - 1] + dt * pt["v_ref"] * np.cos(psi_ref[tstep])
+        y_ref[tstep] = y_ref[tstep - 1] + dt * pt["v_ref"] * np.sin(psi_ref[tstep])
+        pt["omega_ref"] = omega_ref_t
+
         # Get the current state
         x_current = x_sim[tstep - 1, :, :]
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
-            u = kscar.u_nominal(x_current)
+            u = kscar.u_nominal(x_current, pt)
             for dim_idx in range(kscar.n_controls):
                 u[:, dim_idx] = torch.clamp(
                     u[:, dim_idx], min=lower_u_lim[dim_idx], max=upper_u_lim[dim_idx]
@@ -320,15 +329,6 @@ def plot_kscar_s_path():
         else:
             u = u_sim[tstep - 1, :, :]
             u_sim[tstep, :, :] = u
-
-        # Get the path parameters at this point
-        omega_ref_t = 1.8 * np.sin(tstep * dt) + params["omega_ref"]
-        psi_ref[tstep] = dt * omega_ref_t + psi_ref[tstep - 1]
-        pt = copy(pt)
-        pt["psi_ref"] = psi_ref[tstep]
-        x_ref[tstep] = x_ref[tstep - 1] + dt * pt["v_ref"] * np.cos(psi_ref[tstep])
-        y_ref[tstep] = y_ref[tstep - 1] + dt * pt["v_ref"] * np.sin(psi_ref[tstep])
-        pt["omega_ref"] = omega_ref_t
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
@@ -392,6 +392,6 @@ def plot_kscar_s_path():
 
 
 if __name__ == "__main__":
-    plot_kscar_straight_path()
-    plot_kscar_circle_path()
+    # plot_kscar_straight_path()
+    # plot_kscar_circle_path()
     plot_kscar_s_path()

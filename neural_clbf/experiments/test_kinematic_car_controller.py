@@ -29,7 +29,7 @@ def doMain():
     # Define the dynamics model
     nominal_params = {
         "psi_ref": 0.5,
-        "v_ref": 10.0,
+        "v_ref": 2.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
     }
@@ -464,7 +464,7 @@ def single_rollout_s_path(
     clbf_controller: "NeuralCLBFController",
 ) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    gammas = [0.0, 0.1, 0.5, 1.0]
+    gammas = [1.0]
 
     simulation_dt = clbf_controller.dynamics_model.dt
     controller_period = clbf_controller.controller_period
