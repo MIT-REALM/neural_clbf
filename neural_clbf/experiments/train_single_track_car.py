@@ -27,8 +27,8 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 start_x = torch.tensor(
     [
-        [0.0, 0.0, 0.0, 0.0, -np.pi / 6],
-        [0.0, 0.0, 0.0, 0.0, np.pi / 6],
+        [0.0, 0.0, 0.0, 0.0, -np.pi / 6, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0, np.pi / 6, 0.0, 0.0],
     ]
 )
 controller_period = 0.01
