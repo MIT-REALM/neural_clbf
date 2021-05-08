@@ -430,10 +430,6 @@ class STCar(ControlAffineSystem):
             / params["v_ref"]
         )
         x0[0, STCar.DELTA] /= lf * C_Sf * g * lr
-        u0 = torch.zeros((1, self.n_controls)).type_as(x0)
-        dynamics = lambda x: self.closed_loop_dynamics(x, u0, params).squeeze()
-        with torch.enable_grad():
-            A = jacobian(dynamics, self.goal_point).squeeze().cpu().numpy()
 
         A = np.zeros((self.n_dims, self.n_dims))
         A[STCar.SXE, STCar.VE] = 1.0
@@ -489,12 +485,15 @@ class STCar(ControlAffineSystem):
         Q = np.eye(self.n_dims)
         R = np.eye(self.n_controls)
 
-        # Get feedback matrix
-        self.K = torch.tensor(lqr(A, B, Q, R))
+        # Get feedback matrix (only recompute if we need to)
+        if params != self.nominal_params:
+            K = torch.tensor(lqr(A, B, Q, R))
+        else:
+            K = self.K
 
         # Compute nominal control from feedback + equilibrium control
         x0 = x0.type_as(x)
-        u_nominal = -(self.K.type_as(x) @ (x - x0).T).T
+        u_nominal = -(K.type_as(x) @ (x - x0).T).T
         u_eq = torch.zeros_like(u_nominal)
 
         return u_nominal + u_eq
