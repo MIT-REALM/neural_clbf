@@ -239,7 +239,7 @@ class STCar(ControlAffineSystem):
             x: the points from which we calculate distance
         """
         upper_limit, _ = self.state_limits
-        return x.norm(dim=-1) / upper_limit.norm()
+        return (x.norm(dim=-1) - 0.25) / upper_limit.norm()
 
     def goal_mask(self, x):
         """Return the mask of x indicating points in the goal set

@@ -461,6 +461,10 @@ class NeuralCLBFController(pl.LightningModule):
         unsafe_clbf_term = unsafe_V_too_small.mean()
         loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
+        #   4.) V >= 0.5 * dist_to_goal
+        tuning_term = F.relu(eps + 0.5 * dist_to_goal - V).mean()
+        loss.append(("CLBF tuning term", tuning_term))
+
         return loss
 
     def descent_loss(
