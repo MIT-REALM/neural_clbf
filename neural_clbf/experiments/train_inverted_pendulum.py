@@ -64,6 +64,7 @@ def main(args):
         (-np.pi / 4, np.pi / 4),  # theta
         (-1.0, 1.0),  # theta_dot
     ]
+    batch_size = 64
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
@@ -72,16 +73,16 @@ def main(args):
         fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
-        batch_size=64,
-        safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
+        batch_size=batch_size,
+        quotas={"safe": 0.2, "goal": 0.2, "unsafe": 0.2},
     )
 
     # Define the scenarios
     scenarios = [
         nominal_params,
-        {"m": 1.05, "L": 1.0, "b": 0.01},
-        {"m": 1.0, "L": 1.05, "b": 0.01},
-        {"m": 1.05, "L": 1.05, "b": 0.01},
+        # {"m": 1.05, "L": 1.0, "b": 0.01},
+        # {"m": 1.0, "L": 1.05, "b": 0.01},
+        # {"m": 1.05, "L": 1.05, "b": 0.01},
     ]
 
     # Define the plotting callbacks
@@ -98,10 +99,10 @@ def main(args):
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=3,
-        clbf_hidden_size=64,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=64,
+        clbf_hidden_layers=2,
+        clbf_hidden_size=256,
+        u_nn_hidden_layers=2,
+        u_nn_hidden_size=256,
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_relaxation_penalty=50.0,
@@ -116,8 +117,8 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/inverted_pendulum/",
-        name="qp_in_loop",
+        "logs/basic_experiments/fix_u_one_scenario",
+        name=f"u_dt_{controller_period}_bs_{batch_size}",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True

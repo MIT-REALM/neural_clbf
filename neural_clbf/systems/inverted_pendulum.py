@@ -140,8 +140,8 @@ class InvertedPendulum(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = torch.tensor([10.0, 10.0])
-        lower_limit = -torch.tensor([10.0, 10.0])
+        upper_limit = torch.tensor([10.0])
+        lower_limit = -torch.tensor([10.0])
 
         return (upper_limit, lower_limit)
 
@@ -151,21 +151,7 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
-
-        # Avoid angles that are too large
-        theta_max_safe = np.pi / 4
-        angle_small_enough = x[:, InvertedPendulum.THETA].abs() <= theta_max_safe
-        safe_mask.logical_and_(angle_small_enough)
-
-        # Avoid speeds that are too large
-        dtheta_max_safe = 1.5
-        speed_small_enough = x[:, InvertedPendulum.THETA_DOT].abs() <= dtheta_max_safe
-        safe_mask.logical_and_(speed_small_enough)
-
-        # # Also don't let angles go too negative
-        # angle_positive = x[:, InvertedPendulum.THETA] >= -0.1
-        # safe_mask.logical_and_(angle_positive)
+        safe_mask = x.norm(dim=-1) <= 0.8
 
         return safe_mask
 
@@ -175,21 +161,7 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
-
-        # Avoid angles that are too large
-        theta_min_unsafe = np.pi / 3
-        angle_too_big = x[:, InvertedPendulum.THETA].abs() >= theta_min_unsafe
-        unsafe_mask.logical_or_(angle_too_big)
-
-        # Avoid speeds that are too large
-        dtheta_min_unsafe = 1.7
-        speed_too_big = x[:, InvertedPendulum.THETA_DOT].abs() >= dtheta_min_unsafe
-        unsafe_mask.logical_or_(speed_too_big)
-
-        # # Also don't let angles go too negative
-        # angle_negative = x[:, InvertedPendulum.THETA] <= -0.15
-        # unsafe_mask.logical_or_(angle_negative)
+        unsafe_mask = x.norm(dim=-1) >= 1.2
 
         return unsafe_mask
 
@@ -210,14 +182,7 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
-
-        # Define the goal region as being near the goal
-        near_goal = x.norm(dim=-1) <= 0.2
-        goal_mask.logical_and_(near_goal)
-
-        # The goal set has to be a subset of the safe set
-        goal_mask.logical_and_(self.safe_mask(x))
+        goal_mask = x.norm(dim=-1) <= 0.3
 
         return goal_mask
 
