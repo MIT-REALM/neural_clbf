@@ -253,7 +253,8 @@ class InvertedPendulum(ControlAffineSystem):
             u_nominal: bs x self.n_controls tensor of controls
         """
         # Compute nominal control from feedback + equilibrium control
-        u_nominal = -(self.K.type_as(x) @ (x - self.goal_point.squeeze()).T).T
+        x0 = self.goal_point.squeeze().type_as(x)
+        u_nominal = -(self.K.type_as(x) @ (x - x0).T).T
         u_eq = torch.zeros_like(u_nominal)
 
         return u_nominal + u_eq
