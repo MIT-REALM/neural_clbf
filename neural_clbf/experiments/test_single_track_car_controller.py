@@ -464,7 +464,7 @@ def single_rollout_s_path(
     clbf_controller: "NeuralCLBFController",
 ) -> Tuple[str, plt.figure]:
     # Test a bunch of hyperparams if you want
-    penalties = [100, 2e6]
+    penalties = [100]
 
     simulation_dt = clbf_controller.dynamics_model.dt
     controller_period = clbf_controller.controller_period
