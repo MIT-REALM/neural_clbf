@@ -31,7 +31,7 @@ start_x = torch.tensor(
         [0.0, 0.0, 0.0, 0.0, np.pi / 6, 0.0, 0.0],
     ]
 )
-controller_period = 0.01
+controller_period = 0.001
 simulation_dt = 0.001
 
 
@@ -130,7 +130,7 @@ def main(args):
         u_nn_hidden_size=64,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_lambda=0.1,
+        clbf_lambda=5,
         clbf_relaxation_penalty=100.0,
         penalty_scheduling_rate=50.0,
         epochs_per_episode=1,

@@ -34,7 +34,7 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
         clbf_relaxation_penalty: float = 50.0,
-        gamma: float = 1.0,
+        gamma: float = 0.0,
         controller_period: float = 0.01,
         lookahead: float = 0.1,
         primal_learning_rate: float = 1e-3,
@@ -112,12 +112,12 @@ class NeuralCLBFController(pl.LightningModule):
         self.V_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.clbf_hidden_size
         )
-        self.V_layers["input_activation"] = nn.ReLU()
+        self.V_layers["input_activation"] = nn.Tanh()
         for i in range(self.clbf_hidden_layers):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
-            self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
+            self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
         self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
@@ -129,17 +129,17 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_NN_layers["input_linear"] = nn.Linear(
             self.dynamics_model.n_dims, self.u_nn_hidden_size
         )
-        self.u_NN_layers["input_activation"] = nn.ReLU()
+        self.u_NN_layers["input_activation"] = nn.Tanh()
         for i in range(self.u_nn_hidden_layers):
             self.u_NN_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_NN_layers[f"layer_{i}_activation"] = nn.ReLU()
+            self.u_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
         # No output layer, so the control saturates at [-1, 1]
         self.u_NN_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_NN_layers["output_activation"] = nn.ReLU()
+        self.u_NN_layers["output_activation"] = nn.Tanh()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
         # Also set up the objective and actuation limit constraints for the qp
@@ -328,17 +328,17 @@ class NeuralCLBFController(pl.LightningModule):
         # Start by building the cost
         Q = torch.zeros(bs, n_vars, n_vars).type_as(x)
         for j in range(n_controls):
-            Q[:, j, j] = 1.0 * self.gamma + 0.01
+            Q[:, j, j] = 1.0
         for j in range(n_controls, n_vars):
             Q[:, j, j] = relaxation_penalty + 0.01
         Q *= 2.0
         p = torch.zeros(bs, n_vars).type_as(x)
         u_nominal = self.dynamics_model.u_nominal(x)
-        p[:, :n_controls] = -2.0 * self.gamma * u_nominal
+        p[:, :n_controls] = -2.0 * u_nominal
 
         # Add cost term to minimize Vdot
         for i in range(n_scenarios):
-            p[:, :n_controls] += Lg_V[:, i, :]
+            p[:, :n_controls] += self.gamma * Lg_V[:, i, :]
 
         # Now build the inequality constraints G @ [u r]^T <= h
         G = torch.zeros(bs, 2 * n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
