@@ -96,7 +96,7 @@ class NeuralCLBFController(pl.LightningModule):
         self.x_center = (x_max + x_min) / 2.0
         self.x_range = (x_max - x_min) / 2.0
         # Scale to get the input between (-k, k), centered at 0
-        k = 10.0
+        k = 1.0
         self.x_range = self.x_range / k
 
         # Get plotting callbacks
