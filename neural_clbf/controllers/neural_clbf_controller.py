@@ -571,7 +571,9 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn = u_nn.unsqueeze(-1)
         for i, s in enumerate(self.scenarios):
             # Use these dynamics to compute the derivative of V
-            Vdot = Lf_V[:, i, :] + torch.bmm(Lg_V[:, i, :].unsqueeze(1), u_nn)
+            Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
+                Lg_V[:, i, :].unsqueeze(1), u_nn
+            )
             clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
