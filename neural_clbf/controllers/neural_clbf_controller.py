@@ -599,6 +599,13 @@ class NeuralCLBFController(pl.LightningModule):
             clbf_descent_term_lin += F.relu(eps + Vdot + self.clbf_lambda * V).mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
+        #   5.) Compare the controller to the nominal, with a loss that decreases at
+        # each epoch
+        u_nominal = self.dynamics_model.u_nominal(x)
+        dynamics_mse_loss = (u_nn - u_nominal) ** 2
+        dynamics_mse_loss = dynamics_mse_loss.mean()
+        dynamics_mse_loss /= 100 * self.current_epoch + 1
+
         return loss
 
     def training_step(self, batch, batch_idx):
