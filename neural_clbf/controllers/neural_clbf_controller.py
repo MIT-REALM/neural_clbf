@@ -601,7 +601,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         #   5.) Compare the controller to the nominal, with a loss that decreases at
         # each epoch
-        u_nominal = self.dynamics_model.u_nominal(x)
+        u_nominal = self.dynamics_model.u_nominal(x).unsqueeze(-1)
         dynamics_mse_loss = (u_nn - u_nominal) ** 2
         dynamics_mse_loss = dynamics_mse_loss.mean()
         dynamics_mse_loss /= 100 * self.current_epoch + 1
