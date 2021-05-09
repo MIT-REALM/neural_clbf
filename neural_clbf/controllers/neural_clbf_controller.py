@@ -206,7 +206,9 @@ class NeuralCLBFController(pl.LightningModule):
         # We need to initialize the Jacobian to reflect the normalization that's already
         # been done to x
         bs = x.shape[0]
-        JV = torch.zeros((bs, self.n_dims_extended, self.dynamics_model.n_dims)).type_as(x)
+        JV = torch.zeros(
+            (bs, self.n_dims_extended, self.dynamics_model.n_dims)
+        ).type_as(x)
         # and for each non-angle dimension, we need to scale by the normalization
         for dim in range(self.dynamics_model.n_dims):
             JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
@@ -461,39 +463,44 @@ class NeuralCLBFController(pl.LightningModule):
         eps = 1e-2
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        #   1.) CLBF value should be negative on the goal set.
+        # #   1.) CLBF value should be negative on the goal set.
         V = self.V(x)
-        V0 = V[goal_mask]
-        goal_region_violation = F.relu(eps + V0)
-        goal_term = goal_region_violation.mean()
+        # V0 = V[goal_mask]
+        # goal_region_violation = F.relu(eps + V0)
+        # goal_term = goal_region_violation.mean()
 
         #   1b.) CLBF should be minimized on the goal point
-        V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x)) + 1e-1
-        goal_term += (V_goal_pt ** 2).mean()
+        V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x))  # + 1e-1
+        # goal_term += (V_goal_pt ** 2).mean()
+        goal_term = (V_goal_pt ** 2).mean()
         loss.append(("CLBF goal term", goal_term))
 
-        #   2.) V <= safe_level in the safe region
-        V_safe = V[safe_mask]
-        safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
-        safe_clbf_term = safe_V_too_big.mean()
-        #   2b.) V >= 0 in the safe region minus the goal
-        safe_minus_goal_mask = torch.logical_and(
-            safe_mask, torch.logical_not(goal_mask)
-        )
-        V_safe_ex_goal = V[safe_minus_goal_mask]
-        safe_V_too_small = F.relu(eps - V_safe_ex_goal)
-        safe_clbf_term += safe_V_too_small.mean()
+        # V positive everywhere else
+        safe_clbf_term = F.relu(eps - V).mean()
         loss.append(("CLBF safe region term", safe_clbf_term))
 
-        # #   2c.) for tuning, V >= dist_to_goal in the safe region
-        # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
-        # loss.append(("CLBF tuning term", safe_tuning_term.mean()))
+        # #   2.) V <= safe_level in the safe region
+        # V_safe = V[safe_mask]
+        # safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
+        # safe_clbf_term = safe_V_too_big.mean()
+        # #   2b.) V >= 0 in the safe region minus the goal
+        # safe_minus_goal_mask = torch.logical_and(
+        #     safe_mask, torch.logical_not(goal_mask)
+        # )
+        # V_safe_ex_goal = V[safe_minus_goal_mask]
+        # safe_V_too_small = F.relu(eps - V_safe_ex_goal)
+        # safe_clbf_term += safe_V_too_small.mean()
+        # loss.append(("CLBF safe region term", safe_clbf_term))
 
-        #   3.) V >= unsafe_level in the unsafe region
-        V_unsafe = V[unsafe_mask]
-        unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
-        unsafe_clbf_term = unsafe_V_too_small.mean()
-        loss.append(("CLBF unsafe region term", unsafe_clbf_term))
+        # # #   2c.) for tuning, V >= dist_to_goal in the safe region
+        # # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
+        # # loss.append(("CLBF tuning term", safe_tuning_term.mean()))
+
+        # #   3.) V >= unsafe_level in the unsafe region
+        # V_unsafe = V[unsafe_mask]
+        # unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
+        # unsafe_clbf_term = unsafe_V_too_small.mean()
+        # loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
         # #   4.) V >= 0.5 * dist_to_goal
         # tuning_term = F.relu(eps + 0.5 * dist_to_goal - V).mean()
