@@ -104,13 +104,19 @@ class NeuralCLBFController(pl.LightningModule):
             plotting_callbacks = []
         self.plotting_callbacks = plotting_callbacks
 
+        # Some of the dimensions might represent angles. We want to replace these
+        # dimensions with two dimensions: sin and cos of the angle. To do this, we need
+        # to figure out how many numbers are in the expanded state
+        n_angles = len(self.dynamics_model.angle_dims)
+        self.n_dims_extended = self.dynamics_model.n_dims + n_angles
+
         # Define the CLBF network, which we denote V
         self.clbf_hidden_layers = clbf_hidden_layers
         self.clbf_hidden_size = clbf_hidden_size
         # We're going to build the network up layer by layer, starting with the input
         self.V_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.V_layers["input_linear"] = nn.Linear(
-            self.dynamics_model.n_dims, self.clbf_hidden_size
+            self.n_dims_extended, self.clbf_hidden_size
         )
         self.V_layers["input_activation"] = nn.Tanh()
         for i in range(self.clbf_hidden_layers):
@@ -127,7 +133,7 @@ class NeuralCLBFController(pl.LightningModule):
         # Likewise, build the network up layer by layer, starting with the input
         self.u_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.u_NN_layers["input_linear"] = nn.Linear(
-            self.dynamics_model.n_dims, self.u_nn_hidden_size
+            self.n_dims_extended, self.u_nn_hidden_size
         )
         self.u_NN_layers["input_activation"] = nn.Tanh()
         for i in range(self.u_nn_hidden_layers):
@@ -165,6 +171,24 @@ class NeuralCLBFController(pl.LightningModule):
         """
         return (x - self.x_center.type_as(x)) / self.x_range.type_as(x)
 
+    def normalize_w_angles(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize the input using the stored center point and range, and replace all
+        angles with the sine and cosine of the angles
+
+        args:
+            x: bs x self.dynamics_model.n_dims the points to normalize
+        """
+        # Scale and offset based on the center and range
+        x = self.normalize(x)
+
+        # Replace all angles with their sine, and append cosine
+        angle_dims = self.dynamics_model.angle_dims
+        angles = x[:, angle_dims]
+        x[:, angle_dims] = torch.sin(angles)
+        x = torch.cat((x, torch.cos(angles)), dim=-1)
+
+        return x
+
     def V_with_jacobian(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Computes the CLBF value and its Jacobian
 
@@ -175,17 +199,23 @@ class NeuralCLBFController(pl.LightningModule):
             JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
         # Apply the offset and range to normalize about zero
-        x = self.normalize(x)
+        x = self.normalize_w_angles(x)
 
         # Compute the CLBF layer-by-layer, computing the Jacobian alongside
 
         # We need to initialize the Jacobian to reflect the normalization that's already
         # been done to x
         bs = x.shape[0]
-        JV = torch.zeros((bs, x.shape[-1], x.shape[-1])).type_as(x)
-        # and for each dimension, we need to scale by the normalization
+        JV = torch.zeros((bs, self.n_dims_extended, self.dynamics_model.n_dims)).type_as(x)
+        # and for each non-angle dimension, we need to scale by the normalization
         for dim in range(self.dynamics_model.n_dims):
             JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
+
+        # And adjust the Jacobian for the angle dimensions
+        for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
+            cos_idx = self.dynamics_model.n_dims + offset
+            JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
+            JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
 
         # Now step through each layer in V
         V = x
@@ -465,9 +495,9 @@ class NeuralCLBFController(pl.LightningModule):
         unsafe_clbf_term = unsafe_V_too_small.mean()
         loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
-        #   4.) V >= 0.5 * dist_to_goal
-        tuning_term = F.relu(eps + 0.5 * dist_to_goal - V).mean()
-        loss.append(("CLBF tuning term", tuning_term))
+        # #   4.) V >= 0.5 * dist_to_goal
+        # tuning_term = F.relu(eps + 0.5 * dist_to_goal - V).mean()
+        # loss.append(("CLBF tuning term", tuning_term))
 
         return loss
 

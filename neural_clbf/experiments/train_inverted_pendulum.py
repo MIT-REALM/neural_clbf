@@ -19,8 +19,11 @@ from neural_clbf.systems import InvertedPendulum
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-start_x = torch.tensor([[0.5, 1.0]])
+batch_size = 64
 controller_period = 0.01
+clbf_lambda = 1.0
+
+start_x = torch.tensor([[0.5, 1.0]])
 simulation_dt = 0.001
 
 
@@ -64,7 +67,6 @@ def main(args):
         (-np.pi / 4, np.pi / 4),  # theta
         (-1.0, 1.0),  # theta_dot
     ]
-    batch_size = 64
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
@@ -103,6 +105,7 @@ def main(args):
         clbf_hidden_size=256,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=256,
+        clbf_lambda=clbf_lambda,
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_relaxation_penalty=50.0,
