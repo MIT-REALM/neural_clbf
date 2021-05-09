@@ -21,9 +21,16 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 64
 controller_period = 0.01
-clbf_lambda = 1.0
+clbf_lambda = 0.5
 
-start_x = torch.tensor([[0.5, 1.0]])
+start_x = torch.tensor(
+    [
+        [0.5, 0.5],
+        # [-0.2, 1.0],
+        # [0.2, -1.0],
+        # [-0.2, -1.0],
+    ]
+)
 simulation_dt = 0.001
 
 
@@ -31,12 +38,13 @@ def rollout_plotting_cb(clbf_net):
     return rollout_CLBF(
         clbf_net,
         start_x=start_x,
-        plot_x_indices=[InvertedPendulum.THETA, InvertedPendulum.THETA_DOT],
-        plot_x_labels=["$\\theta$", "$\\dot{\\theta}$"],
+        # plot_x_indices=[InvertedPendulum.THETA, InvertedPendulum.THETA_DOT],
+        plot_x_indices=[InvertedPendulum.THETA],
+        plot_x_labels=["$\\theta$"],
         plot_u_indices=[InvertedPendulum.U],
         plot_u_labels=["$u$"],
         t_sim=6.0,
-        n_sims_per_start=1,
+        n_sims_per_start=5,
         controller_period=controller_period,
         goal_check_fn=clbf_net.dynamics_model.goal_mask,
         out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
@@ -82,9 +90,9 @@ def main(args):
     # Define the scenarios
     scenarios = [
         nominal_params,
-        # {"m": 1.05, "L": 1.0, "b": 0.01},
-        # {"m": 1.0, "L": 1.05, "b": 0.01},
-        # {"m": 1.05, "L": 1.05, "b": 0.01},
+        {"m": 1.25, "L": 1.0, "b": 0.01},
+        {"m": 1.0, "L": 1.25, "b": 0.01},
+        {"m": 1.25, "L": 1.25, "b": 0.01},
     ]
 
     # Define the plotting callbacks
@@ -108,7 +116,8 @@ def main(args):
         clbf_lambda=clbf_lambda,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_relaxation_penalty=50.0,
+        clbf_relaxation_penalty=1e5,
+        # clbf_relaxation_penalty=2e6,
         epochs_per_episode=10,
     )
     # Add the DataModule hooks
@@ -121,7 +130,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/basic_experiments/fix_u_one_scenario",
-        name=f"basic_lyap_loss_lambda_{clbf_lambda}",
+        name=f"CLBF_loss_lambda_{clbf_lambda}",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True, track_grad_norm=2

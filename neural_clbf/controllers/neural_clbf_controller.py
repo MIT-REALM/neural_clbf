@@ -171,7 +171,7 @@ class NeuralCLBFController(pl.LightningModule):
         """
         return (x - self.x_center.type_as(x)) / self.x_range.type_as(x)
 
-    def normalize_w_angles(self, x: torch.Tensor) -> torch.Tensor:
+    def normalize_with_angles(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the input using the stored center point and range, and replace all
         angles with the sine and cosine of the angles
 
@@ -199,7 +199,7 @@ class NeuralCLBFController(pl.LightningModule):
             JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
         # Apply the offset and range to normalize about zero
-        x = self.normalize_w_angles(x)
+        x = self.normalize_with_angles(x)
 
         # Compute the CLBF layer-by-layer, computing the Jacobian alongside
 
@@ -231,6 +231,25 @@ class NeuralCLBFController(pl.LightningModule):
             elif isinstance(layer, nn.ReLU):
                 JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
 
+        # # Lol JK use lqr V
+        # P = torch.tensor([[1.1770, 0.0507], [0.0507, 0.0867]])
+        # V = (
+        #     x[:, 0] ** 2 * P[0, 0]
+        #     + 2 * x[:, 0] * x[:, 1] * P[0, 1]
+        #     + x[:, 1] ** 2 * P[1, 1]
+        # )
+        # V *= 0.5
+        # V = V.unsqueeze(-1)
+
+        # JV = torch.zeros(x.shape[0], 1, self.dynamics_model.n_dims)
+        # JV[:, 0, 0] = x[:, 0] * P[0, 0] + x[:, 1] * P[0, 1]
+        # JV[:, 0, 1] = x[:, 0] * P[0, 1] + x[:, 1] * P[1, 1]
+
+        # # Make a gradient
+        # x = self.normalize_with_angles(x)
+        # V_net = self.V_nn(x)
+        # V += 0.0000001 * V_net
+
         return V, JV
 
     def V(self, x: torch.Tensor) -> torch.Tensor:
@@ -245,22 +264,22 @@ class NeuralCLBFController(pl.LightningModule):
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                controller
         """
-        # # Apply the offset and range to normalize about zero
-        # x = self.normalize(x)
+        # Apply the offset and range to normalize about zero
+        x = self.normalize_with_angles(x)
 
-        # # Compute the control effort using the neural network
-        # u = self.u_NN(x)
+        # Compute the control effort using the neural network
+        u = self.u_NN(x)
 
-        # # Scale to reflect plant actuator limits
-        # upper_lim, lower_lim = self.dynamics_model.control_limits
-        # u_center = (upper_lim + lower_lim).type_as(x) / 2.0
-        # u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
+        # Scale to reflect plant actuator limits
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
+        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
 
-        # u_scaled = u * u_semi_range + u_center
+        u_scaled = u * u_semi_range + u_center
 
-        # For now, set u to u_nominal to test V learning
-        # TODO @dawsonc, not permanent
-        u_scaled = self.dynamics_model.u_nominal(x)
+        # # For now, set u to u_nominal to test V learning
+        # # TODO @dawsonc, not permanent
+        # u_scaled = self.dynamics_model.u_nominal(x)
 
         return u_scaled
 
@@ -358,7 +377,11 @@ class NeuralCLBFController(pl.LightningModule):
         # We can optionally add the user-specified inequality constraints as G_u
         n_controls = self.dynamics_model.n_controls
         n_scenarios = self.n_scenarios
-        n_vars = n_controls + n_scenarios
+        if relaxation_penalty < 1e6:
+            n_vars = n_controls + n_scenarios
+        else:
+            n_vars = n_controls
+
         bs = x.shape[0]
 
         # Start by building the cost
@@ -370,41 +393,43 @@ class NeuralCLBFController(pl.LightningModule):
         Q *= 2.0
         p = torch.zeros(bs, n_vars).type_as(x)
         u_nominal = self.dynamics_model.u_nominal(x)
-        p[:, :n_controls] = -2.0 * u_nominal
+        # p[:, :n_controls] = -2.0 * u_nominal
 
         # Add cost term to minimize Vdot
         for i in range(n_scenarios):
             p[:, :n_controls] += self.gamma * Lg_V[:, i, :]
 
         # Now build the inequality constraints G @ [u r]^T <= h
-        G = torch.zeros(bs, 2 * n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
-        h = torch.zeros(bs, 2 * n_scenarios + self.h_u.shape[0], 1).type_as(x)
-        # CLBF decrease condition in each scenario
-        for i in range(n_scenarios):
-            G[:, i, :n_controls] = Lg_V[:, i, :]
-            G[:, i, n_controls + i] = -1
-            h[:, i, :] = -Lf_V[:, i, :] - self.clbf_lambda * V
-        # Positive relaxation
-        for i in range(n_scenarios):
-            G[:, n_scenarios + i, n_controls + i] = -1
-            h[:, n_scenarios + i, 0] = 0.0
-        # Actuation limits
-        G[:, 2 * n_scenarios :, :n_controls] = self.G_u.type_as(x)
-        h[:, 2 * n_scenarios :, 0] = self.h_u.view(1, -1).type_as(x)
-        h = h.squeeze()
-        # Only add equality constraints (relaxation = 0) if the relaxation penalty
-        # is greater than 10^6
         if self.clbf_relaxation_penalty < 1e6:
-            A = torch.tensor([])
-            b = torch.tensor([])
-        else:
-            A = torch.zeros(bs, n_scenarios, n_vars).type_as(x)
-            b = torch.zeros(bs, n_scenarios, 1).type_as(x)
+            G = torch.zeros(bs, 2 * n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
+            h = torch.zeros(bs, 2 * n_scenarios + self.h_u.shape[0], 1).type_as(x)
+            # CLBF decrease condition in each scenario
             for i in range(n_scenarios):
-                A[:, i, n_controls + i] = 1.0
+                G[:, i, :n_controls] = Lg_V[:, i, :]
+                G[:, i, n_controls + i] = -1
+                h[:, i, :] = -Lf_V[:, i, :] - self.clbf_lambda * V
+            # Positive relaxation
+            for i in range(n_scenarios):
+                G[:, n_scenarios + i, n_controls + i] = -1
+                h[:, n_scenarios + i, 0] = 0.0
+            # Actuation limits
+            G[:, 2 * n_scenarios :, :n_controls] = self.G_u.type_as(x)
+            h[:, 2 * n_scenarios :, 0] = self.h_u.view(1, -1).type_as(x)
+            h = h.squeeze()
+        else:
+            G = torch.zeros(bs, n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
+            h = torch.zeros(bs, n_scenarios + self.h_u.shape[0], 1).type_as(x)
+            # CLBF decrease condition in each scenario
+            for i in range(n_scenarios):
+                G[:, i, :n_controls] = Lg_V[:, i, :]
+                h[:, i, :] = -Lf_V[:, i, :] - self.clbf_lambda * V
+            # Actuation limits
+            G[:, n_scenarios:, :n_controls] = self.G_u.type_as(x)
+            h[:, n_scenarios:, 0] = self.h_u.view(1, -1).type_as(x)
+            h = h.squeeze()
 
-            A = A.double()
-            b = b.double().squeeze()
+        A = torch.tensor([])
+        b = torch.tensor([])
 
         # Convert to double precision for solving
         Q = Q.double()
@@ -413,7 +438,9 @@ class NeuralCLBFController(pl.LightningModule):
         h = h.double()
 
         # Solve the QP!
-        result: torch.Tensor = QPFunction(verbose=False)(Q, p, G, h, A, b)
+        result: torch.Tensor = QPFunction(verbose=False, notImprovedLim=100)(
+            Q, p, G, h, A, b
+        )
         # Extract the results
         u = result[:, :n_controls]
         r = result[:, n_controls:]
@@ -465,42 +492,37 @@ class NeuralCLBFController(pl.LightningModule):
         loss = []
         # #   1.) CLBF value should be negative on the goal set.
         V = self.V(x)
-        # V0 = V[goal_mask]
-        # goal_region_violation = F.relu(eps + V0)
-        # goal_term = goal_region_violation.mean()
+        V0 = V[goal_mask]
+        goal_region_violation = F.relu(eps + V0)
+        goal_term = goal_region_violation.mean()
 
         #   1b.) CLBF should be minimized on the goal point
-        V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x))  # + 1e-1
-        # goal_term += (V_goal_pt ** 2).mean()
-        goal_term = (V_goal_pt ** 2).mean()
+        V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x)) + 1e-1
+        goal_term += (V_goal_pt ** 2).mean()
         loss.append(("CLBF goal term", goal_term))
 
-        # V positive everywhere else
-        safe_clbf_term = F.relu(eps - V).mean()
+        #   2.) V <= safe_level in the safe region
+        V_safe = V[safe_mask]
+        safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
+        safe_clbf_term = safe_V_too_big.mean()
+        #   2b.) V >= 0 in the safe region minus the goal
+        safe_minus_goal_mask = torch.logical_and(
+            safe_mask, torch.logical_not(goal_mask)
+        )
+        V_safe_ex_goal = V[safe_minus_goal_mask]
+        safe_V_too_small = F.relu(eps - V_safe_ex_goal)
+        safe_clbf_term += safe_V_too_small.mean()
         loss.append(("CLBF safe region term", safe_clbf_term))
-
-        # #   2.) V <= safe_level in the safe region
-        # V_safe = V[safe_mask]
-        # safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
-        # safe_clbf_term = safe_V_too_big.mean()
-        # #   2b.) V >= 0 in the safe region minus the goal
-        # safe_minus_goal_mask = torch.logical_and(
-        #     safe_mask, torch.logical_not(goal_mask)
-        # )
-        # V_safe_ex_goal = V[safe_minus_goal_mask]
-        # safe_V_too_small = F.relu(eps - V_safe_ex_goal)
-        # safe_clbf_term += safe_V_too_small.mean()
-        # loss.append(("CLBF safe region term", safe_clbf_term))
 
         # # #   2c.) for tuning, V >= dist_to_goal in the safe region
         # # safe_tuning_term = F.relu(eps + dist_to_goal[safe_mask] - V_safe)
         # # loss.append(("CLBF tuning term", safe_tuning_term.mean()))
 
-        # #   3.) V >= unsafe_level in the unsafe region
-        # V_unsafe = V[unsafe_mask]
-        # unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
-        # unsafe_clbf_term = unsafe_V_too_small.mean()
-        # loss.append(("CLBF unsafe region term", unsafe_clbf_term))
+        #   3.) V >= unsafe_level in the unsafe region
+        V_unsafe = V[unsafe_mask]
+        unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
+        unsafe_clbf_term = unsafe_V_too_small.mean()
+        loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
         # #   4.) V >= 0.5 * dist_to_goal
         # tuning_term = F.relu(eps + 0.5 * dist_to_goal - V).mean()
@@ -691,14 +713,14 @@ class NeuralCLBFController(pl.LightningModule):
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of every validation epoch, using arbitrary plotting callbacks!
 
-        # Figure out the relaxation penalty for this rollout
-        relaxation_penalty = (
-            self.clbf_relaxation_penalty
-            * self.current_epoch
-            / self.penalty_scheduling_rate
-        )
-        old_relaxation_penalty = self.clbf_relaxation_penalty
-        self.clbf_relaxation_penalty = relaxation_penalty
+        # # Figure out the relaxation penalty for this rollout
+        # relaxation_penalty = (
+        #     self.clbf_relaxation_penalty
+        #     * self.current_epoch
+        #     / self.penalty_scheduling_rate
+        # )
+        # old_relaxation_penalty = self.clbf_relaxation_penalty
+        # self.clbf_relaxation_penalty = relaxation_penalty
 
         plots = []
         for plot_fn in self.plotting_callbacks:
@@ -711,8 +733,8 @@ class NeuralCLBFController(pl.LightningModule):
         self.logger.experiment.flush()
         [plt.close(plot) for plot in plots]
 
-        # Restore the nominal relaxation penalty
-        self.clbf_relaxation_penalty = old_relaxation_penalty
+        # # Restore the nominal relaxation penalty
+        # self.clbf_relaxation_penalty = old_relaxation_penalty
 
     @pl.core.decorators.auto_move_data
     def simulator_fn(
