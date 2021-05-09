@@ -102,7 +102,7 @@ def test_V_lie_derivatives():
     Vdot = Lf_V + torch.bmm(Lg_V, u.unsqueeze(-1))
 
     # To validate the Lie derivatives, simulate V forward and approximate the derivative
-    delta_t = 0.001
+    delta_t = 0.0001
     V_now = controller.V(x)
     xdot = system.closed_loop_dynamics(x, u)
     x_next = x + xdot * delta_t
