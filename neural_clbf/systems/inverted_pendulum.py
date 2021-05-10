@@ -256,5 +256,15 @@ class InvertedPendulum(ControlAffineSystem):
         x0 = self.goal_point.squeeze().type_as(x)
         u_nominal = -(self.K.type_as(x) @ (x - x0).T).T
         u_eq = torch.zeros_like(u_nominal)
+        u = u_nominal + u_eq
+
+        # Clamp given the control limits
+        upper_u_lim, lower_u_lim = self.control_limits
+        for dim_idx in range(self.n_controls):
+            u[:, dim_idx] = torch.clamp(
+                u[:, dim_idx],
+                min=lower_u_lim[dim_idx].item(),
+                max=upper_u_lim[dim_idx].item(),
+            )
 
         return u_nominal + u_eq
