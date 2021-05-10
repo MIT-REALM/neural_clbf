@@ -130,7 +130,7 @@ class STCar(ControlAffineSystem):
 
     @property
     def angle_dims(self) -> List[int]:
-        return [STCar.DELTA]
+        return [STCar.DELTA, STCar.BETA]
 
     @property
     def n_controls(self) -> int:
