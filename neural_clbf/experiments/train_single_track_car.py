@@ -100,6 +100,7 @@ def main(args):
     # Define the scenarios
     scenarios = []
     omega_ref_vals = [-0.5, 0.5]
+    omega_ref_vals = [0.0]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
@@ -145,7 +146,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/stcar/",
-        name="proof_controller",
+        name="proof_controller/one_scenario",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
