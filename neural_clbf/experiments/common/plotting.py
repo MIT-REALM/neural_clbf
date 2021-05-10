@@ -62,6 +62,7 @@ def plot_CLBF(
     # Set up tensors to store the results
     V_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     # V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    zone_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
 
     # If the default state is not provided, use zeros
     if (
@@ -84,6 +85,12 @@ def plot_CLBF(
 
             # Get the value of the CLBF
             V_grid[j, i] = clbf_net.V(x)
+
+            # Get the goal (-1) or unsafe (1) classification
+            if clbf_net.dynamics_model.goal_mask(x).all():
+                zone_grid[j, i] = -1
+            elif clbf_net.dynamics_model.unsafe_mask(x).all():
+                zone_grid[j, i] = 1
 
             # # Try to get the control input; if it fails, default to zero
             # try:
@@ -109,9 +116,9 @@ def plot_CLBF(
     axs.contour(
         x_vals.cpu(),
         y_vals.cpu(),
-        V_grid.cpu(),
+        zone_grid.cpu(),
         colors=["green"],
-        levels=[safe_level],  # type: ignore
+        levels=[0.5],  # type: ignore
     )
     # And unsafe levels
     unsafe_level = clbf_net.unsafe_level
@@ -135,7 +142,7 @@ def plot_CLBF(
     axs.set_xlabel(x_axis_label)
     axs.set_ylabel(y_axis_label)
     axs.set_title("$V$")
-    axs.plot([], [], c="green", label=f"Safe V={safe_level}")  # type: ignore
+    axs.plot([], [], c="green", label="Unsafe set")  # type: ignore
     axs.plot(
         [],
         [],
