@@ -267,4 +267,4 @@ class InvertedPendulum(ControlAffineSystem):
                 max=upper_u_lim[dim_idx].item(),
             )
 
-        return u_nominal + u_eq
+        return u
