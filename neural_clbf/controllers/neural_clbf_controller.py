@@ -775,12 +775,13 @@ class NeuralCLBFController(pl.LightningModule):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
-            # Figure out the relaxation penalty for this rollout
-            relaxation_penalty = (
-                self.clbf_relaxation_penalty
-                * self.current_epoch
-                / self.penalty_scheduling_rate
-            )
+            # # Figure out the relaxation penalty for this rollout
+            # relaxation_penalty = (
+            #     self.clbf_relaxation_penalty
+            #     * self.current_epoch
+            #     / self.penalty_scheduling_rate
+            # )
+            relaxation_penalty = self.clbf_relaxation_penalty
 
             # Use the models simulation function with this controller
             def simulator_fn_wrapper(x_init: torch.Tensor, num_steps: int):

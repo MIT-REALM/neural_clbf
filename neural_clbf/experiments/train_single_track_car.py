@@ -31,7 +31,7 @@ start_x = torch.tensor(
         [0.0, 0.0, 0.0, 0.0, np.pi / 6, 0.0, 0.0],
     ]
 )
-controller_period = 0.001
+controller_period = 0.01
 simulation_dt = 0.001
 
 
@@ -44,7 +44,7 @@ def rollout_plotting_cb(clbf_net):
         plot_u_indices=[STCar.VDELTA, STCar.ALONG],
         plot_u_labels=["$v_\\delta$", "$a_{long}$"],
         t_sim=6.0,
-        n_sims_per_start=1,
+        n_sims_per_start=5,
         controller_period=controller_period,
         goal_check_fn=clbf_net.dynamics_model.goal_mask,
         out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
@@ -54,7 +54,7 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
+        domain=[(-1.0, 1.0), (-1.0, 1.0)],
         n_grid=50,
         x_axis_index=STCar.SXE,
         y_axis_index=STCar.SYE,
@@ -90,11 +90,11 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=10,
         trajectory_length=1000,
-        fixed_samples=90000,
+        fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "boundary": 0.2, "unsafe": 0.2, "goal": 0.2},
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
     )
 
     # Define the scenarios
@@ -124,16 +124,15 @@ def main(args):
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=3,
-        clbf_hidden_size=64,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=64,
+        clbf_hidden_layers=2,
+        clbf_hidden_size=256,
+        u_nn_hidden_layers=2,
+        u_nn_hidden_size=256,
+        clbf_lambda=0.1,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_lambda=5,
-        clbf_relaxation_penalty=100.0,
-        penalty_scheduling_rate=50.0,
-        epochs_per_episode=1,
+        clbf_relaxation_penalty=1e5,
+        epochs_per_episode=10,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
@@ -145,7 +144,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/stcar/",
-        name="qp_in_loop",
+        name="proof_controller",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
