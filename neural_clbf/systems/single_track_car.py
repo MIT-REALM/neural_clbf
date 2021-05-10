@@ -52,7 +52,7 @@ class STCar(ControlAffineSystem):
     DELTA = 2
     VE = 3
     PSI_E = 4
-    PSI_DOT = 5
+    PSI_E_DOT = 5
     BETA = 6
     # Control indices
     VDELTA = 0
@@ -149,7 +149,7 @@ class STCar(ControlAffineSystem):
         upper_limit[STCar.DELTA] = self.car_params.steering.max
         upper_limit[STCar.VE] = 1.0
         upper_limit[STCar.PSI_E] = np.pi / 2
-        upper_limit[STCar.PSI_DOT] = 1.0
+        upper_limit[STCar.PSI_E_DOT] = np.pi / 2
         upper_limit[STCar.BETA] = np.pi / 3
 
         lower_limit = -1.0 * upper_limit
@@ -189,15 +189,16 @@ class STCar(ControlAffineSystem):
 
         # Avoid tracking errors that are too large
         max_safe_tracking_error = 0.35
-        tracking_error = x[
-            :,
-            [
-                STCar.SXE,
-                STCar.SYE,
-                STCar.VE,
-                STCar.PSI_E,
-            ],
-        ]
+        # tracking_error = x[
+        #     :,
+        #     [
+        #         STCar.SXE,
+        #         STCar.SYE,
+        #         STCar.VE,
+        #         STCar.PSI_E,
+        #     ],
+        # ]
+        tracking_error = x
         tracking_error_small_enough = (
             tracking_error.norm(dim=-1) <= max_safe_tracking_error
         )
@@ -216,15 +217,16 @@ class STCar(ControlAffineSystem):
         # Avoid angles that are too large
         # Avoid tracking errors that are too large
         max_safe_tracking_error = 0.5
-        tracking_error = x[
-            :,
-            [
-                STCar.SXE,
-                STCar.SYE,
-                STCar.VE,
-                STCar.PSI_E,
-            ],
-        ]
+        # tracking_error = x[
+        #     :,
+        #     [
+        #         STCar.SXE,
+        #         STCar.SYE,
+        #         STCar.VE,
+        #         STCar.PSI_E,
+        #     ],
+        # ]
+        tracking_error = x
         tracking_error_too_big = tracking_error.norm(dim=-1) >= max_safe_tracking_error
         unsafe_mask.logical_or_(tracking_error_too_big)
 
@@ -250,15 +252,16 @@ class STCar(ControlAffineSystem):
         goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Define the goal region as being near the goal
-        tracking_error = x[
-            :,
-            [
-                STCar.SXE,
-                STCar.SYE,
-                STCar.VE,
-                STCar.PSI_E,
-            ],
-        ]
+        # tracking_error = x[
+        #     :,
+        #     [
+        #         STCar.SXE,
+        #         STCar.SYE,
+        #         STCar.VE,
+        #         STCar.PSI_E,
+        #     ],
+        # ]
+        tracking_error = x
         near_goal = tracking_error.norm(dim=-1) <= 0.25
         goal_mask.logical_and_(near_goal)
 
@@ -291,7 +294,8 @@ class STCar(ControlAffineSystem):
         # Extract the state variables and adjust for the reference
         v = x[:, STCar.VE] + v_ref
         psi_e = x[:, STCar.PSI_E]
-        psi_dot = x[:, STCar.PSI_DOT]
+        psi_e_dot = x[:, STCar.PSI_E_DOT]
+        psi_dot = psi_e_dot + omega_ref
         beta = x[:, STCar.BETA]
         delta = x[:, STCar.DELTA]
         sxe = x[:, STCar.SXE]
@@ -318,9 +322,9 @@ class STCar(ControlAffineSystem):
         f[:, STCar.SYE, 0] = dsye_r
         f[:, STCar.VE, 0] = -a_ref
         f[:, STCar.DELTA, 0] = 0.0
-        f[:, STCar.PSI_E, 0] = psi_dot - omega_ref
+        f[:, STCar.PSI_E, 0] = psi_e_dot
         # Sorry this is a mess (it's ported from the commonroad models)
-        f[:, STCar.PSI_DOT, 0] = (
+        f[:, STCar.PSI_E_DOT, 0] = (
             -(mu * m / (v * Iz * (lr + lf)))
             * (lf ** 2 * C_Sf * g * lr + lr ** 2 * C_Sr * g * lf)
             * psi_dot
@@ -359,10 +363,12 @@ class STCar(ControlAffineSystem):
 
         # Extract the parameters
         v_ref = torch.tensor(params["v_ref"])
+        omega_ref = torch.tensor(params["omega_ref"])
 
         # Extract the state variables and adjust for the reference
         v = x[:, STCar.VE] + v_ref
-        psi_dot = x[:, STCar.PSI_DOT]
+        psi_e_dot = x[:, STCar.PSI_E_DOT]
+        psi_dot = psi_e_dot + omega_ref
         beta = x[:, STCar.BETA]
         delta = x[:, STCar.DELTA]
 
@@ -379,7 +385,7 @@ class STCar(ControlAffineSystem):
         g[:, STCar.DELTA, STCar.VDELTA] = 1.0
         g[:, STCar.VE, STCar.ALONG] = 1.0
 
-        g[:, STCar.PSI_DOT, STCar.ALONG] = (
+        g[:, STCar.PSI_E_DOT, STCar.ALONG] = (
             -(mu * m / (v * Iz * (lr + lf)))
             * (-(lf ** 2) * C_Sf * h + lr ** 2 * C_Sr * h)
             * psi_dot
@@ -423,9 +429,10 @@ class STCar(ControlAffineSystem):
 
         # Linearize the system about the path
         x0 = self.goal_point
-        x0[0, STCar.PSI_DOT] = params["omega_ref"]
+        x0[0, STCar.PSI_E_DOT] = params["omega_ref"]
         x0[0, STCar.DELTA] = (
             (lf ** 2 * C_Sf * g * lr + lr ** 2 * C_Sr * g * lf)
+            / (lf * C_Sf * g * lr)
             * params["omega_ref"]
             / params["v_ref"]
         )
@@ -439,20 +446,20 @@ class STCar(ControlAffineSystem):
         A[STCar.SYE, STCar.PSI_E] = params["v_ref"]
         A[STCar.SYE, STCar.BETA] = params["v_ref"]
 
-        A[STCar.PSI_E, STCar.PSI_DOT] = 1.0
+        A[STCar.PSI_E, STCar.PSI_E_DOT] = 1.0
 
-        A[STCar.PSI_DOT, STCar.VE] = (
+        A[STCar.PSI_E_DOT, STCar.VE] = (
             (mu * m / (params["v_ref"] ** 2 * Iz * (lr + lf)))
             * (lf ** 2 * C_Sf * g * lr + lr ** 2 * C_Sr * g * lf)
             * params["omega_ref"]
         )
-        A[STCar.PSI_DOT, STCar.PSI_DOT] = -(
+        A[STCar.PSI_E_DOT, STCar.PSI_E_DOT] = -(
             mu * m / (params["v_ref"] * Iz * (lr + lf))
         ) * (lf ** 2 * C_Sf * g * lr + lr ** 2 * C_Sr * g * lf)
-        A[STCar.PSI_DOT, STCar.BETA] = +(mu * m / (Iz * (lr + lf))) * (
+        A[STCar.PSI_E_DOT, STCar.BETA] = +(mu * m / (Iz * (lr + lf))) * (
             lr * C_Sr * g * lf - lf * C_Sf * g * lr
         )
-        A[STCar.PSI_DOT, STCar.DELTA] = (mu * m / (Iz * (lr + lf))) * (
+        A[STCar.PSI_E_DOT, STCar.DELTA] = (mu * m / (Iz * (lr + lf))) * (
             lf * C_Sf * g * lr
         )
 
@@ -466,7 +473,7 @@ class STCar(ControlAffineSystem):
             * (C_Sf * g * lr)
             * x0[0, STCar.DELTA]
         )
-        A[STCar.BETA, STCar.PSI_DOT] = (mu / (params["v_ref"] ** 2 * (lr + lf))) * (
+        A[STCar.BETA, STCar.PSI_E_DOT] = (mu / (params["v_ref"] ** 2 * (lr + lf))) * (
             C_Sr * g * lf * lr - C_Sf * g * lr * lf
         ) - 1
         A[STCar.BETA, STCar.BETA] = -(mu / (params["v_ref"] * (lr + lf))) * (
