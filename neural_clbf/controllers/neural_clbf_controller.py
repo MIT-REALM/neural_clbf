@@ -727,7 +727,7 @@ class NeuralCLBFController(pl.LightningModule):
         #     * self.current_epoch
         #     / self.penalty_scheduling_rate
         # )
-        # old_relaxation_penalty = self.clbf_relaxation_penalty
+        old_relaxation_penalty = self.clbf_relaxation_penalty
         # self.clbf_relaxation_penalty = relaxation_penalty
 
         plots = []
@@ -741,8 +741,9 @@ class NeuralCLBFController(pl.LightningModule):
         self.logger.experiment.flush()
         [plt.close(plot) for plot in plots]
 
-        # # Restore the nominal relaxation penalty
-        # self.clbf_relaxation_penalty = old_relaxation_penalty
+        # Restore the nominal relaxation penalty in case any plotting callbacks
+        # do parameter sweeps
+        self.clbf_relaxation_penalty = old_relaxation_penalty
 
     @pl.core.decorators.auto_move_data
     def simulator_fn(
