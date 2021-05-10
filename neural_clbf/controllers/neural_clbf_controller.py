@@ -40,6 +40,7 @@ class NeuralCLBFController(pl.LightningModule):
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
         penalty_scheduling_rate: float = 100.0,
+        num_controller_init_epochs: int = 1,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
         ] = None,
@@ -64,6 +65,8 @@ class NeuralCLBFController(pl.LightningModule):
             epochs_per_episode: the number of epochs to include in each episode
             penalty_scheduling_rate: the rate at which to ramp the rollout relaxation
                                      penalty up to clbf_relaxation_penalty
+            num_controller_init_epochs: the number of epochs to train the controller
+                                        network to match nominal
             plotting_callbacks: a list of plotting functions that each take a
                                 NeuralCLBFController and return a tuple of a string
                                 name and figure object to log
@@ -90,6 +93,7 @@ class NeuralCLBFController(pl.LightningModule):
         self.primal_learning_rate = primal_learning_rate
         self.epochs_per_episode = epochs_per_episode
         self.penalty_scheduling_rate = penalty_scheduling_rate
+        self.num_controller_init_epochs = num_controller_init_epochs
 
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
@@ -604,8 +608,9 @@ class NeuralCLBFController(pl.LightningModule):
         u_nominal = self.dynamics_model.u_nominal(x).unsqueeze(-1)
         dynamics_mse_loss = (u_nn - u_nominal) ** 2
         dynamics_mse_loss = dynamics_mse_loss.mean()
-        dynamics_mse_loss /= 100 * self.current_epoch + 1
-        loss.append(("Dynamics MSE", dynamics_mse_loss))
+        epoch_cutoff = max(self.current_epoch - self.num_controller_init_epochs, 0)
+        dynamics_mse_loss /= 100 * epoch_cutoff + 1
+        loss.append(("Controller MSE", dynamics_mse_loss))
 
         return loss
 
