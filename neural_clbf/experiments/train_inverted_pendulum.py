@@ -129,11 +129,11 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/basic_experiments/learn_u_multiple_scenarios",
-        name=f"CLBF_loss_lambda_{clbf_lambda}",
+        "logs/basic_experiments/restricted_decrease",
+        name="mean",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True, track_grad_norm=2
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True
     )
 
     # Train
