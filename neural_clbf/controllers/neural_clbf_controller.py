@@ -498,9 +498,7 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         V0 = V[goal_mask]
         goal_region_violation = F.relu(eps + V0)
-        goal_term = (
-            goal_region_violation.mean() + (goal_region_violation > 0).float().mean()
-        )
+        goal_term = goal_region_violation.mean()
 
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x)) + 1e-1
@@ -510,24 +508,20 @@ class NeuralCLBFController(pl.LightningModule):
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
         safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
-        safe_clbf_term = safe_V_too_big.mean() + (safe_V_too_big > 0).float().mean()
+        safe_clbf_term = safe_V_too_big.mean()
         #   2b.) V >= 0 in the safe region minus the goal
         safe_minus_goal_mask = torch.logical_and(
             safe_mask, torch.logical_not(goal_mask)
         )
         V_safe_ex_goal = V[safe_minus_goal_mask]
         safe_V_too_small = F.relu(eps - V_safe_ex_goal)
-        safe_clbf_term += (
-            safe_V_too_small.mean() + (safe_V_too_small > 0).float().mean()
-        )
+        safe_clbf_term += safe_V_too_small.mean()
         loss.append(("CLBF safe region term", safe_clbf_term))
 
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
         unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
-        unsafe_clbf_term = (
-            unsafe_V_too_small.mean() + (unsafe_V_too_small > 0).float().mean()
-        )
+        unsafe_clbf_term = unsafe_V_too_small.mean()
         loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
         return loss
@@ -561,27 +555,24 @@ class NeuralCLBFController(pl.LightningModule):
 
         # First figure out where this condition needs to hold
         V = self.V(x)
-        condition_active = V <= self.safe_level
-        condition_active = condition_active.squeeze()
-        x_active = x[condition_active]
+        condition_active = F.relu(self.safe_level - V)
 
         # Now compute the decrease in that region, using the proof controller
         clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
         # Get the current value of the CLBF and its Lie derivatives
         # (Lie derivatives are computed using a linear fit of the dynamics)
         # TODO @dawsonc do we need dynamics learning here?
-        Lf_V, Lg_V = self.V_lie_derivatives(x_active)
+        Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
         u_nn = self.u(x)
         u_nn = u_nn.unsqueeze(-1)
-        u_nn_active = u_nn[condition_active]
         for i, s in enumerate(self.scenarios):
             # Use these dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
-                Lg_V[:, i, :].unsqueeze(1), u_nn_active
+                Lg_V[:, i, :].unsqueeze(1), u_nn
             )
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V[condition_active])
-            clbf_descent_term_lin += violation.mean() + (violation > 0).float().mean()
+            violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
+            clbf_descent_term_lin += violation.mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
         # #   1.) A term to encourage satisfaction of the CLBF decrease condition,

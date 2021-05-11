@@ -129,8 +129,8 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/basic_experiments/restricted_decrease",
-        name="mean_plus_count",
+        "logs/basic_experiments/restricted_decrease_relu",
+        name="mean",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
