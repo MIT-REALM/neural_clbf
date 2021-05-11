@@ -498,30 +498,30 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         V0 = V[goal_mask]
         goal_region_violation = F.relu(eps + V0)
-        goal_term = goal_region_violation.sum()
+        goal_term = goal_region_violation[goal_region_violation > 0].mean()
 
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x)) + 1e-1
-        goal_term += (V_goal_pt ** 2).sum()
+        goal_term += (V_goal_pt ** 2).mean()
         loss.append(("CLBF goal term", goal_term))
 
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
         safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
-        safe_clbf_term = safe_V_too_big.sum()
+        safe_clbf_term = safe_V_too_big[safe_V_too_big > 0].mean()
         #   2b.) V >= 0 in the safe region minus the goal
         safe_minus_goal_mask = torch.logical_and(
             safe_mask, torch.logical_not(goal_mask)
         )
         V_safe_ex_goal = V[safe_minus_goal_mask]
         safe_V_too_small = F.relu(eps - V_safe_ex_goal)
-        safe_clbf_term += safe_V_too_small.sum()
+        safe_clbf_term += safe_V_too_small[safe_V_too_small > 0].mean()
         loss.append(("CLBF safe region term", safe_clbf_term))
 
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
         unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
-        unsafe_clbf_term = unsafe_V_too_small.sum()
+        unsafe_clbf_term = unsafe_V_too_small[unsafe_V_too_small > 0].mean()
         loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
         return loss
@@ -574,9 +574,8 @@ class NeuralCLBFController(pl.LightningModule):
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1), u_nn_active
             )
-            clbf_descent_term_lin += F.relu(
-                eps + Vdot + self.clbf_lambda * V[condition_active]
-            ).sum()
+            violation = F.relu(eps + Vdot + self.clbf_lambda * V[condition_active])
+            clbf_descent_term_lin += violation[violation > 0].mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
         # #   1.) A term to encourage satisfaction of the CLBF decrease condition,
