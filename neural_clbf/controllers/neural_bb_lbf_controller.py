@@ -494,8 +494,8 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         u_nominal = self.dynamics_model.u_nominal(x)
         control_mse_loss = (u_nn - u_nominal) ** 2
         control_mse_loss = control_mse_loss.mean()
-        epoch_cutoff = max(self.current_epoch - self.num_controller_init_epochs, 0)
-        control_mse_loss /= 100 * epoch_cutoff + 1
+        epoch_cutoff = max(self.num_controller_init_epochs - self.current_epoch, 0)
+        control_mse_loss *= epoch_cutoff
         loss.append(("Controller MSE", control_mse_loss))
 
         return loss
@@ -612,6 +612,12 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         )
         component_losses.update(
             self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(
+            self.controller_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(
+            self.dynamics_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
         )
 
         # Compute the overall loss by summing up the individual losses
