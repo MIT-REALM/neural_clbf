@@ -629,24 +629,11 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         self,
         x_init: torch.Tensor,
         num_steps: int,
-        use_qp: bool = True,
-        relaxation_penalty: Optional[float] = None,
     ):
-        if use_qp:
-
-            def controller_fn(x):
-                u, _, _ = self.solve_CLBF_QP(x, relaxation_penalty)
-                return u
-
-        else:
-
-            def controller_fn(x):
-                return self.u(x)
-
         return self.dynamics_model.simulate(
             x_init,
             num_steps,
-            controller_fn,
+            self.u,
             guard=self.dynamics_model.out_of_bounds_mask,
             controller_period=self.controller_period,
         )
@@ -655,21 +642,11 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
-            # # Figure out the relaxation penalty for this rollout
-            # relaxation_penalty = (
-            #     self.clbf_relaxation_penalty
-            #     * self.current_epoch
-            #     / self.penalty_scheduling_rate
-            # )
-            relaxation_penalty = self.clbf_relaxation_penalty
-
             # Use the models simulation function with this controller
             def simulator_fn_wrapper(x_init: torch.Tensor, num_steps: int):
                 return self.simulator_fn(
                     x_init,
                     num_steps,
-                    use_qp=True,
-                    relaxation_penalty=relaxation_penalty,
                 )
 
             self.datamodule.add_data(simulator_fn_wrapper)
