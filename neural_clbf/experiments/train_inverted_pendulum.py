@@ -72,15 +72,16 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-np.pi / 4, np.pi / 4),  # theta
+        (-np.pi / 2, np.pi / 2),  # theta
         (-1.0, 1.0),  # theta_dot
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=10,
+        trajectories_per_episode=20,
         trajectory_length=1000,
-        fixed_samples=10000,
+        # fixed_samples=10000,
+        fixed_samples=0,
         max_points=100000,
         val_split=0.1,
         batch_size=batch_size,
@@ -129,8 +130,8 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/basic_experiments/restricted_decrease_relu",
-        name="mean",
+        "logs/basic_experiments",
+        name="sim_only",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
