@@ -388,7 +388,7 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
         """
-        beta = 1.0
+        beta = 20.0
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
         # #   1.) LBF value should be negative on the goal set.
@@ -445,7 +445,7 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        beta = 1.0
+        beta = 20.0
 
         #   1.) A term to encourage satisfaction of the LBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
