@@ -4,15 +4,15 @@ import random
 
 from torch.autograd.functional import jacobian
 
-from neural_clbf.controllers.neural_clbf_controller import (
-    NeuralCLBFController,
+from neural_clbf.controllers.neural_bb_lbf_controller import (
+    NeuralBlackBoxLBFController,
 )
 from neural_clbf.systems.tests.mock_system import MockSystem
 from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
 
 
 def test_init_neuralrclbfcontroller():
-    """Test the initialization of a NeuralCLBFController"""
+    """Test the initialization of a NeuralBlackBoxLBFController"""
     # Define the model system
     params = {}
     system = MockSystem(params)
@@ -23,10 +23,18 @@ def test_init_neuralrclbfcontroller():
     ]
     dm = EpisodicDataModule(system, initial_domain)
 
-    # Instantiate with a list of only one scenarios
-    scenarios = [params]
-    controller = NeuralCLBFController(system, scenarios, dm)
+    # Instantiate the controller
+    controller = NeuralBlackBoxLBFController(system, dm)
     assert controller is not None
+
+    # Make sure the neural nets are the right size
+    n_dims_extended = system.n_dims + len(system.angle_dims)
+    assert controller.V_nn[0].in_features == n_dims_extended
+    assert controller.V_nn[-1].out_features == 1
+    assert controller.u_nn[0].in_features == n_dims_extended
+    assert controller.u_nn[-2].out_features == system.n_controls
+    assert controller.f_nn[0].in_features == n_dims_extended + system.n_controls
+    assert controller.f_nn[-1].out_features == system.n_dims
 
 
 def test_normalize_x():
@@ -41,9 +49,8 @@ def test_normalize_x():
     ]
     dm = EpisodicDataModule(system, initial_domain)
 
-    # Instantiate with a list of only one scenarios
-    scenarios = [params]
-    controller = NeuralCLBFController(system, scenarios, dm)
+    # Instantiate the controller
+    controller = NeuralBlackBoxLBFController(system, dm)
 
     # Define states on which to test.
     # Start with the upper and lower state limits
@@ -85,14 +92,13 @@ def test_V_jacobian():
     # Create the controller
     params = {}
     system = MockSystem(params)
-    scenarios = [params]
     # Define the datamodule
     initial_domain = [
         (-1.0, 1.0),
         (-1.0, 1.0),
     ]
     dm = EpisodicDataModule(system, initial_domain)
-    controller = NeuralCLBFController(system, scenarios, dm)
+    controller = NeuralBlackBoxLBFController(system, dm)
 
     # Create the points and perturbations with which to test the Jacobian
     N_test = 10
@@ -121,7 +127,7 @@ def test_V_jacobian():
     )
 
 
-def test_V_lie_derivatives():
+def test_V_dot():
     """Test computation of Lie Derivatives"""
     # Set a random seed for repeatability
     random.seed(0)
@@ -130,14 +136,13 @@ def test_V_lie_derivatives():
     # Create the controller
     params = {}
     system = MockSystem(params)
-    scenarios = [params]
     # Define the datamodule
     initial_domain = [
         (-1.0, 1.0),
         (-1.0, 1.0),
     ]
     dm = EpisodicDataModule(system, initial_domain)
-    controller = NeuralCLBFController(system, scenarios, dm)
+    controller = NeuralBlackBoxLBFController(system, dm)
 
     # Create the points (state and control) at which to test the Lie derivatives
     N_test = 2
@@ -145,13 +150,14 @@ def test_V_lie_derivatives():
     u = torch.Tensor(N_test, system.n_controls).uniform_(-1.0, 1.0)
 
     # Compute the Lie derivatives and expected change in V
-    Lf_V, Lg_V = controller.V_lie_derivatives(x)
-    Vdot = Lf_V + torch.bmm(Lg_V, u.unsqueeze(-1))
+    _, Vdot = controller.Vdot(x, u)
 
-    # To validate the Lie derivatives, simulate V forward and approximate the derivative
+    # To validate the Lie derivatives, simulate V forward using the *learned* dynamics
+    # Since we don't do any training here, we need to use the learned dynamics to be
+    # consistent
     delta_t = 0.0001
     V_now = controller.V(x)
-    xdot = system.closed_loop_dynamics(x, u)
+    xdot = controller.f(x, u)
     x_next = x + xdot * delta_t
     V_next = controller.V(x_next)
     Vdot_simulated = (V_next - V_now) / delta_t
