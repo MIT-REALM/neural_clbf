@@ -78,8 +78,8 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=20,
-        trajectory_length=1000,
+        trajectories_per_episode=200,
+        trajectory_length=100,
         # fixed_samples=10000,
         fixed_samples=0,
         max_points=100000,
