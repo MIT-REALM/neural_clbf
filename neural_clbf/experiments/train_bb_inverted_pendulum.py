@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
-from neural_clbf.controllers import NeuralCLBFController
+from neural_clbf.controllers import NeuralBlackBoxLBFController
 from neural_clbf.experiments.common.episodic_datamodule import (
     EpisodicDataModule,
 )
@@ -44,7 +44,7 @@ def rollout_plotting_cb(clbf_net):
         plot_u_indices=[InvertedPendulum.U],
         plot_u_labels=["$u$"],
         t_sim=6.0,
-        n_sims_per_start=5,
+        n_sims_per_start=1,
         controller_period=controller_period,
         goal_check_fn=clbf_net.dynamics_model.goal_mask,
         out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
@@ -55,7 +55,7 @@ def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
         domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
-        n_grid=15,
+        n_grid=30,
         x_axis_index=InvertedPendulum.THETA,
         y_axis_index=InvertedPendulum.THETA_DOT,
         x_axis_label="$\\theta$",
@@ -78,23 +78,14 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=2000,
-        trajectory_length=10,
-        # fixed_samples=10000,
-        fixed_samples=0,
+        trajectories_per_episode=10,
+        trajectory_length=1000,
+        fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
         batch_size=batch_size,
         quotas={"safe": 0.2, "goal": 0.2, "unsafe": 0.2},
     )
-
-    # Define the scenarios
-    scenarios = [
-        nominal_params,
-        {"m": 1.25, "L": 1.0, "b": 0.01},
-        {"m": 1.0, "L": 1.25, "b": 0.01},
-        {"m": 1.25, "L": 1.25, "b": 0.01},
-    ]
 
     # Define the plotting callbacks
     plotting_callbacks = [
@@ -105,20 +96,18 @@ def main(args):
     ]
 
     # Initialize the controller
-    clbf_controller = NeuralCLBFController(
+    clbf_controller = NeuralBlackBoxLBFController(
         dynamics_model,
-        scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=2,
-        clbf_hidden_size=256,
+        lbf_hidden_layers=2,
+        lbf_hidden_size=256,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=256,
-        clbf_lambda=clbf_lambda,
+        f_nn_hidden_layers=2,
+        f_nn_hidden_size=256,
+        lbf_lambda=clbf_lambda,
         controller_period=controller_period,
-        lookahead=controller_period,
-        clbf_relaxation_penalty=1e5,
-        # clbf_relaxation_penalty=2e6,
         epochs_per_episode=10,
     )
     # Add the DataModule hooks
@@ -130,8 +119,8 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/basic_experiments",
-        name="sim_only",
+        "logs/bb_inverted_pendulum",
+        name="default",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
