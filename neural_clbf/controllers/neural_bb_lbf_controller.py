@@ -32,6 +32,8 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         u_nn_hidden_size: int = 256,
         f_nn_hidden_layers: int = 2,
         f_nn_hidden_size: int = 256,
+        g_nn_hidden_layers=2,
+        g_nn_hidden_size=256,
         lbf_lambda: float = 1.0,
         safety_level: float = 1.0,
         controller_period: float = 0.01,
@@ -53,6 +55,8 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
             u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             f_nn_hidden_layers: number of hidden layers to use for the dynamics model
             f_nn_hidden_size: number of neurons per hidden layer in the dynamics model
+            g_nn_hidden_layers: number of hidden layers to use for the dynamics model
+            g_nn_hidden_size: number of neurons per hidden layer in the dynamics model
             lbf_lambda: convergence rate for the LBF
             safety_level: safety level set value for the LBF
             controller_period: the timestep to use in simulating forward Vdot
@@ -150,7 +154,7 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         # Likewise, build the network up layer by layer, starting with the input
         self.f_nn_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.f_nn_layers["input_linear"] = nn.Linear(
-            self.n_dims_extended + self.dynamics_model.n_controls, self.f_nn_hidden_size
+            self.n_dims_extended, self.f_nn_hidden_size
         )
         self.f_nn_layers["input_activation"] = nn.Tanh()
         for i in range(self.f_nn_hidden_layers):
@@ -163,6 +167,27 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
             self.f_nn_hidden_size, self.dynamics_model.n_dims
         )
         self.f_nn = nn.Sequential(self.f_nn_layers)
+
+        # Also define the dynamics learning network, denoted f_nn
+        self.g_nn_hidden_layers = g_nn_hidden_layers
+        self.g_nn_hidden_size = g_nn_hidden_size
+        # Likewise, build the network up layer by layer, starting with the input
+        self.g_nn_layers: OrderedDict[str, nn.Module] = OrderedDict()
+        self.g_nn_layers["input_linear"] = nn.Linear(
+            self.n_dims_extended, self.g_nn_hidden_size
+        )
+        self.g_nn_layers["input_activation"] = nn.Tanh()
+        for i in range(self.g_nn_hidden_layers):
+            self.g_nn_layers[f"layer_{i}_linear"] = nn.Linear(
+                self.g_nn_hidden_size, self.g_nn_hidden_size
+            )
+            self.g_nn_layers[f"layer_{i}_activation"] = nn.Tanh()
+        # No output layer, so the control saturates at [-1, 1]
+        self.g_nn_layers["output_linear"] = nn.Linear(
+            self.g_nn_hidden_size,
+            self.dynamics_model.n_dims * self.dynamics_model.n_controls,
+        )
+        self.g_nn = nn.Sequential(self.g_nn_layers)
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the input using the stored center point and range
@@ -261,57 +286,76 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
 
         return u_scaled
 
-    def f(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
-        """Computes the learned dynamics dx/dt from the state x with action u
+    def learned_dynamics(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Computes the learned dynamics dx/dt from the state x, in the form of
+
+        dx/dt = f(x) + g(x)u
 
         args:
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                dynamics
-            u: bs x self.dynamics_model.n_controls the inputs for each x
         returns:
-            xdot: the anticipated state derivative
+            f: the state-dependent part of the dynamics
+            g: the control-coefficient part of the dynamics
         """
         # Apply the offset and range to normalize about zero
         # Do this for both the state...
         x = self.normalize_with_angles(x)
-        # And the control effort
-        upper_lim, lower_lim = self.dynamics_model.control_limits
-        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
-        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
-        u_scaled = (u - u_center) / u_semi_range
 
-        # Concatenate inputs
-        inputs = torch.cat((x, u_scaled), dim=-1)
+        # Compute the dynamics using the neural network
+        f = self.f_nn(x)
+        g = self.g_nn(x)
 
-        # Compute the dynamics effort using the neural network
-        x_next = self.f_nn(inputs)
+        # And reshape g to be a matrix
+        g = g.reshape((-1, self.dynamics_model.n_dims, self.dynamics_model.n_controls))
 
-        return x_next
+        return f, g
 
-    def Vdot(
-        self, x: torch.Tensor, u: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute the Lie derivative of the LBF V along the learned dynamics
+    def V_lie_derivatives(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Compute the Lie derivatives of the CLBF V along the control-affine dynamics
 
         args:
             x: bs x self.dynamics_model.n_dims tensor of state
-            u: bs x self.dynamics_model.n_controls the inputs for each x
         returns:
-            V: bs x 1 tensor of the values of V
-            Lf_V: bs x 1 tensor of Lie derivatives of V
-                  along f
+            V: bs x 1 tensor of values of V
+            Lf_V: bs x 1 tensor of Lie derivatives of V along f
+            Lg_V: bs x self.dynamics_model.n_controls tensor of Lie derivatives of V
+                  along g
         """
         # Get the Jacobian of V for each entry in the batch
         V, gradV = self.V_with_jacobian(x)
 
-        # Get the dynamics f
-        f = self.f(x, u)
+        # Get the dynamics f and g for this scenario
+        f, g = self.learned_dynamics(x)
 
         # Multiply these with the Jacobian to get the Lie derivatives
         Lf_V = torch.bmm(gradV, f.unsqueeze(-1)).squeeze(1)
+        Lg_V = torch.bmm(gradV, g).squeeze(1)
 
         # return the Lie derivatives
-        return V, Lf_V
+        return V, Lf_V, Lg_V
+
+    def Vdot(
+        self, x: torch.Tensor, u: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Compute the derivatives of the CLBF V along the system flow
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of state
+            u: bs x self.dynamics_model.n_controls tensor of control inputs
+        returns:
+            V: bs x 1 tensor of values of V
+            Vdot: bs x 1 tensor of derivatives of V
+        """
+        # Get V and its lie derivatives
+        V, Lf_V, Lg_V = self.V_lie_derivatives(x)
+
+        # Compute the derivative
+        Vdot = Lf_V + torch.bmm(Lg_V.unsqueeze(1), u.unsqueeze(-1)).reshape(-1, 1)
+
+        return V, Vdot
 
     def forward(self, x):
         """Determine the control input for a given state using a learned controller
@@ -482,7 +526,8 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
 
         #   1.) Compare the black box and learned dynamics with on-policy actions
         u_nn = self.u(x)
-        learned_dynamics = self.f(x, u_nn)
+        f, g = self.learned_dynamics(x)
+        learned_dynamics = f + torch.bmm(g, u_nn.unsqueeze(-1)).squeeze()
         true_dynamics = self.dynamics_model.closed_loop_dynamics(x, u_nn)
         dynamics_mse_loss = (learned_dynamics - true_dynamics) ** 2
         dynamics_mse_loss = dynamics_mse_loss.mean()
