@@ -15,7 +15,7 @@ from neural_clbf.experiments.common.plotting import (
     plot_CLBF,
     rollout_CLBF,
 )
-from neural_clbf.experiments.test_single_track_car_controller import (
+from neural_clbf.experiments.sim_single_track_car_controller import (
     # single_rollout_straight_path,
     # single_rollout_circle_path,
     single_rollout_s_path,
