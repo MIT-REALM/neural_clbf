@@ -33,8 +33,10 @@ def test_init_neuralrclbfcontroller():
     assert controller.V_nn[-1].out_features == 1
     assert controller.u_nn[0].in_features == n_dims_extended
     assert controller.u_nn[-2].out_features == system.n_controls
-    assert controller.f_nn[0].in_features == n_dims_extended + system.n_controls
+    assert controller.f_nn[0].in_features == n_dims_extended
     assert controller.f_nn[-1].out_features == system.n_dims
+    assert controller.g_nn[0].in_features == n_dims_extended
+    assert controller.g_nn[-1].out_features == system.n_dims * system.n_controls
 
 
 def test_normalize_x():
@@ -157,7 +159,8 @@ def test_V_dot():
     # consistent
     delta_t = 0.0001
     V_now = controller.V(x)
-    xdot = controller.f(x, u)
+    f, g = controller.learned_dynamics(x)
+    xdot = f + torch.bmm(g, u.unsqueeze(-1)).squeeze()
     x_next = x + xdot * delta_t
     V_next = controller.V(x_next)
     Vdot_simulated = (V_next - V_now) / delta_t

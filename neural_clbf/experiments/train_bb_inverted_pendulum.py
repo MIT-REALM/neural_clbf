@@ -106,6 +106,8 @@ def main(args):
         u_nn_hidden_size=256,
         f_nn_hidden_layers=2,
         f_nn_hidden_size=256,
+        g_nn_hidden_layers=2,
+        g_nn_hidden_size=256,
         lbf_lambda=clbf_lambda,
         controller_period=controller_period,
         epochs_per_episode=10,
@@ -120,7 +122,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/bb_inverted_pendulum",
-        name="default",
+        name="control_affine",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
