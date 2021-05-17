@@ -362,6 +362,7 @@ class KSCar(ControlAffineSystem):
         x0[0, KSCar.DELTA] = torch.atan(
             torch.tensor(params["omega_ref"] * wheelbase / params["v_ref"])
         )
+        x0 = x0.type_as(x)
         A = np.zeros((self.n_dims, self.n_dims))
         A[KSCar.SXE, KSCar.SYE] = self.nominal_params["omega_ref"]
         A[KSCar.SXE, KSCar.VE] = 1
