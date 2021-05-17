@@ -110,7 +110,6 @@ def main(args):
         g_nn_hidden_size=256,
         lbf_lambda=clbf_lambda,
         controller_period=controller_period,
-        num_controller_init_epochs=5,
         epochs_per_episode=10,
     )
     # Add the DataModule hooks
