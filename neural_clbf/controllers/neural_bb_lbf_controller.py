@@ -394,7 +394,7 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         # #   1.) LBF value should be negative on the goal set.
         V = self.V(x)
         V0 = V[goal_mask]
-        goal_region_violation = F.leaky_relu(eps + V0)
+        goal_region_violation = F.leaky_relu(eps + V0, negative_slope=1e-4)
         goal_term = goal_region_violation.mean()
 
         #   1b.) LBF should be minimized on the goal point
@@ -404,20 +404,24 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
 
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
-        safe_V_too_big = F.leaky_relu(eps + V_safe - self.safe_level)
+        safe_V_too_big = F.leaky_relu(
+            eps + V_safe - self.safe_level, negative_slope=1e-4
+        )
         safe_lbf_term = safe_V_too_big.mean()
         #   2b.) V >= 0 in the safe region minus the goal
         safe_minus_goal_mask = torch.logical_and(
             safe_mask, torch.logical_not(goal_mask)
         )
         V_safe_ex_goal = V[safe_minus_goal_mask]
-        safe_V_too_small = F.leaky_relu(eps - V_safe_ex_goal)
+        safe_V_too_small = F.leaky_relu(eps - V_safe_ex_goal, negative_slope=1e-4)
         safe_lbf_term += safe_V_too_small.mean()
         loss.append(("LBF safe region term", safe_lbf_term))
 
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
-        unsafe_V_too_small = F.leaky_relu(eps + self.unsafe_level - V_unsafe)
+        unsafe_V_too_small = F.leaky_relu(
+            eps + self.unsafe_level - V_unsafe, negative_slope=1e-4
+        )
         unsafe_lbf_term = unsafe_V_too_small.mean()
         loss.append(("LBF unsafe region term", unsafe_lbf_term))
 
@@ -459,8 +463,11 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         condition_active = F.relu(self.safe_level - V)
 
         # And compute the violation in that region
-        violation = F.leaky_relu(eps + Vdot + self.lbf_lambda * V) * condition_active
-        clbf_descent_term_lin = violation.mean()
+        violation = (
+            F.leaky_relu(eps + Vdot + self.lbf_lambda * V, negative_slope=1e-4)
+            * condition_active
+        )
+        clbf_descent_term_lin = 100 * violation.mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
         return loss
