@@ -388,13 +388,13 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
         """
-        beta = 20.0
+        eps = 1e-2
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
         # #   1.) LBF value should be negative on the goal set.
         V = self.V(x)
         V0 = V[goal_mask]
-        goal_region_violation = F.softplus(V0, beta=beta)
+        goal_region_violation = F.relu(eps + V0)
         goal_term = goal_region_violation.mean()
 
         #   1b.) LBF should be minimized on the goal point
@@ -404,20 +404,20 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
 
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
-        safe_V_too_big = F.softplus(V_safe - self.safe_level, beta=beta)
+        safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
         safe_lbf_term = safe_V_too_big.mean()
         #   2b.) V >= 0 in the safe region minus the goal
         safe_minus_goal_mask = torch.logical_and(
             safe_mask, torch.logical_not(goal_mask)
         )
         V_safe_ex_goal = V[safe_minus_goal_mask]
-        safe_V_too_small = F.softplus(-V_safe_ex_goal, beta=beta)
+        safe_V_too_small = F.relu(eps - V_safe_ex_goal)
         safe_lbf_term += safe_V_too_small.mean()
         loss.append(("LBF safe region term", safe_lbf_term))
 
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
-        unsafe_V_too_small = F.softplus(self.unsafe_level - V_unsafe, beta=beta)
+        unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
         unsafe_lbf_term = unsafe_V_too_small.mean()
         loss.append(("LBF unsafe region term", unsafe_lbf_term))
 
@@ -445,7 +445,7 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        beta = 20.0
+        eps = 0.01
 
         #   1.) A term to encourage satisfaction of the LBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
@@ -456,10 +456,10 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
 
         # Figure out where this decrease condition needs to hold
         V = self.V(x)
-        condition_active = F.softplus(self.safe_level - V, beta=beta)
+        condition_active = F.relu(self.safe_level - V)
 
         # And compute the violation in that region
-        violation = F.softplus(Vdot + self.lbf_lambda * V, beta=beta) * condition_active
+        violation = F.relu(eps + Vdot + self.lbf_lambda * V) * condition_active
         clbf_descent_term_lin = violation.mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
@@ -494,8 +494,8 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         u_nominal = self.dynamics_model.u_nominal(x)
         control_mse_loss = (u_nn - u_nominal) ** 2
         control_mse_loss = control_mse_loss.mean()
-        epoch_cutoff = max(self.current_epoch - self.num_controller_init_epochs, 0)
-        control_mse_loss /= 100 * epoch_cutoff + 1
+        epoch_cutoff = max(self.num_controller_init_epochs - self.current_epoch, 0)
+        control_mse_loss *= epoch_cutoff
         loss.append(("Controller MSE", control_mse_loss))
 
         return loss
@@ -612,6 +612,12 @@ class NeuralBlackBoxLBFController(pl.LightningModule):
         )
         component_losses.update(
             self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(
+            self.controller_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(
+            self.dynamics_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
         )
 
         # Compute the overall loss by summing up the individual losses
