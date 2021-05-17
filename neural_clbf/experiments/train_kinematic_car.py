@@ -1,7 +1,6 @@
 from argparse import ArgumentParser
 from copy import copy
 
-import numpy as np
 import torch
 import torch.multiprocessing
 import pytorch_lightning as pl
@@ -27,10 +26,10 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 start_x = torch.tensor(
     [
-        [0.0, 0.6, 0.0, 0.0, -np.pi / 6],
-        [0.6, 0.0, 0.0, 0.0, -np.pi / 6],
-        [0.0, 0.6, 0.0, 0.0, np.pi / 6],
-        [0.6, 0.0, 0.0, 0.0, np.pi / 6],
+        [0.0, 0.6, 0.0, 0.0, 0.0],
+        # [0.6, 0.0, 0.0, 0.0, -np.pi / 6],
+        # [0.0, 0.6, 0.0, 0.0, np.pi / 6],
+        # [0.6, 0.0, 0.0, 0.0, np.pi / 6],
     ]
 )
 controller_period = 0.01
@@ -79,11 +78,11 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-0.1, 0.1),  # sxe
-        (-0.1, 0.1),  # sye
-        (-0.1, 0.1),  # delta
-        (-0.1, 0.1),  # ve
-        (-0.1, 0.1),  # psi_e
+        (-0.5, 0.5),  # sxe
+        (-0.5, 0.5),  # sye
+        (-0.5, 0.5),  # delta
+        (-0.5, 0.5),  # ve
+        (-0.5, 0.5),  # psi_e
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
@@ -94,7 +93,7 @@ def main(args):
         max_points=500000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.3, "boundary": 0.5, "unsafe": 0.2},
+        quotas={"safe": 0.2, "boundary": 0.2, "unsafe": 0.2},
     )
 
     # Define the scenarios
@@ -124,10 +123,10 @@ def main(args):
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=3,
-        clbf_hidden_size=64,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=64,
+        clbf_hidden_layers=1,
+        clbf_hidden_size=8,
+        u_nn_hidden_layers=1,
+        u_nn_hidden_size=8,
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_lambda=0.1,
