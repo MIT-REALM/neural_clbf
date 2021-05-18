@@ -463,9 +463,6 @@ def single_rollout_circle_path(
 def single_rollout_s_path(
     clbf_controller: "NeuralCLBFController",
 ) -> Tuple[str, plt.figure]:
-    # Test a bunch of hyperparams if you want
-    penalties = [clbf_controller.clbf_relaxation_penalty]
-
     simulation_dt = clbf_controller.dynamics_model.dt
     controller_period = clbf_controller.controller_period
 
@@ -476,7 +473,7 @@ def single_rollout_s_path(
     # Simulate!
     # (but first make somewhere to save the results)
     t_sim = 5.0
-    n_sims = len(penalties)
+    n_sims = 1
     num_timesteps = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
         [[0.0, 1.0, 0.0, 1.0, -np.pi / 6, 0.0, 0.0]], device=clbf_controller.device
@@ -522,10 +519,8 @@ def single_rollout_s_path(
         x_current = x_sim[tstep - 1, :, :]
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
-            for j in range(n_sims):
-                clbf_controller.clbf_relaxation_penalty = penalties[j]
-                u = clbf_controller(x_current[j, :].unsqueeze(0))
-                u_sim[tstep, j, :] = u
+            u = clbf_controller(x_current)
+            u_sim[tstep, :, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
             u_sim[tstep, :, :] = u
@@ -547,11 +542,8 @@ def single_rollout_s_path(
         x_current = x_nominal[tstep - 1, :, :]
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
-            for j in range(n_sims):
-                u = clbf_controller.dynamics_model.u_nominal(
-                    x_current[j, :].unsqueeze(0)
-                )
-                u_sim[tstep, j, :] = u
+            u = clbf_controller.dynamics_model.u_nominal(x_current)
+            u_sim[tstep, :, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
             u_sim[tstep, :, :] = u
@@ -618,18 +610,19 @@ def single_rollout_s_path(
     ax1.set_aspect("equal")
 
     ax3 = axs[1]
+    ax3.plot([], [], linestyle="-", label="CLBF-QP")
+    ax3.plot([], [], linestyle=":", label="Nominal")
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
             x_sim[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
-            label=f"Tracking Error, r={penalties[i]}",
+            linestyle="-",
         )
     for i in range(n_sims):
         ax3.plot(
             t[:t_final],
             x_nominal[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             linestyle=":",
-            label="Tracking Error (nominal)",
         )
         break
     # ax3.plot(
