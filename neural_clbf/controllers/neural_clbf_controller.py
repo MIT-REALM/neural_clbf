@@ -205,57 +205,62 @@ class NeuralCLBFController(pl.LightningModule):
             V: bs tensor of CLBF values
             JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
-        # Apply the offset and range to normalize about zero
-        x = self.normalize_with_angles(x)
-
-        # Compute the CLBF layer-by-layer, computing the Jacobian alongside
-
-        # We need to initialize the Jacobian to reflect the normalization that's already
-        # been done to x
-        bs = x.shape[0]
-        JV = torch.zeros(
-            (bs, self.n_dims_extended, self.dynamics_model.n_dims)
-        ).type_as(x)
-        # and for each non-angle dimension, we need to scale by the normalization
-        for dim in range(self.dynamics_model.n_dims):
-            JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
-
-        # And adjust the Jacobian for the angle dimensions
-        for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
-            cos_idx = self.dynamics_model.n_dims + offset
-            JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
-            JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
-
-        # Now step through each layer in V
-        V = x
-        for layer in self.V_nn:
-            V = layer(V)
-
-            if isinstance(layer, nn.Linear):
-                JV = torch.matmul(layer.weight, JV)
-            elif isinstance(layer, nn.Tanh):
-                JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
-            elif isinstance(layer, nn.ReLU):
-                JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
-
-        # # Lol JK use lqr V
-        # P = torch.tensor([[1.1770, 0.0507], [0.0507, 0.0867]])
-        # V = (
-        #     x[:, 0] ** 2 * P[0, 0]
-        #     + 2 * x[:, 0] * x[:, 1] * P[0, 1]
-        #     + x[:, 1] ** 2 * P[1, 1]
-        # )
-        # V *= 0.5
-        # V = V.unsqueeze(-1)
-
-        # JV = torch.zeros(x.shape[0], 1, self.dynamics_model.n_dims)
-        # JV[:, 0, 0] = x[:, 0] * P[0, 0] + x[:, 1] * P[0, 1]
-        # JV[:, 0, 1] = x[:, 0] * P[0, 1] + x[:, 1] * P[1, 1]
-
-        # # Make a gradient
+        # # Apply the offset and range to normalize about zero
         # x = self.normalize_with_angles(x)
-        # V_net = self.V_nn(x)
-        # V += 0.0000001 * V_net
+
+        # # Compute the CLBF layer-by-layer, computing the Jacobian alongside
+
+        # # We need to initialize the Jacobian to reflect the normalization that's already
+        # # been done to x
+        # bs = x.shape[0]
+        # JV = torch.zeros(
+        #     (bs, self.n_dims_extended, self.dynamics_model.n_dims)
+        # ).type_as(x)
+        # # and for each non-angle dimension, we need to scale by the normalization
+        # for dim in range(self.dynamics_model.n_dims):
+        #     JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
+
+        # # And adjust the Jacobian for the angle dimensions
+        # for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
+        #     cos_idx = self.dynamics_model.n_dims + offset
+        #     JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
+        #     JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
+
+        # # Now step through each layer in V
+        # V = x
+        # for layer in self.V_nn:
+        #     V = layer(V)
+
+        #     if isinstance(layer, nn.Linear):
+        #         JV = torch.matmul(layer.weight, JV)
+        #     elif isinstance(layer, nn.Tanh):
+        #         JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
+        #     elif isinstance(layer, nn.ReLU):
+        #         JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
+
+        # Lol JK use lqr V
+        P = torch.tensor(
+            [
+                [1.4434, 0.0000, 0.0000, 0.5000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.5334, 0.5000, 0.0000, 1.3438, 0.0382, 0.2261],
+                [0.0000, 0.5000, 1.9205, 0.0000, 2.2879, 0.1421, 0.2373],
+                [0.5000, 0.0000, 0.0000, 0.5774, 0.0000, 0.0000, 0.0000],
+                [0.0000, 1.3438, 2.2879, 0.0000, 6.3124, 0.2096, 0.6128],
+                [0.0000, 0.0382, 0.1421, 0.0000, 0.2096, 0.0301, 0.0170],
+                [0.0000, 0.2261, 0.2373, 0.0000, 0.6128, 0.0170, 0.1232],
+            ]
+        )
+        V = torch.zeros((x.shape[0], 1)).type_as(x)
+        JV = torch.zeros(x.shape[0], 1, self.dynamics_model.n_dims)
+        for i in range(x.shape[0]):
+            xi = x[i, :]
+            V[i, 0] = 0.5 * xi @ P @ xi
+            JV[i, 0, :] = xi @ P
+
+        # Make a gradient
+        x = self.normalize_with_angles(x)
+        V_net = self.V_nn(x)
+        V += 0.0000001 * V_net
 
         return V, JV
 
@@ -271,22 +276,22 @@ class NeuralCLBFController(pl.LightningModule):
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                controller
         """
-        # Apply the offset and range to normalize about zero
-        x = self.normalize_with_angles(x)
+        # # Apply the offset and range to normalize about zero
+        # x = self.normalize_with_angles(x)
 
-        # Compute the control effort using the neural network
-        u = self.u_NN(x)
+        # # Compute the control effort using the neural network
+        # u = self.u_NN(x)
 
-        # Scale to reflect plant actuator limits
-        upper_lim, lower_lim = self.dynamics_model.control_limits
-        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
-        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
+        # # Scale to reflect plant actuator limits
+        # upper_lim, lower_lim = self.dynamics_model.control_limits
+        # u_center = (upper_lim + lower_lim).type_as(x) / 2.0
+        # u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
 
-        u_scaled = u * u_semi_range + u_center
+        # u_scaled = u * u_semi_range + u_center
 
-        # # For now, set u to u_nominal to test V learning
-        # # TODO @dawsonc, not permanent
-        # u_scaled = self.dynamics_model.u_nominal(x)
+        # For now, set u to u_nominal to test V learning
+        # TODO @dawsonc, not permanent
+        u_scaled = self.dynamics_model.u_nominal(x)
 
         return u_scaled
 
@@ -471,7 +476,8 @@ class NeuralCLBFController(pl.LightningModule):
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control inputs
         """
-        u, _, _ = self.solve_CLBF_QP(x)
+        # u, _, _ = self.solve_CLBF_QP(x)
+        u = self.u(x)
         return u
 
     def boundary_loss(
@@ -574,6 +580,7 @@ class NeuralCLBFController(pl.LightningModule):
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
+            Vdot = Vdot.reshape(-1, 1)
             violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
             clbf_descent_term_lin += violation.mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
