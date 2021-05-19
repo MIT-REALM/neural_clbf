@@ -47,7 +47,7 @@ def rollout_plotting_cb(clbf_net):
         n_sims_per_start=1,
         controller_period=controller_period,
         goal_check_fn=clbf_net.dynamics_model.goal_mask,
-        out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
+        # out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
     )
 
 
@@ -89,8 +89,8 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=10,
-        trajectory_length=1000,
-        fixed_samples=2000,
+        trajectory_length=100,
+        fixed_samples=1000,
         max_points=500000,
         val_split=0.1,
         batch_size=64,
@@ -116,7 +116,7 @@ def main(args):
         # Plot some rollouts
         # single_rollout_straight_path,
         # single_rollout_circle_path,
-        single_rollout_s_path,
+        # single_rollout_s_path,
     ]
 
     # Initialize the controller
@@ -129,7 +129,7 @@ def main(args):
         clbf_hidden_size=256,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=256,
-        clbf_lambda=0.1,
+        clbf_lambda=0.01,
         controller_period=controller_period,
         lookahead=controller_period,
         clbf_relaxation_penalty=1e5,
@@ -145,7 +145,7 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/stcar/",
+        "logs/stcar_basic/",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
