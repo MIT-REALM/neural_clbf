@@ -142,6 +142,8 @@ def plot_v_vs_tracking_error(
         tracking_error[incorrectly_labelled], V[incorrectly_labelled], color="r"
     )
 
+    return "V Scatter", fig
+
 
 @torch.no_grad()
 def single_rollout_straight_path(
