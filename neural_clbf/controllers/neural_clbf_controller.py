@@ -205,62 +205,62 @@ class NeuralCLBFController(pl.LightningModule):
             V: bs tensor of CLBF values
             JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
-        # # Apply the offset and range to normalize about zero
-        # x = self.normalize_with_angles(x)
-
-        # # Compute the CLBF layer-by-layer, computing the Jacobian alongside
-
-        # # We need to initialize the Jacobian to reflect the normalization that's already
-        # # been done to x
-        # bs = x.shape[0]
-        # JV = torch.zeros(
-        #     (bs, self.n_dims_extended, self.dynamics_model.n_dims)
-        # ).type_as(x)
-        # # and for each non-angle dimension, we need to scale by the normalization
-        # for dim in range(self.dynamics_model.n_dims):
-        #     JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
-
-        # # And adjust the Jacobian for the angle dimensions
-        # for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
-        #     cos_idx = self.dynamics_model.n_dims + offset
-        #     JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
-        #     JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
-
-        # # Now step through each layer in V
-        # V = x
-        # for layer in self.V_nn:
-        #     V = layer(V)
-
-        #     if isinstance(layer, nn.Linear):
-        #         JV = torch.matmul(layer.weight, JV)
-        #     elif isinstance(layer, nn.Tanh):
-        #         JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
-        #     elif isinstance(layer, nn.ReLU):
-        #         JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
-
-        # Lol JK use lqr V
-        P = torch.tensor(
-            [
-                [1.4434, 0.0000, 0.0000, 0.5000, 0.0000, 0.0000, 0.0000],
-                [0.0000, 0.5334, 0.5000, 0.0000, 1.3438, 0.0382, 0.2261],
-                [0.0000, 0.5000, 1.9205, 0.0000, 2.2879, 0.1421, 0.2373],
-                [0.5000, 0.0000, 0.0000, 0.5774, 0.0000, 0.0000, 0.0000],
-                [0.0000, 1.3438, 2.2879, 0.0000, 6.3124, 0.2096, 0.6128],
-                [0.0000, 0.0382, 0.1421, 0.0000, 0.2096, 0.0301, 0.0170],
-                [0.0000, 0.2261, 0.2373, 0.0000, 0.6128, 0.0170, 0.1232],
-            ]
-        )
-        V = torch.zeros((x.shape[0], 1)).type_as(x)
-        JV = torch.zeros(x.shape[0], 1, self.dynamics_model.n_dims)
-        for i in range(x.shape[0]):
-            xi = x[i, :]
-            V[i, 0] = 0.5 * xi @ P @ xi
-            JV[i, 0, :] = xi @ P
-
-        # Make a gradient
+        # Apply the offset and range to normalize about zero
         x = self.normalize_with_angles(x)
-        V_net = self.V_nn(x)
-        V += 0.0000001 * V_net
+
+        # Compute the CLBF layer-by-layer, computing the Jacobian alongside
+
+        # We need to initialize the Jacobian to reflect the normalization that's already
+        # been done to x
+        bs = x.shape[0]
+        JV = torch.zeros(
+            (bs, self.n_dims_extended, self.dynamics_model.n_dims)
+        ).type_as(x)
+        # and for each non-angle dimension, we need to scale by the normalization
+        for dim in range(self.dynamics_model.n_dims):
+            JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
+
+        # And adjust the Jacobian for the angle dimensions
+        for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
+            cos_idx = self.dynamics_model.n_dims + offset
+            JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
+            JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
+
+        # Now step through each layer in V
+        V = x
+        for layer in self.V_nn:
+            V = layer(V)
+
+            if isinstance(layer, nn.Linear):
+                JV = torch.matmul(layer.weight, JV)
+            elif isinstance(layer, nn.Tanh):
+                JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
+            elif isinstance(layer, nn.ReLU):
+                JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
+
+        # # Lol JK use lqr V
+        # P = torch.tensor(
+        #     [
+        #         [1.4434, 0.0000, 0.0000, 0.5000, 0.0000, 0.0000, 0.0000],
+        #         [0.0000, 0.5334, 0.5000, 0.0000, 1.3438, 0.0382, 0.2261],
+        #         [0.0000, 0.5000, 1.9205, 0.0000, 2.2879, 0.1421, 0.2373],
+        #         [0.5000, 0.0000, 0.0000, 0.5774, 0.0000, 0.0000, 0.0000],
+        #         [0.0000, 1.3438, 2.2879, 0.0000, 6.3124, 0.2096, 0.6128],
+        #         [0.0000, 0.0382, 0.1421, 0.0000, 0.2096, 0.0301, 0.0170],
+        #         [0.0000, 0.2261, 0.2373, 0.0000, 0.6128, 0.0170, 0.1232],
+        #     ]
+        # )
+        # V = torch.zeros((x.shape[0], 1)).type_as(x)
+        # JV = torch.zeros(x.shape[0], 1, self.dynamics_model.n_dims)
+        # for i in range(x.shape[0]):
+        #     xi = x[i, :]
+        #     V[i, 0] = 0.5 * xi @ P @ xi
+        #     JV[i, 0, :] = xi @ P
+
+        # # Make a gradient
+        # x = self.normalize_with_angles(x)
+        # V_net = self.V_nn(x)
+        # V += 0.0000001 * V_net
 
         return V, JV
 

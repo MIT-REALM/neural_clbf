@@ -100,7 +100,7 @@ def main(args):
     # Define the scenarios
     scenarios = []
     omega_ref_vals = [-0.5, 0.5]
-    omega_ref_vals = [0.0]
+    # omega_ref_vals = [0.0]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
@@ -116,7 +116,7 @@ def main(args):
         # Plot some rollouts
         # single_rollout_straight_path,
         # single_rollout_circle_path,
-        # single_rollout_s_path,
+        single_rollout_s_path,
     ]
 
     # Initialize the controller
@@ -129,10 +129,10 @@ def main(args):
         clbf_hidden_size=256,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=256,
-        clbf_lambda=0.01,
+        clbf_lambda=0.1,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_relaxation_penalty=1e5,
+        clbf_relaxation_penalty=1e8,
         num_controller_init_epochs=5,
         epochs_per_episode=10,
     )

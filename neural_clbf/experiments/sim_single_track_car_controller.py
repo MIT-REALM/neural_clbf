@@ -542,7 +542,7 @@ def single_rollout_s_path(
         x_current = x_nominal[tstep - 1, :, :]
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
-            u = clbf_controller.dynamics_model.u_nominal(x_current)
+            u = clbf_controller.dynamics_model.u_nominal(x_current, pt)
             u_sim[tstep, :, :] = u
         else:
             u = u_sim[tstep - 1, :, :]
