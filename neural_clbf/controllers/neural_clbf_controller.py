@@ -199,53 +199,53 @@ class NeuralCLBFController(pl.LightningModule):
             V: bs tensor of CLBF values
             JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
-        # # Apply the offset and range to normalize about zero
-        # x = self.normalize_with_angles(x)
+        # Apply the offset and range to normalize about zero
+        x = self.normalize_with_angles(x)
 
-        # # Compute the CLBF layer-by-layer, computing the Jacobian alongside
+        # Compute the CLBF layer-by-layer, computing the Jacobian alongside
 
-        # # We need to initialize the Jacobian to reflect the normalization that's already
-        # # been done to x
-        # bs = x.shape[0]
-        # JV = torch.zeros(
-        #     (bs, self.n_dims_extended, self.dynamics_model.n_dims)
-        # ).type_as(x)
-        # # and for each non-angle dimension, we need to scale by the normalization
-        # for dim in range(self.dynamics_model.n_dims):
-        #     JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
+        # We need to initialize the Jacobian to reflect the normalization that's already
+        # been done to x
+        bs = x.shape[0]
+        JV = torch.zeros(
+            (bs, self.n_dims_extended, self.dynamics_model.n_dims)
+        ).type_as(x)
+        # and for each non-angle dimension, we need to scale by the normalization
+        for dim in range(self.dynamics_model.n_dims):
+            JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
 
-        # # And adjust the Jacobian for the angle dimensions
-        # for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
-        #     cos_idx = self.dynamics_model.n_dims + offset
-        #     JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
-        #     JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
+        # And adjust the Jacobian for the angle dimensions
+        for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
+            cos_idx = self.dynamics_model.n_dims + offset
+            JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
+            JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
 
-        # # Now step through each layer in V
-        # V = x
-        # for layer in self.V_nn:
-        #     V = layer(V)
+        # Now step through each layer in V
+        V = x
+        for layer in self.V_nn:
+            V = layer(V)
 
-        #     if isinstance(layer, nn.Linear):
-        #         JV = torch.matmul(layer.weight, JV)
-        #     elif isinstance(layer, nn.Tanh):
-        #         JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
-        #     elif isinstance(layer, nn.ReLU):
-        #         JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
+            if isinstance(layer, nn.Linear):
+                JV = torch.matmul(layer.weight, JV)
+            elif isinstance(layer, nn.Tanh):
+                JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
+            elif isinstance(layer, nn.ReLU):
+                JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
 
         # # Lol JK use lqr V
-        # Get the nominal Lyapunov function
-        P = self.dynamics_model.P.type_as(x)
-        # Reshape to use pytorch's bilinear function
-        P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        V = 0.5 * F.bilinear(x, x, P)
-        P = P.reshape(self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        JV = F.linear(x, P)
-        JV = JV.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
+        # # Get the nominal Lyapunov function
+        # P = self.dynamics_model.P.type_as(x)
+        # # Reshape to use pytorch's bilinear function
+        # P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+        # V = 0.5 * F.bilinear(x, x, P)
+        # P = P.reshape(self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+        # JV = F.linear(x, P)
+        # JV = JV.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
 
-        # Make a gradient
-        x = self.normalize_with_angles(x)
-        V_net = self.V_nn(x)
-        V += 0.0000001 * V_net
+        # # Make a gradient
+        # x = self.normalize_with_angles(x)
+        # V_net = self.V_nn(x)
+        # V += 0.0000001 * V_net
 
         return V, JV
 
