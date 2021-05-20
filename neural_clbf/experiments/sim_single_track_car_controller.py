@@ -21,14 +21,14 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint = "logs/st_car/qp_in_loop/TODO"
+    checkpoint = "logs/stcar_basic/v2.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
 
     # Define the dynamics model
     nominal_params = {
-        "psi_ref": 0.5,
+        "psi_ref": 1.0,
         "v_ref": 10.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
@@ -37,11 +37,13 @@ def doMain():
 
     # Initialize the DataModule
     initial_conditions = [
-        (-2.0, 2.0),  # sxe
-        (-2.0, 2.0),  # sye
-        (-1.0, 1.0),  # delta
-        (-2.0, 2.0),  # ve
-        (-1.0, 1.0),  # psi_e
+        (-0.1, 0.1),  # sxe
+        (-0.1, 0.1),  # sye
+        (-0.1, 0.1),  # delta
+        (-0.1, 0.1),  # ve
+        (-0.1, 0.1),  # psi_e
+        (-0.1, 0.1),  # psi_dot
+        (-0.1, 0.1),  # beta
     ]
 
     # Define the scenarios (we need 2^3 = 6)
@@ -56,13 +58,13 @@ def doMain():
     data_module = EpisodicDataModule(
         stcar,
         initial_conditions,
-        trajectories_per_episode=100,
-        trajectory_length=500,
-        fixed_samples=100000,
-        max_points=500000,
+        trajectories_per_episode=10,
+        trajectory_length=1000,
+        fixed_samples=10000,
+        max_points=5000000,
         val_split=0.1,
         batch_size=64,
-        safe_unsafe_goal_quotas=(0.2, 0.2, 0.2),
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
     )
 
     clbf_controller = NeuralCLBFController.load_from_checkpoint(
@@ -70,24 +72,74 @@ def doMain():
         dynamics_model=stcar,
         scenarios=scenarios,
         datamodule=data_module,
-        clbf_hidden_layers=3,
-        clbf_hidden_size=64,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=64,
+        clbf_hidden_layers=2,
+        clbf_hidden_size=256,
+        u_nn_hidden_layers=2,
+        u_nn_hidden_size=256,
+        clbf_lambda=0.1,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_relaxation_penalty=1000.0,
-        clbf_lambda=0.1,
-        penalty_scheduling_rate=50.0,
-        epochs_per_episode=5,
+        clbf_relaxation_penalty=1e8,
+        num_controller_init_epochs=5,
+        epochs_per_episode=10,
     )
 
-    single_rollout_straight_path(clbf_controller)
+    plot_v_vs_tracking_error(clbf_controller)
     plt.show()
-    single_rollout_circle_path(clbf_controller)
-    plt.show()
-    single_rollout_s_path(clbf_controller)
-    plt.show()
+
+    # single_rollout_straight_path(clbf_controller)
+    # plt.show()
+    # single_rollout_circle_path(clbf_controller)
+    # plt.show()
+    # single_rollout_s_path(clbf_controller)
+    # plt.show()
+
+
+@torch.no_grad()
+def plot_v_vs_tracking_error(
+    clbf_controller: "NeuralCLBFController",
+) -> Tuple[str, plt.figure]:
+    # Get the CLBF value at a bunch of points
+    x_state = clbf_controller.dynamics_model.sample_state_space(1000)
+    x_safe = clbf_controller.dynamics_model.sample_safe(1000)
+    x_unsafe = clbf_controller.dynamics_model.sample_unsafe(1000)
+    x_goal = clbf_controller.dynamics_model.sample_goal(1000)
+    x = torch.cat((x_state, x_safe, x_unsafe, x_goal), dim=0)
+
+    tracking_error = x.norm(dim=-1)
+    V = clbf_controller.V(x)
+
+    # Create helpful masks
+    correctly_labelled = torch.logical_or(
+        torch.logical_and(
+            clbf_controller.dynamics_model.safe_mask(x), (V <= 1.0).squeeze()
+        ),
+        torch.logical_and(
+            clbf_controller.dynamics_model.unsafe_mask(x), (V >= 1.0).squeeze()
+        ),
+    )
+    incorrectly_labelled = torch.logical_or(
+        torch.logical_and(
+            clbf_controller.dynamics_model.safe_mask(x), (V >= 1.0).squeeze()
+        ),
+        torch.logical_and(
+            clbf_controller.dynamics_model.unsafe_mask(x), (V <= 1.0).squeeze()
+        ),
+    )
+
+    # Plot them
+    fig, axs = plt.subplots(1, 1)
+    fig.set_size_inches(10, 10)
+
+    ax1 = axs
+    ax1.scatter(tracking_error, V, color="b")
+    ax1.scatter(tracking_error[correctly_labelled], V[correctly_labelled], color="g")
+    ax1.scatter(
+        tracking_error[incorrectly_labelled], V[incorrectly_labelled], color="r"
+    )
+    ax1.legend(["?", "Correct", "Incorrect"])
+
+    return "V Scatter", fig
 
 
 @torch.no_grad()
@@ -563,7 +615,7 @@ def single_rollout_s_path(
         t_final = tstep
 
     # Plot!
-    fig, axs = plt.subplots(2, 1)
+    fig, axs = plt.subplots(3, 1)
     fig.set_size_inches(10, 12)
 
     # Get reference path
@@ -609,36 +661,38 @@ def single_rollout_s_path(
     ax1.set_xlim([np.min(x_ref) - 3, np.max(x_ref) + 3])
     ax1.set_aspect("equal")
 
-    ax3 = axs[1]
-    ax3.plot([], [], linestyle="-", label="CLBF-QP")
-    ax3.plot([], [], linestyle=":", label="Nominal")
+    ax2 = axs[1]
+    ax2.plot([], [], linestyle="-", label="CLBF-QP")
+    ax2.plot([], [], linestyle=":", label="Nominal")
     for i in range(n_sims):
-        ax3.plot(
+        ax2.plot(
             t[:t_final],
             x_sim[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             linestyle="-",
         )
     for i in range(n_sims):
-        ax3.plot(
+        ax2.plot(
             t[:t_final],
             x_nominal[:t_final, i, :].norm(dim=-1).squeeze().cpu().numpy(),
             linestyle=":",
         )
         break
-    # ax3.plot(
-    #     t[:t_final],
-    #     V_sim[:t_final, :, :].squeeze().cpu().numpy(),
-    #     label="V",
-    # )
-    # # Plot markers indicating where the simulations were unsafe
-    # zeros = np.zeros((num_timesteps,))
-    # ax3.plot(
-    #     t[:t_final],
-    #     zeros[:t_final],
-    # )
 
-    ax3.legend()
-    ax3.set_xlabel("$t$")
+    ax2.legend()
+    ax2.set_xlabel("$t$")
+
+    ax3 = axs[2]
+    ax3.plot(
+        t[:t_final],
+        V_sim[:t_final, :, :].squeeze().cpu().numpy(),
+        label="V",
+    )
+    # Plot markers indicating where the simulations were unsafe
+    zeros = np.zeros((num_timesteps,))
+    ax3.plot(
+        t[:t_final],
+        zeros[:t_final],
+    )
 
     fig.tight_layout()
 
