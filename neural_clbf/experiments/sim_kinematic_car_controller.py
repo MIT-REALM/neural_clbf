@@ -578,7 +578,6 @@ def single_rollout_s_path(
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
             for j in range(n_sims):
-                clbf_controller.gamma = gammas[j]
                 u = clbf_controller(x_current[j, :].unsqueeze(0))
                 u_sim[tstep, j, :] = u
         else:
