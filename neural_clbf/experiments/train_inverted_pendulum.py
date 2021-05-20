@@ -116,7 +116,6 @@ def main(args):
         u_nn_hidden_size=256,
         clbf_lambda=clbf_lambda,
         controller_period=controller_period,
-        lookahead=controller_period,
         clbf_relaxation_penalty=1e5,
         # clbf_relaxation_penalty=2e6,
         epochs_per_episode=10,

@@ -34,13 +34,11 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
         clbf_relaxation_penalty: float = 50.0,
-        gamma: float = 0.0,
         controller_period: float = 0.01,
-        lookahead: float = 0.1,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
         penalty_scheduling_rate: float = 100.0,
-        num_controller_init_epochs: int = 1,
+        num_init_epochs: int = 5,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
         ] = None,
@@ -57,16 +55,14 @@ class NeuralCLBFController(pl.LightningModule):
             clbf_lambda: convergence rate for the CLBF
             safety_level: safety level set value for the CLBF
             clbf_relaxation_penalty: the penalty for relaxing CLBF conditions.
-            gamma: cost scaling for difference from nominal controller.
             controller_period: the timestep to use in simulating forward Vdot
-            lookahead: how far to simulate forward to gauge decrease in V
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
             epochs_per_episode: the number of epochs to include in each episode
             penalty_scheduling_rate: the rate at which to ramp the rollout relaxation
                                      penalty up to clbf_relaxation_penalty
-            num_controller_init_epochs: the number of epochs to train the controller
-                                        network to match nominal
+            num_init_epochs: the number of epochs to pretrain the controller on the
+                             linear controller
             plotting_callbacks: a list of plotting functions that each take a
                                 NeuralCLBFController and return a tuple of a string
                                 name and figure object to log
@@ -87,13 +83,11 @@ class NeuralCLBFController(pl.LightningModule):
         self.safe_level = safety_level
         self.unsafe_level = safety_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
-        self.gamma = gamma
         self.controller_period = controller_period
-        self.lookahead = lookahead
         self.primal_learning_rate = primal_learning_rate
         self.epochs_per_episode = epochs_per_episode
         self.penalty_scheduling_rate = penalty_scheduling_rate
-        self.num_controller_init_epochs = num_controller_init_epochs
+        self.num_init_epochs = num_init_epochs
 
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
@@ -205,62 +199,53 @@ class NeuralCLBFController(pl.LightningModule):
             V: bs tensor of CLBF values
             JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
-        # Apply the offset and range to normalize about zero
-        x = self.normalize_with_angles(x)
+        # # Apply the offset and range to normalize about zero
+        # x = self.normalize_with_angles(x)
 
-        # Compute the CLBF layer-by-layer, computing the Jacobian alongside
+        # # Compute the CLBF layer-by-layer, computing the Jacobian alongside
 
-        # We need to initialize the Jacobian to reflect the normalization that's already
-        # been done to x
-        bs = x.shape[0]
-        JV = torch.zeros(
-            (bs, self.n_dims_extended, self.dynamics_model.n_dims)
-        ).type_as(x)
-        # and for each non-angle dimension, we need to scale by the normalization
-        for dim in range(self.dynamics_model.n_dims):
-            JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
+        # # We need to initialize the Jacobian to reflect the normalization that's already
+        # # been done to x
+        # bs = x.shape[0]
+        # JV = torch.zeros(
+        #     (bs, self.n_dims_extended, self.dynamics_model.n_dims)
+        # ).type_as(x)
+        # # and for each non-angle dimension, we need to scale by the normalization
+        # for dim in range(self.dynamics_model.n_dims):
+        #     JV[:, dim, dim] = 1.0 / self.x_range[dim].type_as(x)
 
-        # And adjust the Jacobian for the angle dimensions
-        for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
-            cos_idx = self.dynamics_model.n_dims + offset
-            JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
-            JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
+        # # And adjust the Jacobian for the angle dimensions
+        # for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
+        #     cos_idx = self.dynamics_model.n_dims + offset
+        #     JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
+        #     JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
 
-        # Now step through each layer in V
-        V = x
-        for layer in self.V_nn:
-            V = layer(V)
+        # # Now step through each layer in V
+        # V = x
+        # for layer in self.V_nn:
+        #     V = layer(V)
 
-            if isinstance(layer, nn.Linear):
-                JV = torch.matmul(layer.weight, JV)
-            elif isinstance(layer, nn.Tanh):
-                JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
-            elif isinstance(layer, nn.ReLU):
-                JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
+        #     if isinstance(layer, nn.Linear):
+        #         JV = torch.matmul(layer.weight, JV)
+        #     elif isinstance(layer, nn.Tanh):
+        #         JV = torch.matmul(torch.diag_embed(1 - V ** 2), JV)
+        #     elif isinstance(layer, nn.ReLU):
+        #         JV = torch.matmul(torch.diag_embed(torch.sign(V)), JV)
 
         # # Lol JK use lqr V
-        # P = torch.tensor(
-        #     [
-        #         [1.4434, 0.0000, 0.0000, 0.5000, 0.0000, 0.0000, 0.0000],
-        #         [0.0000, 0.5334, 0.5000, 0.0000, 1.3438, 0.0382, 0.2261],
-        #         [0.0000, 0.5000, 1.9205, 0.0000, 2.2879, 0.1421, 0.2373],
-        #         [0.5000, 0.0000, 0.0000, 0.5774, 0.0000, 0.0000, 0.0000],
-        #         [0.0000, 1.3438, 2.2879, 0.0000, 6.3124, 0.2096, 0.6128],
-        #         [0.0000, 0.0382, 0.1421, 0.0000, 0.2096, 0.0301, 0.0170],
-        #         [0.0000, 0.2261, 0.2373, 0.0000, 0.6128, 0.0170, 0.1232],
-        #     ]
-        # )
-        # V = torch.zeros((x.shape[0], 1)).type_as(x)
-        # JV = torch.zeros(x.shape[0], 1, self.dynamics_model.n_dims)
-        # for i in range(x.shape[0]):
-        #     xi = x[i, :]
-        #     V[i, 0] = 0.5 * xi @ P @ xi
-        #     JV[i, 0, :] = xi @ P
+        # Get the nominal Lyapunov function
+        P = self.dynamics_model.P.type_as(x)
+        # Reshape to use pytorch's bilinear function
+        P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+        V = 0.5 * F.bilinear(x, x, P)
+        P = P.reshape(self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+        JV = F.linear(x, P)
+        JV = JV.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
 
-        # # Make a gradient
-        # x = self.normalize_with_angles(x)
-        # V_net = self.V_nn(x)
-        # V += 0.0000001 * V_net
+        # Make a gradient
+        x = self.normalize_with_angles(x)
+        V_net = self.V_nn(x)
+        V += 0.0000001 * V_net
 
         return V, JV
 
@@ -406,10 +391,6 @@ class NeuralCLBFController(pl.LightningModule):
         p = torch.zeros(bs, n_vars).type_as(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         # p[:, :n_controls] = -2.0 * u_nominal
-
-        # Add cost term to minimize Vdot
-        for i in range(n_scenarios):
-            p[:, :n_controls] += self.gamma * Lg_V[:, i, :]
 
         # Now build the inequality constraints G @ [u r]^T <= h
         if self.clbf_relaxation_penalty < 1e6:
@@ -585,39 +566,37 @@ class NeuralCLBFController(pl.LightningModule):
             clbf_descent_term_lin += violation.mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
-        # #   1.) A term to encourage satisfaction of the CLBF decrease condition,
-        # # by minimizing the relaxation in the CLBF conditions needed to solve the QP
-        # u, relax, objective = self.solve_CLBF_QP(x)
-        # # relax_term = self.clbf_relaxation_penalty * relax.mean()
-        # relax_term = relax.mean()
-        # loss.append(("CLBF QP relaxation", relax_term))
+        return loss
 
-        # #   2.) Also minimize the objective of the QP. This should push in mostly the
-        # # same direction as (1), since the objective includes a relax^2 term.
-        # objective_term = objective.mean()
-        # loss.append(("CLBF QP objective", objective_term))
+    def initial_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
+        """
+        Compute the loss during the initialization epochs, which trains the net to
+        match the nominal controller and local linear lyapunov function
+        """
+        loss = []
 
-        # #   3.) A term to encourage satisfaction of CLBF decrease condition
-        # # We compute the change in V by simulating x forward in time and checking if V
-        # # decreases
-        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        # for s in self.scenarios:
-        #     sim_timesteps = round(self.lookahead / self.dynamics_model.dt)
-        #     x_next = self.simulator_fn(x, sim_timesteps, use_qp=True)[:, -1, :]
-        #     V_next = self.V(x_next)
-        #     # dV/dt \approx (V_next - V)/dt + lambda V \leq 0
-        #     V_dot = (V_next - V) / self.lookahead
-        #     clbf_descent_term_sim += F.relu(eps + V_dot + self.clbf_lambda * V).mean()
-        # loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
-
-        #   5.) Compare the controller to the nominal, with a loss that decreases at
-        # each epoch
-        u_nominal = self.dynamics_model.u_nominal(x).unsqueeze(-1)
+        #   1.) Compare the controller to the nominal
+        u_nn = self.u(x)
+        u_nominal = self.dynamics_model.u_nominal(x)
         dynamics_mse_loss = (u_nn - u_nominal) ** 2
         dynamics_mse_loss = dynamics_mse_loss.mean()
-        epoch_cutoff = max(self.current_epoch - self.num_controller_init_epochs, 0)
-        dynamics_mse_loss /= 100 * epoch_cutoff + 1
         loss.append(("Controller MSE", dynamics_mse_loss))
+
+        #   2.) Compare the CLBF to the nominal solution
+
+        # Get the learned CLBF
+        V = self.V(x)
+
+        # Get the nominal Lyapunov function
+        P = self.dynamics_model.P.type_as(x)
+        # Reshape to use pytorch's bilinear function
+        P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+        V_nominal = 0.5 * F.bilinear(x, x, P)
+
+        # Compute the error between the two
+        clbf_mse_loss = (V - V_nominal) ** 2
+        clbf_mse_loss = clbf_mse_loss.mean()
+        loss.append(("CLBF MSE", clbf_mse_loss))
 
         return loss
 
@@ -628,12 +607,15 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the losses
         component_losses = {}
-        component_losses.update(
-            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        )
-        component_losses.update(
-            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        )
+        if self.current_epoch < self.num_init_epochs:
+            component_losses.update(self.initial_loss(x))
+        else:
+            component_losses.update(
+                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            )
+            component_losses.update(
+                self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -788,21 +770,13 @@ class NeuralCLBFController(pl.LightningModule):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
-            # # Figure out the relaxation penalty for this rollout
-            # relaxation_penalty = (
-            #     self.clbf_relaxation_penalty
-            #     * self.current_epoch
-            #     / self.penalty_scheduling_rate
-            # )
-            relaxation_penalty = self.clbf_relaxation_penalty
-
             # Use the models simulation function with this controller
             def simulator_fn_wrapper(x_init: torch.Tensor, num_steps: int):
                 return self.simulator_fn(
                     x_init,
                     num_steps,
                     use_qp=True,
-                    relaxation_penalty=relaxation_penalty,
+                    relaxation_penalty=self.clbf_relaxation_penalty,
                 )
 
             self.datamodule.add_data(simulator_fn_wrapper)
