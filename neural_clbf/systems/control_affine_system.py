@@ -6,9 +6,11 @@ from abc import (
 )
 from typing import Callable, Tuple, Optional, List
 
+import numpy as np
 import torch
+from torch.autograd.functional import jacobian
 
-from neural_clbf.systems.utils import Scenario
+from neural_clbf.systems.utils import Scenario, lqr, continuous_lyap
 
 
 class ControlAffineSystem(ABC):
@@ -24,13 +26,24 @@ class ControlAffineSystem(ABC):
     useful properties when it comes to designing controllers.
     """
 
-    def __init__(self, nominal_params: Scenario, dt: float = 0.01):
+    def __init__(
+        self,
+        nominal_params: Scenario,
+        dt: float = 0.01,
+        controller_dt: Optional[float] = None,
+        use_linearized_controller: bool = True,
+    ):
         """
         Initialize a system.
 
         args:
             nominal_params: a dictionary giving the parameter values for the system
             dt: the timestep to use for simulation
+            controller_dt: the timestep for the LQR discretization. Defaults to dt
+            use_linearized_controller: if True, linearize the system model to derive a
+                                       LQR controller. If false, the system is must
+                                       set self.P itself to be a tensor n_dims x n_dims
+                                       positive definite matrix.
         raises:
             ValueError if nominal_params are not valid for this system
         """
@@ -45,6 +58,42 @@ class ControlAffineSystem(ABC):
         # Make sure the timestep is valid
         assert dt > 0.0
         self.dt = dt
+
+        if controller_dt is None:
+            controller_dt = self.dt
+        self.controller_dt = controller_dt
+
+        # Compute the linearized controller
+        if use_linearized_controller:
+            self.compute_linearized_controller()
+
+    def compute_linearized_controller(self):
+        """
+        Computes the linearized controller K and lyapunov matrix P.
+        """
+        # Compute the LQR gain matrix for the nominal parameters
+        # Linearize the system about the x = 0, u = 0
+        x0 = self.goal_point
+        u0 = self.u_eq
+        dynamics = lambda x: self.closed_loop_dynamics(
+            x, u0, self.nominal_params
+        ).squeeze()
+        Act = jacobian(dynamics, x0).squeeze().cpu().numpy()
+        A = np.eye(self.n_dims) + self.controller_dt * Act
+
+        Bct = self._g(self.goal_point, self.nominal_params).squeeze().cpu().numpy()
+        B = self.controller_dt * Bct
+
+        # Define cost matrices as identity
+        Q = np.eye(self.n_dims)
+        R = np.eye(self.n_controls)
+
+        # Get feedback matrix
+        K_np = lqr(A, B, Q, R)
+        self.K = torch.tensor(K_np)
+
+        # compute the closed loop dynamics and get the Lyapunov matrix
+        self.P = torch.tensor(continuous_lyap(Act - Bct @ K_np, Q))
 
     @abstractmethod
     def validate_params(self, params: Scenario) -> bool:
@@ -154,6 +203,10 @@ class ControlAffineSystem(ABC):
     @property
     def goal_point(self):
         return torch.zeros((1, self.n_dims))
+
+    @property
+    def u_eq(self):
+        return torch.zeros((1, self.n_controls))
 
     def sample_state_space(self, num_samples: int) -> torch.Tensor:
         """Sample uniformly from the state space"""
@@ -375,15 +428,29 @@ class ControlAffineSystem(ABC):
         """
         pass
 
-    @abstractmethod
     def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Compute the nominal (e.g. LQR or proportional) control for the nominal
-        parameters
+        Compute the nominal control for the nominal parameters, using LQR unless
+        overridden
 
         args:
             x: bs x self.n_dims tensor of state
         returns:
             u_nominal: bs x self.n_controls tensor of controls
         """
-        pass
+        # Compute nominal control from feedback + equilibrium control
+        u_nominal = -(self.K.type_as(x) @ (x - self.goal_point.squeeze()).T).T
+
+        # Adjust for the equilibrium setpoint
+        u = u_nominal + self.u_eq
+
+        # Clamp given the control limits
+        upper_u_lim, lower_u_lim = self.control_limits
+        for dim_idx in range(self.n_controls):
+            u[:, dim_idx] = torch.clamp(
+                u[:, dim_idx],
+                min=lower_u_lim[dim_idx].item(),
+                max=upper_u_lim[dim_idx].item(),
+            )
+
+        return u

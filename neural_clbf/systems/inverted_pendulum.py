@@ -2,10 +2,9 @@
 from typing import Tuple, Optional, List
 
 import torch
-import numpy as np
 
 from .control_affine_system import ControlAffineSystem
-from neural_clbf.systems.utils import grav, Scenario, lqr
+from neural_clbf.systems.utils import grav, Scenario
 
 
 class InvertedPendulum(ControlAffineSystem):
@@ -56,33 +55,7 @@ class InvertedPendulum(ControlAffineSystem):
         raises:
             ValueError if nominal_params are not valid for this system
         """
-        super().__init__(nominal_params, dt)
-
-        # Compute the LQR gain matrix for the nominal parameters
-        # Linearize the system about the x = 0, u = 0
-        A = np.zeros((self.n_dims, self.n_dims))
-        A[0, 1] = 1.0
-        A[1, 0] = grav / self.nominal_params["L"]
-        A[1, 1] = -self.nominal_params["b"] / (
-            self.nominal_params["m"] * self.nominal_params["L"] ** 2
-        )
-
-        B = np.zeros((self.n_dims, self.n_controls))
-        B[1, 0] = 1.0 / (self.nominal_params["m"] * self.nominal_params["L"] ** 2)
-
-        # Adapt for discrete time
-        if controller_dt is None:
-            controller_dt = dt
-
-        A = np.eye(self.n_dims) + controller_dt * A
-        B = controller_dt * B
-
-        # Define cost matrices as identity
-        Q = np.eye(self.n_dims)
-        R = np.eye(self.n_controls)
-
-        # Get feedback matrix
-        self.K = torch.tensor(lqr(A, B, Q, R))
+        super().__init__(nominal_params, dt, controller_dt)
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -241,30 +214,3 @@ class InvertedPendulum(ControlAffineSystem):
         g[:, InvertedPendulum.THETA_DOT, InvertedPendulum.U] = 1 / (m * L ** 2)
 
         return g
-
-    def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the nominal control for the nominal parameters. For the inverted
-        pendulum, the nominal controller is LQR
-
-        args:
-            x: bs x self.n_dims tensor of state
-        returns:
-            u_nominal: bs x self.n_controls tensor of controls
-        """
-        # Compute nominal control from feedback + equilibrium control
-        x0 = self.goal_point.squeeze().type_as(x)
-        u_nominal = -(self.K.type_as(x) @ (x - x0).T).T
-        u_eq = torch.zeros_like(u_nominal)
-        u = u_nominal + u_eq
-
-        # Clamp given the control limits
-        upper_u_lim, lower_u_lim = self.control_limits
-        for dim_idx in range(self.n_controls):
-            u[:, dim_idx] = torch.clamp(
-                u[:, dim_idx],
-                min=lower_u_lim[dim_idx].item(),
-                max=upper_u_lim[dim_idx].item(),
-            )
-
-        return u

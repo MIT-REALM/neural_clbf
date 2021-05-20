@@ -2,7 +2,6 @@
 from typing import Tuple, Optional, List
 
 import torch
-from torch.autograd.functional import jacobian
 import numpy as np
 
 from .control_affine_system import ControlAffineSystem
@@ -76,35 +75,11 @@ class STCar(ControlAffineSystem):
         raises:
             ValueError if nominal_params are not valid for this system
         """
-        super().__init__(nominal_params, dt)
-
         # Get car parameters
         self.car_params = parameters_vehicle2()
 
-        if controller_dt is None:
-            controller_dt = dt
-        self.controller_dt = controller_dt
-
-        # Compute the LQR gain matrix for the nominal parameters
-        # Linearize the system about the x = 0, u = 0
-        x0 = self.goal_point
-        u0 = torch.zeros((1, self.n_controls)).type_as(x0)
-        dynamics = lambda x: self.closed_loop_dynamics(
-            x, u0, self.nominal_params
-        ).squeeze()
-        A = jacobian(dynamics, self.goal_point).squeeze().cpu().numpy()
-        A = np.eye(self.n_dims) + self.controller_dt * A
-
-        B = self._g(self.goal_point, self.nominal_params).squeeze().cpu().numpy()
-        B = self.controller_dt * B
-
-        # Define cost matrices as identity
-        Q = np.eye(self.n_dims)
-        R = np.eye(self.n_controls)
-
-        # Get feedback matrix
-        # import pdb; pdb.set_trace()
-        self.K = torch.tensor(lqr(A, B, Q, R))
+        # Then initialize
+        super().__init__(nominal_params, dt, controller_dt)
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
