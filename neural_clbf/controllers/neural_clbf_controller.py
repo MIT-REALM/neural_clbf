@@ -261,22 +261,22 @@ class NeuralCLBFController(pl.LightningModule):
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                controller
         """
-        # # Apply the offset and range to normalize about zero
-        # x = self.normalize_with_angles(x)
+        # Apply the offset and range to normalize about zero
+        x = self.normalize_with_angles(x)
 
-        # # Compute the control effort using the neural network
-        # u = self.u_NN(x)
+        # Compute the control effort using the neural network
+        u = self.u_NN(x)
 
-        # # Scale to reflect plant actuator limits
-        # upper_lim, lower_lim = self.dynamics_model.control_limits
-        # u_center = (upper_lim + lower_lim).type_as(x) / 2.0
-        # u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
+        # Scale to reflect plant actuator limits
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
+        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
 
-        # u_scaled = u * u_semi_range + u_center
+        u_scaled = u * u_semi_range + u_center
 
-        # For now, set u to u_nominal to test V learning
-        # TODO @dawsonc, not permanent
-        u_scaled = self.dynamics_model.u_nominal(x)
+        # # For now, set u to u_nominal to test V learning
+        # # TODO @dawsonc, not permanent
+        # u_scaled = self.dynamics_model.u_nominal(x)
 
         return u_scaled
 
@@ -775,7 +775,7 @@ class NeuralCLBFController(pl.LightningModule):
                 return self.simulator_fn(
                     x_init,
                     num_steps,
-                    use_qp=True,
+                    use_qp=False,
                     relaxation_penalty=self.clbf_relaxation_penalty,
                 )
 
