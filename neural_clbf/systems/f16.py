@@ -84,7 +84,11 @@ class F16(ControlAffineSystem):
         raises:
             ValueError if nominal_params are not valid for this system
         """
-        super().__init__(nominal_params, dt)
+        super().__init__(nominal_params, dt, use_linearized_controller=False)
+
+        # Since we aren't using a linearized controller, we need to provide
+        # some guess for a Lyapunov matrix
+        self.P = torch.eye(self.n_dims)
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid

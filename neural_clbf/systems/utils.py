@@ -45,3 +45,25 @@ def lqr(
     else:
         eigVals, _ = scipy.linalg.eig(A - B * K)
         return K, eigVals
+
+
+def continuous_lyap(Acl: np.ndarray, Q: np.ndarray):
+    """Solve the continuous time lyapunov equation.
+
+    Acl.T P + P Acl + Q = 0
+
+    using scipy, which expects AP + PA.T = Q, so we need to transpose Acl and negate Q
+    """
+    P = scipy.linalg.solve_continuous_lyapunov(Acl.T, -Q)
+    return P
+
+
+def discrete_lyap(Acl: np.ndarray, Q: np.ndarray):
+    """Solve the continuous time lyapunov equation.
+
+    Acl.T P Acl - P + Q = 0
+
+    using scipy, which expects A P A.T - P + Q = 0, so we need to transpose Acl
+    """
+    P = scipy.linalg.solve_discrete_lyapunov(Acl.T, Q)
+    return P

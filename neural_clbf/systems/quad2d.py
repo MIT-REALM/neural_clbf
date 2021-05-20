@@ -5,7 +5,7 @@ import torch
 import numpy as np
 
 from .control_affine_system import ControlAffineSystem
-from .utils import grav, Scenario, lqr
+from .utils import grav, Scenario
 
 
 class Quad2D(ControlAffineSystem):
@@ -61,35 +61,7 @@ class Quad2D(ControlAffineSystem):
         raises:
             ValueError if nominal_params are not valid for this system
         """
-        super().__init__(nominal_params, dt)
-
-        # Compute the LQR gain matrix for the nominal parameters
-        # Linearize the system about the x = 0, u1 = u2 = mg / 2
-        A = np.zeros((self.n_dims, self.n_dims))
-        A[0, 3] = 1.0
-        A[1, 4] = 1.0
-        A[2, 5] = 1.0
-        A[3, 2] = -grav
-
-        B = np.zeros((self.n_dims, self.n_controls))
-        B[4, 0] = 1.0 / self.nominal_params["m"]
-        B[4, 1] = 1.0 / self.nominal_params["m"]
-        B[5, 0] = self.nominal_params["r"] / self.nominal_params["I"]
-        B[5, 1] = -self.nominal_params["r"] / self.nominal_params["I"]
-
-        # Adapt for discrete time
-        if controller_dt is None:
-            controller_dt = dt
-
-        A = np.eye(self.n_dims) + controller_dt * A
-        B = controller_dt * B
-
-        # Define cost matrices as identity
-        Q = np.eye(self.n_dims)
-        R = np.eye(self.n_controls)
-
-        # Get feedback matrix
-        self.K = torch.tensor(lqr(A, B, Q, R))
+        super().__init__(nominal_params, dt, controller_dt)
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -330,18 +302,15 @@ class Quad2D(ControlAffineSystem):
 
         return g
 
-    def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the nominal control for the nominal parameters. For Quad2D, the nominal
-        controller is LQR
-
-        args:
-            x: bs x self.n_dims tensor of state
-        returns:
-            u_nominal: bs x self.n_controls tensor of controls
-        """
-        # Compute nominal control from feedback + equilibrium control
-        u_nominal = -(self.K.type_as(x) @ (x - self.goal_point.squeeze()).T).T
-        u_eq = torch.zeros_like(u_nominal) + self.nominal_params["m"] * grav / 2.0
-
-        return u_nominal + u_eq
+    @property
+    def u_eq(self):
+        u_eq = (
+            torch.zeros(
+                (
+                    1,
+                    self.n_controls,
+                )
+            )
+            + self.nominal_params["m"] * grav / 2.0
+        )
+        return u_eq

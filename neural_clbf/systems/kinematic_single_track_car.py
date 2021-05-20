@@ -72,40 +72,10 @@ class KSCar(ControlAffineSystem):
         raises:
             ValueError if nominal_params are not valid for this system
         """
-        super().__init__(nominal_params, dt)
-
         # Get car parameters
         self.car_params = parameters_vehicle2()
 
-        if controller_dt is None:
-            controller_dt = dt
-        self.controller_dt = controller_dt
-
-        # Compute the LQR gain matrix for the nominal parameters
-        # Linearize the system about the x = 0, u = 0
-        wheelbase = self.car_params.a + self.car_params.b
-        A = np.zeros((self.n_dims, self.n_dims))
-        A[KSCar.SXE, KSCar.SYE] = self.nominal_params["omega_ref"]
-        A[KSCar.SXE, KSCar.VE] = 1
-
-        A[KSCar.SYE, KSCar.SXE] = -self.nominal_params["omega_ref"]
-        A[KSCar.SYE, KSCar.PSI_E] = self.nominal_params["v_ref"]
-
-        A[KSCar.PSI_E, KSCar.DELTA] = self.nominal_params["v_ref"] / wheelbase
-
-        B = np.zeros((self.n_dims, self.n_controls))
-        B[KSCar.DELTA, KSCar.VDELTA] = 1.0
-        B[KSCar.VE, KSCar.ALONG] = 1.0
-
-        A = np.eye(self.n_dims) + self.controller_dt * A
-        B = self.controller_dt * B
-
-        # Define cost matrices as identity
-        Q = np.eye(self.n_dims)
-        R = np.eye(self.n_controls)
-
-        # Get feedback matrix
-        self.K = torch.tensor(lqr(A, B, Q, R))
+        super().__init__(nominal_params, dt, controller_dt)
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid

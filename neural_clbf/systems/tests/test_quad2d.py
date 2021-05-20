@@ -26,6 +26,14 @@ def test_quad2d_init():
     assert torch.allclose(upper_lim, expected_upper, atol=0.01)
     assert torch.allclose(lower_lim, expected_lower, atol=0.01)
 
+    # Test that we can get nominal controls for a bunch of random points
+    N = 100
+    x = quad2d.sample_state_space(N)
+    u = quad2d.u_nominal(x)
+    assert u.shape[0] == N
+    assert u.shape[1] == quad2d.n_controls
+    assert u.ndim == 2
+
     # Test instantiation without all needed parameters
     incomplete_params_list = [
         {},
