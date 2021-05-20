@@ -60,7 +60,7 @@ class F16(ControlAffineSystem):
     PHI = 3  # roll angle
     THETA = 4  # pitch angle
     PSI = 5  # yaw angle
-    P = 6  # roll rate
+    Proll = 6  # roll rate
     Q = 7  # pitch rate
     R = 8  # yaw rate
     POSN = 9  # northward displacement
@@ -209,7 +209,7 @@ class F16(ControlAffineSystem):
         # We also need to carve out some space around the goal region
         goal_buffer = torch.ones_like(x[:, 0], dtype=torch.bool)
         nose_high_enough = x[:, F16.THETA] + x[:, F16.ALPHA] >= -0.2
-        roll_rate_low = x[:, F16.P].abs() <= 0.5
+        roll_rate_low = x[:, F16.Proll].abs() <= 0.5
         wings_near_level = x[:, F16.PHI].abs() <= 0.2
         above_deck = x[:, F16.H] >= 800.0
         goal_buffer.logical_and_(nose_high_enough)
@@ -260,7 +260,7 @@ class F16(ControlAffineSystem):
         # the deck
         nose_high_enough = x[:, F16.THETA] + x[:, F16.ALPHA] >= 0.0
         goal_mask.logical_and_(nose_high_enough)
-        roll_rate_low = x[:, F16.P].abs() <= 0.25
+        roll_rate_low = x[:, F16.Proll].abs() <= 0.25
         goal_mask.logical_and_(roll_rate_low)
         wings_near_level = x[:, F16.PHI].abs() <= 0.1
         goal_mask.logical_and_(wings_near_level)

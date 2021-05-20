@@ -90,7 +90,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=10,
         trajectory_length=1000,
-        fixed_samples=10000,
+        fixed_samples=50000,
         max_points=5000000,
         val_split=0.1,
         batch_size=64,
@@ -111,12 +111,12 @@ def main(args):
     plotting_callbacks = [
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
-        # # This plotting function simulates rollouts of the controller
-        # rollout_plotting_cb,
-        # # Plot some rollouts
-        # # single_rollout_straight_path,
-        # # single_rollout_circle_path,
-        # single_rollout_s_path,
+        # This plotting function simulates rollouts of the controller
+        rollout_plotting_cb,
+        # Plot some rollouts
+        # single_rollout_straight_path,
+        # single_rollout_circle_path,
+        single_rollout_s_path,
     ]
 
     # Initialize the controller
@@ -132,7 +132,7 @@ def main(args):
         clbf_lambda=0.1,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e8,
-        num_init_epochs=100,
+        num_init_epochs=25,
         epochs_per_episode=100,
     )
     # Add the DataModule hooks
