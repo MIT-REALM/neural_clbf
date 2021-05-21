@@ -149,11 +149,6 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_NN_layers["output_activation"] = nn.Tanh()
         self.u_NN = nn.Sequential(self.u_NN_layers)
 
-        # We also need a tunable parameter for scaling and shifting the LQR lyapunov
-        # function when we match it
-        self.nominal_V_shift = nn.parameter.Parameter(torch.tensor(0.0))
-        self.nominal_V_scale = nn.parameter.Parameter(torch.tensor(1.0))
-
         # Also set up the objective and actuation limit constraints for the qp
         # controller (enforced as G_u @ u <= h)
         self.G_u = torch.zeros(
@@ -597,7 +592,6 @@ class NeuralCLBFController(pl.LightningModule):
         # Reshape to use pytorch's bilinear function
         P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
         V_nominal = 0.5 * F.bilinear(x, x, P)
-        V_nominal = self.nominal_V_scale * V_nominal + self.nominal_V_shift
 
         # Compute the error between the two
         clbf_mse_loss = (V - V_nominal) ** 2
@@ -790,9 +784,7 @@ class NeuralCLBFController(pl.LightningModule):
     def configure_optimizers(self):
         primal_opt = torch.optim.SGD(
             list(self.V_nn.parameters())
-            + list(self.u_NN.parameters())
-            + [self.nominal_V_shift]
-            + [self.nominal_V_scale],
+            + list(self.u_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
