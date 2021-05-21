@@ -393,7 +393,7 @@ class NeuralCLBFController(pl.LightningModule):
         # p[:, :n_controls] = -2.0 * u_nominal
 
         # Now build the inequality constraints G @ [u r]^T <= h
-        if self.clbf_relaxation_penalty < 1e6:
+        if relaxation_penalty < 1e6:
             G = torch.zeros(bs, 2 * n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
             h = torch.zeros(bs, 2 * n_scenarios + self.h_u.shape[0], 1).type_as(x)
             # CLBF decrease condition in each scenario
@@ -431,7 +431,7 @@ class NeuralCLBFController(pl.LightningModule):
         h = h.double()
 
         # Solve the QP!
-        result: torch.Tensor = QPFunction(verbose=False, notImprovedLim=100)(
+        result: torch.Tensor = QPFunction(verbose=False, notImprovedLim=200)(
             Q, p, G, h, A, b
         )
         # Extract the results
