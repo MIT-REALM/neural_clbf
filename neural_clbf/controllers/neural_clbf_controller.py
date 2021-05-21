@@ -575,11 +575,15 @@ class NeuralCLBFController(pl.LightningModule):
         """
         loss = []
 
+        # The initial losses should decrease exponentially to zero, based on the epoch
+        epoch_count = max(self.current_epoch - self.num_init_epochs, 0)
+        decrease_factor = 0.5 ** epoch_count
+
         #   1.) Compare the controller to the nominal
         u_nn = self.u(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         dynamics_mse_loss = (u_nn - u_nominal) ** 2
-        dynamics_mse_loss = dynamics_mse_loss.mean()
+        dynamics_mse_loss = decrease_factor * dynamics_mse_loss.mean()
         loss.append(("Controller MSE", dynamics_mse_loss))
 
         #   2.) Compare the CLBF to the nominal solution
@@ -595,7 +599,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the error between the two
         clbf_mse_loss = (V - V_nominal) ** 2
-        clbf_mse_loss = clbf_mse_loss.mean()
+        clbf_mse_loss = decrease_factor * clbf_mse_loss.mean()
         loss.append(("CLBF MSE", clbf_mse_loss))
 
         return loss
@@ -607,15 +611,13 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the losses
         component_losses = {}
-        if self.current_epoch < self.num_init_epochs:
-            component_losses.update(self.initial_loss(x))
-        else:
-            component_losses.update(
-                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
-            component_losses.update(
-                self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
+        component_losses.update(self.initial_loss(x))
+        component_losses.update(
+            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(
+            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
