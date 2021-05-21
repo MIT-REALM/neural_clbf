@@ -457,8 +457,8 @@ class NeuralCLBFController(pl.LightningModule):
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control inputs
         """
-        # u, _, _ = self.solve_CLBF_QP(x)
-        u = self.u(x)
+        u, _, _ = self.solve_CLBF_QP(x)
+        # u = self.u(x)
         return u
 
     def boundary_loss(
@@ -775,7 +775,7 @@ class NeuralCLBFController(pl.LightningModule):
                 return self.simulator_fn(
                     x_init,
                     num_steps,
-                    use_qp=False,
+                    use_qp=True,
                     relaxation_penalty=self.clbf_relaxation_penalty,
                 )
 
