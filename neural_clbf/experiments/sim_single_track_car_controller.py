@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint = "logs/stcar_basic/v2.ckpt"
+    checkpoint = "logs/stcar_basic/v5.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -84,15 +84,15 @@ def doMain():
         epochs_per_episode=10,
     )
 
-    plot_v_vs_tracking_error(clbf_controller)
-    plt.show()
+    # plot_v_vs_tracking_error(clbf_controller)
+    # plt.show()
 
     # single_rollout_straight_path(clbf_controller)
     # plt.show()
     # single_rollout_circle_path(clbf_controller)
     # plt.show()
-    # single_rollout_s_path(clbf_controller)
-    # plt.show()
+    single_rollout_s_path(clbf_controller)
+    plt.show()
 
 
 @torch.no_grad()
