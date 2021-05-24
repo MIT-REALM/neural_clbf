@@ -729,14 +729,14 @@ class NeuralCLBFController(pl.LightningModule):
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of every validation epoch, using arbitrary plotting callbacks!
 
-        # # Figure out the relaxation penalty for this rollout
-        # relaxation_penalty = (
-        #     self.clbf_relaxation_penalty
-        #     * self.current_epoch
-        #     / self.penalty_scheduling_rate
-        # )
+        # Figure out the relaxation penalty for this rollout
+        relaxation_penalty = (
+            self.clbf_relaxation_penalty
+            * self.current_epoch
+            / self.penalty_scheduling_rate
+        )
         old_relaxation_penalty = self.clbf_relaxation_penalty
-        # self.clbf_relaxation_penalty = relaxation_penalty
+        self.clbf_relaxation_penalty = relaxation_penalty
 
         plots = []
         for plot_fn in self.plotting_callbacks:
@@ -784,13 +784,19 @@ class NeuralCLBFController(pl.LightningModule):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
+            relaxation_penalty = (
+                self.clbf_relaxation_penalty
+                * self.current_epoch
+                / self.penalty_scheduling_rate
+            )
+
             # Use the models simulation function with this controller
             def simulator_fn_wrapper(x_init: torch.Tensor, num_steps: int):
                 return self.simulator_fn(
                     x_init,
                     num_steps,
                     use_qp=True,
-                    relaxation_penalty=self.clbf_relaxation_penalty,
+                    relaxation_penalty=relaxation_penalty,
                 )
 
             self.datamodule.add_data(simulator_fn_wrapper)
