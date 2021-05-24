@@ -280,30 +280,37 @@ class NeuralCLBFController(pl.LightningModule):
 
         return u_scaled
 
-    def V_lie_derivatives(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def V_lie_derivatives(
+        self, x: torch.Tensor, scenarios: Optional[ScenarioList] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute the Lie derivatives of the CLBF V along the control-affine dynamics
 
         args:
             x: bs x self.dynamics_model.n_dims tensor of state
+            scenarios: optional list of scenarios. Defaults to self.scenarios
         returns:
-            Lf_V: bs x self.n_scenarios x 1 tensor of Lie derivatives of V
+            Lf_V: bs x len(scenarios) x 1 tensor of Lie derivatives of V
                   along f
-            Lg_V: bs x self.n_scenarios x self.dynamics_model.n_controls tensor
+            Lg_V: bs x len(scenarios) x self.dynamics_model.n_controls tensor
                   of Lie derivatives of V along g
         """
+        if scenarios is None:
+            scenarios = self.scenarios
+        n_scenarios = len(scenarios)
+
         # Get the Jacobian of V for each entry in the batch
         _, gradV = self.V_with_jacobian(x)
 
         # We need to compute Lie derivatives for each scenario
         batch_size = x.shape[0]
-        Lf_V = torch.zeros(batch_size, self.n_scenarios, 1)
-        Lg_V = torch.zeros(batch_size, self.n_scenarios, self.dynamics_model.n_controls)
+        Lf_V = torch.zeros(batch_size, n_scenarios, 1)
+        Lg_V = torch.zeros(batch_size, n_scenarios, self.dynamics_model.n_controls)
         Lf_V = Lf_V.type_as(x)
         Lg_V = Lg_V.type_as(x)
 
-        for i in range(self.n_scenarios):
+        for i in range(n_scenarios):
             # Get the dynamics f and g for this scenario
-            s = self.scenarios[i]
+            s = scenarios[i]
             f, g = self.dynamics_model.control_affine_dynamics(x, params=s)
 
             # Multiply these with the Jacobian to get the Lie derivatives
@@ -431,9 +438,8 @@ class NeuralCLBFController(pl.LightningModule):
         h = h.double()
 
         # Solve the QP!
-        result: torch.Tensor = QPFunction(verbose=False, notImprovedLim=200)(
-            Q, p, G, h, A, b
-        )
+        qp_function = QPFunction(verbose=False, notImprovedLim=200)
+        result: torch.Tensor = qp_function(Q, p, G, h, A, b)
         # Extract the results
         u = result[:, :n_controls]
         r = result[:, n_controls:]
