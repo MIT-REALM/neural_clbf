@@ -1,7 +1,9 @@
 from typing import Tuple, List, Optional, Callable
 from collections import OrderedDict
 
-from qpth.qp import QPFunction
+import gurobipy as gp
+from gurobipy import GRB
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -381,79 +383,66 @@ class NeuralCLBFController(pl.LightningModule):
         # We can optionally add the user-specified inequality constraints as G_u
         n_controls = self.dynamics_model.n_controls
         n_scenarios = self.n_scenarios
-        if relaxation_penalty < 1e6:
-            n_vars = n_controls + n_scenarios
-        else:
-            n_vars = n_controls
+        allow_relaxation = relaxation_penalty < 1e6
 
+        # Solve a QP for each row in x
         bs = x.shape[0]
+        u_result = torch.zeros(bs, n_controls).type_as(x)
+        r_result = torch.zeros(bs, n_scenarios).type_as(x)
+        objective_result = torch.zeros(bs, 1).type_as(x)
+        for batch_idx in range(bs):
+            # Instantiate the model
+            model = gp.Model("clbf_qp")
+            # Create variables for control input and (optionally) the relaxations
+            u = model.addMVar(n_controls)
+            if allow_relaxation:
+                r = model.addVars(n_scenarios)
 
-        # Start by building the cost
-        Q = torch.zeros(bs, n_vars, n_vars).type_as(x)
-        for j in range(n_controls):
-            Q[:, j, j] = 1.0
-        for j in range(n_controls, n_vars):
-            Q[:, j, j] = relaxation_penalty + 0.01
-        Q *= 2.0
-        p = torch.zeros(bs, n_vars).type_as(x)
-        u_nominal = self.dynamics_model.u_nominal(x)
-        # p[:, :n_controls] = -2.0 * u_nominal
+            # Define the cost
+            Q = np.eye(n_controls)
+            objective = u @ Q @ u
+            if allow_relaxation:
+                for i in range(n_scenarios):
+                    objective += relaxation_penalty * r[i]
 
-        # Now build the inequality constraints G @ [u r]^T <= h
-        if relaxation_penalty < 1e6:
-            G = torch.zeros(bs, 2 * n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
-            h = torch.zeros(bs, 2 * n_scenarios + self.h_u.shape[0], 1).type_as(x)
-            # CLBF decrease condition in each scenario
+            model.setObjective(objective, GRB.MINIMIZE)
+
+            # Now build the CLBF constraints
             for i in range(n_scenarios):
-                G[:, i, :n_controls] = Lg_V[:, i, :]
-                G[:, i, n_controls + i] = -1
-                h[:, i, :] = -Lf_V[:, i, :] - self.clbf_lambda * V
-            # Positive relaxation
+                Lg_V_np = Lg_V[batch_idx, i, :].detach().cpu().numpy()
+                Lf_V_np = Lf_V[batch_idx, i, :].detach().cpu().numpy()
+                V_np = V[batch_idx].detach().cpu().numpy()
+                clbf_constraint = Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np
+                if allow_relaxation:
+                    clbf_constraint -= r[i]
+                model.addConstr(clbf_constraint <= 0)
+
+                # Also constrain the relaxation if needed
+                if allow_relaxation:
+                    model.addConstr(r[i] >= 0)
+
+            # Also add actuation constraints
+            upper_lim, lower_lim = self.dynamics_model.control_limits
+            upper_lim = upper_lim.cpu().numpy()
+            lower_lim = lower_lim.cpu().numpy()
+            for j in range(n_controls):
+                model.addConstr(u[j] <= upper_lim[j])
+                model.addConstr(u[j] >= lower_lim[j])
+
+            # Optimize!
+            model.optimize()
+
+            if model.status != GRB.OPTIMAL:
+                continue
+
+            # Extract the results
+            for i in range(n_controls):
+                u_result[batch_idx, i] = u[i].x
             for i in range(n_scenarios):
-                G[:, n_scenarios + i, n_controls + i] = -1
-                h[:, n_scenarios + i, 0] = 0.0
-            # Actuation limits
-            G[:, 2 * n_scenarios :, :n_controls] = self.G_u.type_as(x)
-            h[:, 2 * n_scenarios :, 0] = self.h_u.view(1, -1).type_as(x)
-            h = h.squeeze()
-        else:
-            G = torch.zeros(bs, n_scenarios + self.G_u.shape[0], n_vars).type_as(x)
-            h = torch.zeros(bs, n_scenarios + self.h_u.shape[0], 1).type_as(x)
-            # CLBF decrease condition in each scenario
-            for i in range(n_scenarios):
-                G[:, i, :n_controls] = Lg_V[:, i, :]
-                h[:, i, :] = -Lf_V[:, i, :] - self.clbf_lambda * V
-            # Actuation limits
-            G[:, n_scenarios:, :n_controls] = self.G_u.type_as(x)
-            h[:, n_scenarios:, 0] = self.h_u.view(1, -1).type_as(x)
-            h = h.squeeze()
+                r_result[batch_idx, i] = r[i].x
+            objective_result[batch_idx, 0] = model.objVal
 
-        A = torch.tensor([])
-        b = torch.tensor([])
-
-        # Convert to double precision for solving
-        Q = Q.double()
-        p = p.double()
-        G = G.double()
-        h = h.double()
-
-        # Solve the QP!
-        qp_function = QPFunction(verbose=False, notImprovedLim=200)
-        result: torch.Tensor = qp_function(Q, p, G, h, A, b)
-        # Extract the results
-        u = result[:, :n_controls]
-        r = result[:, n_controls:]
-
-        # Get the objective
-        Qx = torch.bmm(Q, result.unsqueeze(-1))
-        xQx = torch.bmm(result.unsqueeze(1), Qx)
-        px = torch.bmm(p.unsqueeze(1), result.unsqueeze(-1))
-        objective = 0.5 * xQx + px
-        # Also add the constant nominal control term to put the unconstrained minimum
-        # objective at zero
-        objective = objective.reshape(-1, 1) + (u_nominal ** 2).sum(dim=-1)
-
-        return u.type_as(x), r.type_as(x), objective.type_as(x)
+        return u_result.type_as(x), r_result.type_as(x), objective_result.type_as(x)
 
     def forward(self, x):
         """Determine the control input for a given state using a QP

@@ -12,7 +12,7 @@ black
 
 # Learning libraries
 # pytorch >= 1.8.0
-torch
+torch >= 1.8.0
 pytorch-lightning >= 1.2.0
 
 # Optimization
