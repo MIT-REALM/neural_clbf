@@ -396,14 +396,15 @@ class NeuralCLBFController(pl.LightningModule):
             # Create variables for control input and (optionally) the relaxations
             u = model.addMVar(n_controls)
             if allow_relaxation:
-                r = model.addVars(n_scenarios)
+                r = model.addMVar(n_scenarios)
 
             # Define the cost
             Q = np.eye(n_controls)
             objective = u @ Q @ u
             if allow_relaxation:
+                relax_penalties = relaxation_penalty * np.ones(n_scenarios)
                 for i in range(n_scenarios):
-                    objective += relaxation_penalty * r[i]
+                    objective += relax_penalties @ r[i]
 
             model.setObjective(objective, GRB.MINIMIZE)
 
