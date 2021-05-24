@@ -11,8 +11,11 @@ flake8
 black
 
 # Learning libraries
-pytorch >= 1.8.0
+# pytorch >= 1.8.0
+torch
 pytorch-lightning >= 1.2.0
 
 # Optimization
 qpth >= 0.0.15
+cvxpy
+gurobipy
