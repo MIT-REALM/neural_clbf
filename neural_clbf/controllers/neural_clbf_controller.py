@@ -437,10 +437,10 @@ class NeuralCLBFController(pl.LightningModule):
 
             # Extract the results
             for i in range(n_controls):
-                u_result[batch_idx, i] = u[i].x
+                u_result[batch_idx, i] = torch.tensor(u[i].x)
             for i in range(n_scenarios):
-                r_result[batch_idx, i] = r[i].x
-            objective_result[batch_idx, 0] = model.objVal
+                r_result[batch_idx, i] = torch.tensor(r[i].x)
+            objective_result[batch_idx, 0] = torch.tensor(model.objVal)
 
         return u_result.type_as(x), r_result.type_as(x), objective_result.type_as(x)
 
