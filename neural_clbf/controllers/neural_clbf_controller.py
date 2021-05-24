@@ -387,9 +387,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Solve a QP for each row in x
         bs = x.shape[0]
-        u_result = torch.zeros(bs, n_controls).type_as(x)
-        r_result = torch.zeros(bs, n_scenarios).type_as(x)
-        objective_result = torch.zeros(bs, 1).type_as(x)
+        u_result = torch.zeros(bs, n_controls)
+        r_result = torch.zeros(bs, n_scenarios)
+        objective_result = torch.zeros(bs, 1)
         for batch_idx in range(bs):
             # Instantiate the model
             model = gp.Model("clbf_qp")
