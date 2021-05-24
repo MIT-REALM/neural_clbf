@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint = "logs/stcar_basic/v10.ckpt"
+    checkpoint = "logs/stcar_basic/v12.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
