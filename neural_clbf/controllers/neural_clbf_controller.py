@@ -403,8 +403,7 @@ class NeuralCLBFController(pl.LightningModule):
             objective = u @ Q @ u
             if allow_relaxation:
                 relax_penalties = relaxation_penalty * np.ones(n_scenarios)
-                for i in range(n_scenarios):
-                    objective += relax_penalties @ r[i]
+                objective += relax_penalties @ r
 
             model.setObjective(objective, GRB.MINIMIZE)
 
