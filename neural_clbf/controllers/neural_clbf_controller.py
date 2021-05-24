@@ -557,7 +557,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn = self.u(x)
         u_nn = u_nn.unsqueeze(-1)
         for i, s in enumerate(self.scenarios):
-            # Use these dynamics to compute the derivative of V
+            # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
@@ -565,6 +565,22 @@ class NeuralCLBFController(pl.LightningModule):
             violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
             clbf_descent_term_lin += violation.mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
+
+        #   2.) A term to encourage satisfaction of CLF condition, using the method from
+        # the RSS paper.
+        # We compute the change in V in two ways: simulating x forward in time and check
+        # if V decreases in each scenario
+        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        for s in self.scenarios:
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn.squeeze(), params=s)
+            x_next = x + self.controller_period * xdot
+            V_next = self.V(x_next)
+            clbf_descent_term_sim += F.relu(
+                eps
+                + V_next
+                - (1 - self.clbf_lambda * self.controller_period) * V.squeeze()
+            ).mean()
+        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
         return loss
 
@@ -785,8 +801,7 @@ class NeuralCLBFController(pl.LightningModule):
 
     def configure_optimizers(self):
         primal_opt = torch.optim.SGD(
-            list(self.V_nn.parameters())
-            + list(self.u_NN.parameters()),
+            list(self.V_nn.parameters()) + list(self.u_NN.parameters()),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )

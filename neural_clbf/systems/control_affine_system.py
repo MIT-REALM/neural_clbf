@@ -79,9 +79,11 @@ class ControlAffineSystem(ABC):
             x, u0, self.nominal_params
         ).squeeze()
         Act = jacobian(dynamics, x0).squeeze().cpu().numpy()
+        Act = np.reshape(Act, (self.n_dims, self.n_dims))
         A = np.eye(self.n_dims) + self.controller_dt * Act
 
         Bct = self._g(self.goal_point, self.nominal_params).squeeze().cpu().numpy()
+        Bct = np.reshape(Bct, (self.n_dims, self.n_controls))
         B = self.controller_dt * Bct
 
         # Define cost matrices as identity
