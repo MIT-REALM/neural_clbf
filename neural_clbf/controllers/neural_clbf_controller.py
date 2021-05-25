@@ -486,7 +486,7 @@ class NeuralCLBFController(pl.LightningModule):
         loss = []
 
         V = self.V(x)
-        goal_term = torch.tensor(0.0)
+        goal_term = torch.tensor(0.0).type_as(x)
 
         # #   1.) CLBF value should be negative on the goal set.
         # V0 = V[goal_mask]
