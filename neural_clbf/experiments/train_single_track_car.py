@@ -131,8 +131,8 @@ def main(args):
         u_nn_hidden_size=256,
         clbf_lambda=0.1,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e3,
-        penalty_scheduling_rate=50,
+        clbf_relaxation_penalty=1e6,
+        penalty_scheduling_rate=1,
         num_init_epochs=5,
         epochs_per_episode=5,
     )
