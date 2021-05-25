@@ -35,6 +35,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
+        goal_level: float = 0.1,
         clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
@@ -56,6 +57,7 @@ class NeuralCLBFController(pl.LightningModule):
             u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             clbf_lambda: convergence rate for the CLBF
             safety_level: safety level set value for the CLBF
+            goal_level: goal level set value for the CLBF
             clbf_relaxation_penalty: the penalty for relaxing CLBF conditions.
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
@@ -83,6 +85,7 @@ class NeuralCLBFController(pl.LightningModule):
         # Save the other parameters
         self.clbf_lambda = clbf_lambda
         self.safe_level = safety_level
+        self.goal_level = goal_level
         self.unsafe_level = safety_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
         self.controller_period = controller_period
@@ -236,7 +239,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the final activation
         JV = torch.bmm(V.unsqueeze(1), JV)
-        V = 0.5 * (V * V).sum(dim=1)
+        V = 0.5 * (V * V).sum(dim=1) - self.goal_level
 
         # # Lol JK use lqr V
         # # Get the nominal Lyapunov function
@@ -251,7 +254,9 @@ class NeuralCLBFController(pl.LightningModule):
         # # Make a gradient
         # x = self.normalize_with_angles(x)
         # V_net = self.V_nn(x)
-        # V += 0.0000001 * V_net
+        # V += 0.0000001 * (V_net * V_net).sum(dim=1).unsqueeze(-1)
+
+        # V -= 0.1
 
         return V, JV
 
@@ -398,9 +403,9 @@ class NeuralCLBFController(pl.LightningModule):
             # Instantiate the model
             model = gp.Model("clbf_qp")
             # Create variables for control input and (optionally) the relaxations
-            u = model.addMVar(n_controls)
+            u = model.addMVar(n_controls, lb=-GRB.INFINITY, ub=GRB.INFINITY)
             if allow_relaxation:
-                r = model.addMVar(n_scenarios)
+                r = model.addMVar(n_scenarios, lb=0, ub=GRB.INFINITY)
 
             # Define the cost
             Q = np.eye(n_controls)
@@ -409,6 +414,7 @@ class NeuralCLBFController(pl.LightningModule):
                 relax_penalties = relaxation_penalty * np.ones(n_scenarios)
                 objective += relax_penalties @ r
 
+            model.setParam("DualReductions", 0)
             model.setObjective(objective, GRB.MINIMIZE)
 
             # Now build the CLBF constraints
@@ -419,11 +425,7 @@ class NeuralCLBFController(pl.LightningModule):
                 clbf_constraint = Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np
                 if allow_relaxation:
                     clbf_constraint -= r[i]
-                model.addConstr(clbf_constraint <= 0)
-
-                # Also constrain the relaxation if needed
-                if allow_relaxation:
-                    model.addConstr(r[i] >= 0)
+                model.addConstr(clbf_constraint <= 0, name=f"Scenario {i} Decrease")
 
             # Also add actuation constraints
             upper_lim, lower_lim = self.dynamics_model.control_limits
@@ -488,27 +490,27 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         goal_term = torch.tensor(0.0).type_as(x)
 
-        # #   1.) CLBF value should be negative on the goal set.
-        # V0 = V[goal_mask]
-        # goal_region_violation = F.relu(eps + V0)
-        # goal_term = goal_region_violation.mean()
+        #   1.) CLBF value should be negative on the goal set.
+        V0 = V[goal_mask]
+        goal_region_violation = F.relu(eps + V0)
+        goal_term = goal_region_violation.mean()
 
         #   1b.) CLBF should be minimized on the goal point
-        V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x))  # + 1e-1
-        goal_term += (V_goal_pt ** 2).mean()
+        V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x))
+        goal_term += V_goal_pt.mean()
         loss.append(("CLBF goal term", goal_term))
 
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
         safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
         safe_clbf_term = 100 * safe_V_too_big.mean()
-        # #   2b.) V >= 0 in the safe region minus the goal
-        # safe_minus_goal_mask = torch.logical_and(
-        #     safe_mask, torch.logical_not(goal_mask)
-        # )
-        # V_safe_ex_goal = V[safe_minus_goal_mask]
-        # safe_V_too_small = F.relu(eps - V_safe_ex_goal)
-        # safe_clbf_term += 100 * safe_V_too_small.mean()
+        #   2b.) V >= 0 in the safe region minus the goal
+        safe_minus_goal_mask = torch.logical_and(
+            safe_mask, torch.logical_not(goal_mask)
+        )
+        V_safe_ex_goal = V[safe_minus_goal_mask]
+        safe_V_too_small = F.relu(eps - V_safe_ex_goal)
+        safe_clbf_term += 100 * safe_V_too_small.mean()
         loss.append(("CLBF safe region term", safe_clbf_term))
 
         #   3.) V >= unsafe_level in the unsafe region
@@ -743,8 +745,8 @@ class NeuralCLBFController(pl.LightningModule):
         # Figure out the relaxation penalty for this rollout
         relaxation_penalty = (
             self.clbf_relaxation_penalty
-            * self.current_epoch
-            / self.penalty_scheduling_rate
+            # * self.current_epoch
+            # / self.penalty_scheduling_rate
         )
         old_relaxation_penalty = self.clbf_relaxation_penalty
         self.clbf_relaxation_penalty = relaxation_penalty
@@ -797,8 +799,8 @@ class NeuralCLBFController(pl.LightningModule):
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
             relaxation_penalty = (
                 self.clbf_relaxation_penalty
-                * self.current_epoch
-                / self.penalty_scheduling_rate
+                # * self.current_epoch
+                # / self.penalty_scheduling_rate
             )
 
             # Use the models simulation function with this controller
