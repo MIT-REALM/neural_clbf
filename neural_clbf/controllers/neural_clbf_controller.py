@@ -745,8 +745,8 @@ class NeuralCLBFController(pl.LightningModule):
         # Figure out the relaxation penalty for this rollout
         relaxation_penalty = (
             self.clbf_relaxation_penalty
-            # * self.current_epoch
-            # / self.penalty_scheduling_rate
+            * self.current_epoch
+            / self.penalty_scheduling_rate
         )
         old_relaxation_penalty = self.clbf_relaxation_penalty
         self.clbf_relaxation_penalty = relaxation_penalty
@@ -799,8 +799,8 @@ class NeuralCLBFController(pl.LightningModule):
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
             relaxation_penalty = (
                 self.clbf_relaxation_penalty
-                # * self.current_epoch
-                # / self.penalty_scheduling_rate
+                * self.current_epoch
+                / self.penalty_scheduling_rate
             )
 
             # Use the models simulation function with this controller
