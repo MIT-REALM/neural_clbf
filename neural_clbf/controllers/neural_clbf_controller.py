@@ -405,14 +405,16 @@ class NeuralCLBFController(pl.LightningModule):
                 relax_penalties = relaxation_penalty * np.ones(n_scenarios)
                 objective += relax_penalties @ r
 
-            model.setObjective(objective, GRB.MINIMIZE)
-
             # Now build the CLBF constraints
             for i in range(n_scenarios):
                 Lg_V_np = Lg_V[batch_idx, i, :].detach().cpu().numpy()
                 Lf_V_np = Lf_V[batch_idx, i, :].detach().cpu().numpy()
                 V_np = V[batch_idx].detach().cpu().numpy()
                 clbf_constraint = Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np
+
+                # What happens if we incentivize descending?
+                objective += clbf_constraint
+
                 if allow_relaxation:
                     clbf_constraint -= r[i]
                 model.addConstr(clbf_constraint <= 0)
@@ -430,6 +432,7 @@ class NeuralCLBFController(pl.LightningModule):
                 model.addConstr(u[j] >= lower_lim[j])
 
             # Optimize!
+            model.setObjective(objective, GRB.MINIMIZE)
             model.optimize()
 
             if model.status != GRB.OPTIMAL:
