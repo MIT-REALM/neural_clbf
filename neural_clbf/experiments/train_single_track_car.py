@@ -132,7 +132,7 @@ def main(args):
         clbf_lambda=0.1,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e6,
-        penalty_scheduling_rate=1,
+        penalty_scheduling_rate=50,
         num_init_epochs=5,
         epochs_per_episode=5,
     )
