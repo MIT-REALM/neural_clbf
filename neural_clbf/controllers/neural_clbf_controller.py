@@ -405,16 +405,14 @@ class NeuralCLBFController(pl.LightningModule):
                 relax_penalties = relaxation_penalty * np.ones(n_scenarios)
                 objective += relax_penalties @ r
 
+            model.setObjective(objective, GRB.MINIMIZE)
+
             # Now build the CLBF constraints
             for i in range(n_scenarios):
                 Lg_V_np = Lg_V[batch_idx, i, :].detach().cpu().numpy()
                 Lf_V_np = Lf_V[batch_idx, i, :].detach().cpu().numpy()
                 V_np = V[batch_idx].detach().cpu().numpy()
                 clbf_constraint = Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np
-
-                # What happens if we incentivize descending?
-                objective += clbf_constraint
-
                 if allow_relaxation:
                     clbf_constraint -= r[i]
                 model.addConstr(clbf_constraint <= 0)
@@ -432,7 +430,6 @@ class NeuralCLBFController(pl.LightningModule):
                 model.addConstr(u[j] >= lower_lim[j])
 
             # Optimize!
-            model.setObjective(objective, GRB.MINIMIZE)
             model.optimize()
 
             if model.status != GRB.OPTIMAL:
@@ -537,14 +534,14 @@ class NeuralCLBFController(pl.LightningModule):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        eps = 0.01
+        eps = 0.1
 
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
 
         # First figure out where this condition needs to hold
         V = self.V(x)
-        condition_active = F.relu(self.safe_level - V)
+        condition_active = F.relu(self.safe_level + eps - V)
 
         # Now compute the decrease in that region, using the proof controller
         clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
@@ -561,9 +558,7 @@ class NeuralCLBFController(pl.LightningModule):
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
             Vdot = Vdot.reshape(-1, 1)
-            violation = (
-                F.leaky_relu(eps + Vdot + self.clbf_lambda * V) * condition_active
-            )
+            violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
             clbf_descent_term_lin += violation.mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
@@ -577,7 +572,7 @@ class NeuralCLBFController(pl.LightningModule):
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
             violation = (
-                F.leaky_relu(
+                F.relu(
                     eps
                     + V_next
                     - (1 - self.clbf_lambda * self.controller_period) * V.squeeze()

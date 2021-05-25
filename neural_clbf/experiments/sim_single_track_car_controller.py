@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint = "logs/stcar_basic/v12.ckpt"
+    checkpoint_file = "logs/stcar_basic/v12.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -58,17 +58,17 @@ def doMain():
     data_module = EpisodicDataModule(
         stcar,
         initial_conditions,
-        trajectories_per_episode=10,
-        trajectory_length=1000,
-        fixed_samples=10000,
+        trajectories_per_episode=1,
+        trajectory_length=10,
+        fixed_samples=100,
         max_points=5000000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
     )
 
     clbf_controller = NeuralCLBFController.load_from_checkpoint(
-        checkpoint,
+        checkpoint_file,
+        map_location=torch.device("cpu"),
         dynamics_model=stcar,
         scenarios=scenarios,
         datamodule=data_module,
@@ -79,7 +79,7 @@ def doMain():
         clbf_lambda=0.1,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_relaxation_penalty=1e8,
+        clbf_relaxation_penalty=1e3,
         num_controller_init_epochs=5,
         epochs_per_episode=10,
     )
@@ -524,7 +524,7 @@ def single_rollout_s_path(
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 5.0
+    t_sim = 5.0 / 1
     n_sims = 1
     T = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
