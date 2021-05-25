@@ -558,7 +558,9 @@ class NeuralCLBFController(pl.LightningModule):
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
             Vdot = Vdot.reshape(-1, 1)
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
+            violation = (
+                F.leaky_relu(eps + Vdot + self.clbf_lambda * V) * condition_active
+            )
             clbf_descent_term_lin += violation.mean()
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
@@ -571,11 +573,15 @@ class NeuralCLBFController(pl.LightningModule):
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn.squeeze(), params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
-            clbf_descent_term_sim += F.relu(
-                eps
-                + V_next
-                - (1 - self.clbf_lambda * self.controller_period) * V.squeeze()
-            ).mean()
+            violation = (
+                F.leaky_relu(
+                    eps
+                    + V_next
+                    - (1 - self.clbf_lambda * self.controller_period) * V.squeeze()
+                )
+                * condition_active
+            )
+            clbf_descent_term_sim += violation.mean()
         loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
         return loss
