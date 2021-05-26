@@ -402,8 +402,8 @@ class NeuralCLBFController(pl.LightningModule):
         for batch_idx in range(bs):
             # Skip any bad points
             if (
-                torch.isnan(x[bs]).any()
-                or torch.isinf(x[bs]).any()
+                torch.isnan(x[batch_idx]).any()
+                or torch.isinf(x[batch_idx]).any()
                 or torch.isnan(Lg_V[batch_idx]).any()
                 or torch.isinf(Lg_V[batch_idx]).any()
                 or torch.isnan(Lf_V[batch_idx]).any()
