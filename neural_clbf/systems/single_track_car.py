@@ -297,6 +297,12 @@ class STCar(ControlAffineSystem):
         f[:, STCar.SYE, 0] = dsye_r
         f[:, STCar.VE, 0] = -a_ref
         f[:, STCar.DELTA, 0] = 0.0
+
+        # Use the single-track dynamics if the speed is high enough, otherwise fall back
+        # to the kinematic model (since single-track becomes singular for small v)
+        use_kinematic_model = v.abs() < 0.1
+
+        # Single-track dynamics
         f[:, STCar.PSI_E, 0] = psi_e_dot
         # Sorry this is a mess (it's ported from the commonroad models)
         f[:, STCar.PSI_E_DOT, 0] = (
@@ -317,6 +323,15 @@ class STCar(ControlAffineSystem):
             - (mu / (v * (lr + lf))) * (C_Sr * g * lf + C_Sf * g * lr) * beta
             + mu / (v * (lr + lf)) * (C_Sf * g * lr) * delta
         )
+
+        # Kinematic dynamics
+        lwb = lf + lr
+        km = use_kinematic_model
+        f[km, STCar.PSI_E, 0] = (
+            v[km] * torch.cos(beta[km]) / lwb * torch.tan(delta[km]) - omega_ref
+        )
+        f[km, STCar.PSI_E_DOT, 0] = 0.0
+        f[km, STCar.BETA, 0] = 0.0
 
         return f
 
@@ -357,6 +372,11 @@ class STCar(ControlAffineSystem):
         m = self.car_params.m
         Iz = self.car_params.I_z
 
+        # Use the single-track dynamics if the speed is high enough, otherwise fall back
+        # to the kinematic model (since single-track becomes singular for small v)
+        use_kinematic_model = v.abs() < 0.1
+
+        # Single-track dynamics
         g[:, STCar.DELTA, STCar.VDELTA] = 1.0
         g[:, STCar.VE, STCar.ALONG] = 1.0
 
@@ -372,6 +392,28 @@ class STCar(ControlAffineSystem):
             - (mu / (v * (lr + lf))) * (C_Sr * h - C_Sf * h) * beta
             - mu / (v * (lr + lf)) * C_Sf * h * delta
         )
+
+        # Kinematic dynamics
+        lwb = lf + lr
+        km = use_kinematic_model
+        beta_dot = (
+            1
+            / (1 + (torch.tan(delta) * lr / lwb) ** 2)
+            * lr
+            / (lwb * torch.cos(delta) ** 2)
+        )
+        g[km, STCar.PSI_E_DOT, STCar.ALONG] = (
+            1 / lwb * (torch.cos(beta[km]) * torch.tan(delta[km]))
+        )
+        g[km, STCar.PSI_E_DOT, STCar.VDELTA] = (
+            1
+            / lwb
+            * (
+                -v[km] * torch.sin(beta[km]) * torch.tan(delta[km]) * beta_dot[km]
+                + v[km] * torch.cos(beta[km]) / torch.cos(delta[km]) ** 2
+            )
+        )
+        g[km, STCar.BETA, 0] = beta_dot[km]
 
         return g
 
