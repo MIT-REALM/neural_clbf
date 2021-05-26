@@ -350,6 +350,9 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         Lf_V, Lg_V = self.V_lie_derivatives(x)
 
+        # Get the nominal control input as well
+        u_nominal = self.dynamics_model.u_nominal(x)
+
         # Apply default penalty if needed
         if relaxation_penalty is None:
             relaxation_penalty = self.clbf_relaxation_penalty
@@ -420,7 +423,8 @@ class NeuralCLBFController(pl.LightningModule):
 
             # Define the cost
             Q = np.eye(n_controls)
-            objective = u @ Q @ u
+            u_nom_np = u_nominal[batch_idx, :].detach().cpu().numpy()
+            objective = u @ Q @ u - 2 * u_nom_np @ Q @ u + u_nom_np @ Q @ u_nom_np
             if allow_relaxation:
                 relax_penalties = relaxation_penalty * np.ones(n_scenarios)
                 objective += relax_penalties @ r
