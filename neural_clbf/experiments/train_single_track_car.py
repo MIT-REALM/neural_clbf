@@ -111,9 +111,9 @@ def main(args):
     plotting_callbacks = [
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
-        # This plotting function simulates rollouts of the controller
-        rollout_plotting_cb,
-        # Plot some rollouts
+        # # This plotting function simulates rollouts of the controller
+        # rollout_plotting_cb,
+        # # Plot some rollouts
         # single_rollout_straight_path,
         # single_rollout_circle_path,
         single_rollout_s_path,
@@ -126,10 +126,12 @@ def main(args):
         data_module,
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=2,
-        clbf_hidden_size=256,
+        clbf_hidden_size=64,
         u_nn_hidden_layers=2,
-        u_nn_hidden_size=256,
+        u_nn_hidden_size=64,
         clbf_lambda=0.1,
+        safety_level=0.1,
+        goal_level=0.05,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e6,
         penalty_scheduling_rate=50,
