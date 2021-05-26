@@ -131,7 +131,7 @@ def main(args):
         u_nn_hidden_size=64,
         clbf_lambda=0.1,
         safety_level=0.1,
-        goal_level=0.05,
+        goal_level=0.0,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e6,
         penalty_scheduling_rate=50,
