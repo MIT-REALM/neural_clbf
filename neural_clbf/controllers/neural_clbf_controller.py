@@ -400,6 +400,17 @@ class NeuralCLBFController(pl.LightningModule):
         r_result = torch.zeros(bs, n_scenarios)
         objective_result = torch.zeros(bs, 1)
         for batch_idx in range(bs):
+            # Skip any bad points
+            if (
+                torch.isnan(x[bs]).any()
+                or torch.isinf(x[bs]).any()
+                or torch.isnan(Lg_V[batch_idx]).any()
+                or torch.isinf(Lg_V[batch_idx]).any()
+                or torch.isnan(Lf_V[batch_idx]).any()
+                or torch.isinf(Lf_V[batch_idx]).any()
+            ):
+                continue
+
             # Instantiate the model
             model = gp.Model("clbf_qp")
             # Create variables for control input and (optionally) the relaxations
