@@ -352,6 +352,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Get the nominal control input as well
         u_nominal = self.dynamics_model.u_nominal(x)
+        u_nn = self.u(x)
 
         # Apply default penalty if needed
         if relaxation_penalty is None:
@@ -424,7 +425,8 @@ class NeuralCLBFController(pl.LightningModule):
             # Define the cost
             Q = np.eye(n_controls)
             u_nom_np = u_nominal[batch_idx, :].detach().cpu().numpy()
-            objective = u @ Q @ u - 2 * u_nom_np @ Q @ u + u_nom_np @ Q @ u_nom_np
+            u_nn_np = u_nn[batch_idx, :].detach().cpu().numpy()
+            objective = u @ Q @ u - 2 * u_nn_np @ Q @ u + u_nn_np @ Q @ u_nn_np
             if allow_relaxation:
                 relax_penalties = relaxation_penalty * np.ones(n_scenarios)
                 objective += relax_penalties @ r
@@ -505,10 +507,10 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         goal_term = torch.tensor(0.0).type_as(x)
 
-        # #   1.) CLBF value should be negative on the goal set.
-        # V0 = V[goal_mask]
-        # goal_region_violation = F.relu(eps + V0)
-        # goal_term += goal_region_violation.mean()
+        #   1.) CLBF value should be negative on the goal set.
+        V0 = V[goal_mask]
+        goal_region_violation = F.relu(eps + V0)
+        goal_term += goal_region_violation.mean()
 
         #   1b.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x))
@@ -519,13 +521,13 @@ class NeuralCLBFController(pl.LightningModule):
         V_safe = V[safe_mask]
         safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
         safe_clbf_term = 100 * safe_V_too_big.mean()
-        # #   2b.) V >= 0 in the safe region minus the goal
-        # safe_minus_goal_mask = torch.logical_and(
-        #     safe_mask, torch.logical_not(goal_mask)
-        # )
-        # V_safe_ex_goal = V[safe_minus_goal_mask]
-        # safe_V_too_small = F.relu(eps - V_safe_ex_goal)
-        # safe_clbf_term += 100 * safe_V_too_small.mean()
+        #   2b.) V >= 0 in the safe region minus the goal
+        safe_minus_goal_mask = torch.logical_and(
+            safe_mask, torch.logical_not(goal_mask)
+        )
+        V_safe_ex_goal = V[safe_minus_goal_mask]
+        safe_V_too_small = F.relu(eps - V_safe_ex_goal)
+        safe_clbf_term += 100 * safe_V_too_small.mean()
         loss.append(("CLBF safe region term", safe_clbf_term))
 
         #   3.) V >= unsafe_level in the unsafe region
