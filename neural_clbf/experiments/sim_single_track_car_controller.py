@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "logs/stcar_basic/v12.ckpt"
+    checkpoint_file = "logs/stcar_basic/v24.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -73,13 +73,13 @@ def doMain():
         scenarios=scenarios,
         datamodule=data_module,
         clbf_hidden_layers=2,
-        clbf_hidden_size=256,
+        clbf_hidden_size=64,
         u_nn_hidden_layers=2,
-        u_nn_hidden_size=256,
+        u_nn_hidden_size=64,
         clbf_lambda=0.1,
         controller_period=controller_period,
         lookahead=controller_period,
-        clbf_relaxation_penalty=1e3,
+        clbf_relaxation_penalty=1e1,
         num_controller_init_epochs=5,
         epochs_per_episode=10,
     )
@@ -572,6 +572,7 @@ def single_rollout_s_path(
         omega_ref_t = 1.5 * np.sign(np.sin(tstep * simulation_dt))
         psi_ref[tstep] = simulation_dt * omega_ref_t + psi_ref[tstep - 1]
         pt = copy(params)
+        # pt["omega_ref"] = omega_ref_t
         pt["psi_ref"] = psi_ref[tstep]
         x_ref[tstep] = x_ref[tstep - 1] + simulation_dt * pt["v_ref"] * np.cos(
             psi_ref[tstep]
@@ -882,7 +883,7 @@ def single_rollout_s_path(
         t[1:t_final],
         Vdot_nominal[1:t_final, :, -1, :].squeeze().cpu().numpy(),
         label="Linearized (true parameters)",
-        linestyle="dashed",
+        linestyle="solid",
         color="green",
     )
     ax4.fill_between(
@@ -897,7 +898,7 @@ def single_rollout_s_path(
         t[1:t_final],
         Vdot_actual_nominal[1:t_final, :, :].squeeze().cpu().numpy(),
         label="Simulated",
-        linestyle="solid",
+        linestyle="dotted",
         color="green",
     )
     # Plot markers indicating where the simulations were unsafe

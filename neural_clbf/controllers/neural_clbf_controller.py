@@ -350,8 +350,7 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
         Lf_V, Lg_V = self.V_lie_derivatives(x)
 
-        # Get the nominal control input as well
-        u_nominal = self.dynamics_model.u_nominal(x)
+        # Get the nn control input as well
         u_nn = self.u(x)
 
         # Apply default penalty if needed
@@ -424,15 +423,11 @@ class NeuralCLBFController(pl.LightningModule):
 
             # Define the cost
             Q = np.eye(n_controls)
-            u_nom_np = u_nominal[batch_idx, :].detach().cpu().numpy()
             u_nn_np = u_nn[batch_idx, :].detach().cpu().numpy()
             objective = u @ Q @ u - 2 * u_nn_np @ Q @ u + u_nn_np @ Q @ u_nn_np
             if allow_relaxation:
                 relax_penalties = relaxation_penalty * np.ones(n_scenarios)
                 objective += relax_penalties @ r
-
-            model.setParam("DualReductions", 0)
-            model.setObjective(objective, GRB.MINIMIZE)
 
             # Now build the CLBF constraints
             for i in range(n_scenarios):
@@ -453,6 +448,8 @@ class NeuralCLBFController(pl.LightningModule):
                 model.addConstr(u[j] >= lower_lim[j])
 
             # Optimize!
+            model.setParam("DualReductions", 0)
+            model.setObjective(objective, GRB.MINIMIZE)
             model.optimize()
 
             if model.status != GRB.OPTIMAL:
@@ -560,7 +557,7 @@ class NeuralCLBFController(pl.LightningModule):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        eps = 0.1
+        eps = 0.01
 
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
