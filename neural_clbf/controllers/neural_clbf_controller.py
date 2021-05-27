@@ -633,7 +633,7 @@ class NeuralCLBFController(pl.LightningModule):
         P = self.dynamics_model.P.type_as(x)
         # Reshape to use pytorch's bilinear function
         P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        V_nominal = 0.5 * F.bilinear(x, x, P)
+        V_nominal = 0.5 * F.bilinear(x, x, P).squeeze()
 
         # Compute the error between the two
         clbf_mse_loss = (V - V_nominal) ** 2
