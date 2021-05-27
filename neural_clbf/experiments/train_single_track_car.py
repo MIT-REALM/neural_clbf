@@ -90,7 +90,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=10,
         trajectory_length=1000,
-        fixed_samples=10000,
+        fixed_samples=20000,
         max_points=5000000,
         val_split=0.1,
         batch_size=64,
@@ -125,18 +125,18 @@ def main(args):
         scenarios,
         data_module,
         plotting_callbacks=plotting_callbacks,
-        clbf_hidden_layers=1,
-        clbf_hidden_size=8,
-        u_nn_hidden_layers=1,
-        u_nn_hidden_size=8,
+        clbf_hidden_layers=2,
+        clbf_hidden_size=64,
+        u_nn_hidden_layers=2,
+        u_nn_hidden_size=64,
         clbf_lambda=0.1,
         safety_level=0.1,
-        goal_level=0.05,
+        goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e6,
-        penalty_scheduling_rate=50,
-        num_init_epochs=5,
-        epochs_per_episode=5,
+        clbf_relaxation_penalty=1e1,
+        penalty_scheduling_rate=0,
+        num_init_epochs=10,
+        epochs_per_episode=10,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
@@ -147,7 +147,7 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/stcar_basic/",
+        "logs/stcar/",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True

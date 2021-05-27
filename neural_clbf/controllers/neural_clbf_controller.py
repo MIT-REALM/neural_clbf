@@ -35,7 +35,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
-        goal_level: float = 0.1,
+        goal_level: float = 0.0,
         clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
@@ -64,7 +64,8 @@ class NeuralCLBFController(pl.LightningModule):
                                   applied to the CLBF decrease loss
             epochs_per_episode: the number of epochs to include in each episode
             penalty_scheduling_rate: the rate at which to ramp the rollout relaxation
-                                     penalty up to clbf_relaxation_penalty
+                                     penalty up to clbf_relaxation_penalty. Set to 0 to
+                                     disable penalty scheduling (use constant penalty)
             num_init_epochs: the number of epochs to pretrain the controller on the
                              linear controller
             plotting_callbacks: a list of plotting functions that each take a
@@ -254,9 +255,7 @@ class NeuralCLBFController(pl.LightningModule):
         # # Make a gradient
         # x = self.normalize_with_angles(x)
         # V_net = self.V_nn(x)
-        # V += 0.0000001 * (V_net * V_net).sum(dim=1).unsqueeze(-1)
-
-        # V -= 0.1
+        # V += 0.0000001 * (V_net * V_net).sum(dim=1).unsqueeze(-1) - self.goal_level
 
         return V, JV
 
@@ -757,11 +756,14 @@ class NeuralCLBFController(pl.LightningModule):
         # at the end of every validation epoch, using arbitrary plotting callbacks!
 
         # Figure out the relaxation penalty for this rollout
-        relaxation_penalty = (
-            self.clbf_relaxation_penalty
-            * self.current_epoch
-            / self.penalty_scheduling_rate
-        )
+        if self.penalty_scheduling_rate > 0:
+            relaxation_penalty = (
+                self.clbf_relaxation_penalty
+                * self.current_epoch
+                / self.penalty_scheduling_rate
+            )
+        else:
+            relaxation_penalty = self.clbf_relaxation_penalty
         old_relaxation_penalty = self.clbf_relaxation_penalty
         self.clbf_relaxation_penalty = relaxation_penalty
 
@@ -811,11 +813,14 @@ class NeuralCLBFController(pl.LightningModule):
         """This function is called at the end of every validation epoch"""
         # We want to generate new data at the end of every episode
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
-            relaxation_penalty = (
-                self.clbf_relaxation_penalty
-                * self.current_epoch
-                / self.penalty_scheduling_rate
-            )
+            if self.penalty_scheduling_rate > 0:
+                relaxation_penalty = (
+                    self.clbf_relaxation_penalty
+                    * self.current_epoch
+                    / self.penalty_scheduling_rate
+                )
+            else:
+                relaxation_penalty = self.clbf_relaxation_penalty
 
             # Use the models simulation function with this controller
             def simulator_fn_wrapper(x_init: torch.Tensor, num_steps: int):
