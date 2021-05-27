@@ -618,12 +618,12 @@ class NeuralCLBFController(pl.LightningModule):
         epoch_count = max(self.current_epoch - self.num_init_epochs, 0)
         decrease_factor = 0.5 ** epoch_count
 
-        #   1.) Compare the controller to the nominal
-        u_nn = self.u(x)
-        u_nominal = self.dynamics_model.u_nominal(x)
-        dynamics_mse_loss = (u_nn - u_nominal) ** 2
-        dynamics_mse_loss = decrease_factor * dynamics_mse_loss.mean()
-        loss.append(("Controller MSE", dynamics_mse_loss))
+        # #   1.) Compare the controller to the nominal
+        # u_nn = self.u(x)
+        # u_nominal = self.dynamics_model.u_nominal(x)
+        # dynamics_mse_loss = (u_nn - u_nominal) ** 2
+        # dynamics_mse_loss = decrease_factor * dynamics_mse_loss.mean()
+        # loss.append(("Controller MSE", dynamics_mse_loss))
 
         #   2.) Compare the CLBF to the nominal solution
 
