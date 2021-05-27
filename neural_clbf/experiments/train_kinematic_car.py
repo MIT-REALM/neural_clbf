@@ -124,15 +124,17 @@ def main(args):
         data_module,
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=2,
-        clbf_hidden_size=8,
+        clbf_hidden_size=64,
         u_nn_hidden_layers=2,
-        u_nn_hidden_size=8,
-        controller_period=controller_period,
-        lookahead=controller_period,
+        u_nn_hidden_size=64,
         clbf_lambda=0.1,
-        clbf_relaxation_penalty=50.0,
-        penalty_scheduling_rate=50.0,
-        epochs_per_episode=1,
+        safety_level=0.1,
+        goal_level=0.00,
+        controller_period=controller_period,
+        clbf_relaxation_penalty=1e1,
+        penalty_scheduling_rate=0,
+        num_init_epochs=50,
+        epochs_per_episode=100,
     )
     # Add the DataModule hooks
     clbf_controller.prepare_data = data_module.prepare_data
@@ -144,7 +146,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/kinematic_car/",
-        name="qp_in_loop",
+        name="default",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
