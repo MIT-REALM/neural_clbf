@@ -113,7 +113,7 @@ def plot_CLBF(
     # Make the plots
     fig, axes = plt.subplots(1, 2)
     # fig, axs = plt.subplots(1, 1)
-    fig.set_size_inches(10, 12)
+    fig.set_size_inches(15, 6)
 
     # First for V
     axs = axes[0]
