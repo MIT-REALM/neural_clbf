@@ -61,6 +61,7 @@ def plot_CLBF(
 
     # Set up tensors to store the results
     V_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    V_lqr_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     # V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     unsafe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     safe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
@@ -88,6 +89,12 @@ def plot_CLBF(
             # Get the value of the CLBF
             V_grid[j, i] = clbf_net.V(x)
 
+            P = clbf_net.dynamics_model.P.type_as(x)
+            # Reshape to use pytorch's bilinear function
+            P = P.reshape(1, clbf_net.dynamics_model.n_dims, clbf_net.dynamics_model.n_dims)
+            V_nominal = 0.5 * torch.nn.F.bilinear(x, x, P)
+            V_lqr_grid[j, i] = V_nominal
+
             # Get the goal, safe, or unsafe classification
             if clbf_net.dynamics_model.goal_mask(x).all():
                 goal_grid[j, i] = 1
@@ -110,7 +117,7 @@ def plot_CLBF(
 
     # First for V
     contours = axs.contourf(
-        x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
+        x_vals.cpu(), y_vals.cpu(), (V_grid - V_lqr_grid).cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
     # Plot safe levels
@@ -138,9 +145,6 @@ def plot_CLBF(
         colors=["green"],
         levels=[0.5],  # type: ignore
     )
-    print(f"safe level: {clbf_net.safe_level}")
-    print(f"unsafe level: {clbf_net.unsafe_level}")
-    print(f"goal level: {clbf_net.goal_level}")
     # And unsafe levels
     unsafe_level = clbf_net.unsafe_level
     if isinstance(unsafe_level, torch.Tensor):
