@@ -113,13 +113,14 @@ def plot_CLBF(
     # Make the plots
     fig, axes = plt.subplots(1, 2)
     # fig, axs = plt.subplots(1, 1)
-    fig.set_size_inches(10, 6)
+    fig.set_size_inches(10, 12)
 
     # First for V
     axs = axes[0]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), (V_grid - V_lqr_grid).cpu(), cmap="magma", levels=20
     )
+    plt.colorbar(contours, ax=axs, orientation="horizontal")
     axs = axes[1]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
