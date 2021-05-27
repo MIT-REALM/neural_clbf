@@ -111,13 +111,18 @@ def plot_CLBF(
             # V_dot_grid[j, i] = clbf_net.V_decrease_violation(x)
 
     # Make the plots
-    fig, axs = plt.subplots(1, 2)
-    fig, axs = plt.subplots(1, 1)
+    fig, axes = plt.subplots(1, 2)
+    # fig, axs = plt.subplots(1, 1)
     fig.set_size_inches(10, 6)
 
     # First for V
+    axs = axes[0]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), (V_grid - V_lqr_grid).cpu(), cmap="magma", levels=20
+    )
+    axs = axes[1]
+    contours = axs.contourf(
+        x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
     # Plot safe levels
