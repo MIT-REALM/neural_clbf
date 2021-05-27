@@ -92,7 +92,7 @@ def plot_CLBF(
             P = clbf_net.dynamics_model.P.type_as(x)
             # Reshape to use pytorch's bilinear function
             P = P.reshape(1, clbf_net.dynamics_model.n_dims, clbf_net.dynamics_model.n_dims)
-            V_nominal = 0.5 * torch.nn.F.bilinear(x, x, P)
+            V_nominal = 0.5 * torch.nn.functional.bilinear(x, x, P)
             V_lqr_grid[j, i] = V_nominal
 
             # Get the goal, safe, or unsafe classification
