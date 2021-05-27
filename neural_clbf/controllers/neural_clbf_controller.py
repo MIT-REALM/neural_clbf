@@ -125,12 +125,12 @@ class NeuralCLBFController(pl.LightningModule):
         self.V_layers["input_linear"] = nn.Linear(
             self.n_dims_extended, self.clbf_hidden_size
         )
-        self.V_layers["input_activation"] = nn.Tanh()
-        for i in range(self.clbf_hidden_layers):
-            self.V_layers[f"layer_{i}_linear"] = nn.Linear(
-                self.clbf_hidden_size, self.clbf_hidden_size
-            )
-            self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
+        # self.V_layers["input_activation"] = nn.Tanh()
+        # for i in range(self.clbf_hidden_layers):
+        #     self.V_layers[f"layer_{i}_linear"] = nn.Linear(
+        #         self.clbf_hidden_size, self.clbf_hidden_size
+        #     )
+        #     self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
         # self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
