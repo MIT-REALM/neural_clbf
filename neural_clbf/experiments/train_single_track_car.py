@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from copy import copy
+import subprocess
 
 import numpy as np
 import torch
@@ -145,9 +146,14 @@ def main(args):
     clbf_controller.val_dataloader = data_module.val_dataloader
     clbf_controller.test_dataloader = data_module.test_dataloader
 
-    # Initialize the logger and trainer
+    # Initialize the logger and trainer]
+    current_git_hash = (
+        subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
+        .decode("ascii")
+        .strip()
+    )
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/stcar/",
+        "logs/stcar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
