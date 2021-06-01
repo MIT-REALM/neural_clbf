@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from copy import copy
+import subprocess
 
 import torch
 import torch.multiprocessing
@@ -67,7 +68,7 @@ def clbf_plotting_cb(clbf_net):
 def main(args):
     # Define the dynamics model
     nominal_params = {
-        "psi_ref": 0.5,
+        "psi_ref": 1.0,
         "v_ref": 10.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
@@ -78,22 +79,22 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-0.5, 0.5),  # sxe
-        (-0.5, 0.5),  # sye
-        (-0.5, 0.5),  # delta
-        (-0.5, 0.5),  # ve
-        (-0.5, 0.5),  # psi_e
+        (-0.1, 0.1),  # sxe
+        (-0.1, 0.1),  # sye
+        (-0.1, 0.1),  # delta
+        (-0.1, 0.1),  # ve
+        (-0.1, 0.1),  # psi_e
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=10,
         trajectory_length=1000,
-        fixed_samples=90000,
-        max_points=500000,
+        fixed_samples=10000,
+        max_points=5000000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "boundary": 0.2, "unsafe": 0.2},
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
     )
 
     # Define the scenarios
@@ -144,9 +145,13 @@ def main(args):
     clbf_controller.test_dataloader = data_module.test_dataloader
 
     # Initialize the logger and trainer
+    current_git_hash = (
+        subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
+        .decode("ascii")
+        .strip()
+    )
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/kinematic_car/",
-        name="default",
+        "logs/kscar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True

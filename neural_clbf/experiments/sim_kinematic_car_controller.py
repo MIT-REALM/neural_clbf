@@ -33,7 +33,9 @@ def doMain():
         "a_ref": 0.0,
         "omega_ref": 0.0,
     }
-    dynamics_model = KSCar(nominal_params, dt=simulation_dt, controller_dt=controller_period)
+    dynamics_model = KSCar(
+        nominal_params, dt=simulation_dt, controller_dt=controller_period
+    )
 
     # Initialize the DataModule
     initial_conditions = [
@@ -170,9 +172,9 @@ def single_rollout_straight_path(
     start_x = torch.tensor(
         [[0.0, 1.0, 0.0, 1.0, -np.pi / 6]], device=clbf_controller.device
     )
-    x_sim = torch.zeros(
-        T, n_sims, clbf_controller.dynamics_model.n_dims
-    ).type_as(start_x)
+    x_sim = torch.zeros(T, n_sims, clbf_controller.dynamics_model.n_dims).type_as(
+        start_x
+    )
     V_sim = torch.zeros(T, n_sims, 1).type_as(start_x)
     for i in range(n_sims):
         x_sim[0, i, :] = start_x
@@ -181,9 +183,9 @@ def single_rollout_straight_path(
     x_nominal = torch.clone(x_sim)
     V_nominal = torch.clone(V_sim)
 
-    u_sim = torch.zeros(
-        T, n_sims, clbf_controller.dynamics_model.n_controls
-    ).type_as(start_x)
+    u_sim = torch.zeros(T, n_sims, clbf_controller.dynamics_model.n_controls).type_as(
+        start_x
+    )
     controller_update_freq = int(controller_period / simulation_dt)
     prog_bar_range = tqdm.trange(1, T, desc="Straight Curve", leave=True)
     for tstep in prog_bar_range:
@@ -346,9 +348,9 @@ def single_rollout_circle_path(
     start_x = 0.0 * torch.tensor(
         [[0.0, 1.0, 0.0, 1.0, -np.pi / 6]], device=clbf_controller.device
     )
-    x_sim = torch.zeros(
-        T, n_sims, clbf_controller.dynamics_model.n_dims
-    ).type_as(start_x)
+    x_sim = torch.zeros(T, n_sims, clbf_controller.dynamics_model.n_dims).type_as(
+        start_x
+    )
     V_sim = torch.zeros(T, n_sims, 1).type_as(start_x)
     for i in range(n_sims):
         x_sim[0, i, :] = start_x
@@ -365,9 +367,9 @@ def single_rollout_circle_path(
     psi_ref = np.zeros(T)
     psi_ref[0] = 1.0
 
-    u_sim = torch.zeros(
-        T, n_sims, clbf_controller.dynamics_model.n_controls
-    ).type_as(start_x)
+    u_sim = torch.zeros(T, n_sims, clbf_controller.dynamics_model.n_controls).type_as(
+        start_x
+    )
     controller_update_freq = int(controller_period / simulation_dt)
     prog_bar_range = tqdm.trange(1, T, desc="Circle Curve", leave=True)
     for tstep in prog_bar_range:
