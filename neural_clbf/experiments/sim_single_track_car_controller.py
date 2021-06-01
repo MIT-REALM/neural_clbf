@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/stcar/v24.ckpt"
+    checkpoint_file = "saved_models/stcar/774ba0b.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -46,9 +46,9 @@ def doMain():
         (-0.1, 0.1),  # beta
     ]
 
-    # Define the scenarios (we need 2^3 = 6)
+    # Define the scenarios
     scenarios = []
-    omega_ref_vals = [-0.5, 0.5]
+    omega_ref_vals = [-1.5, 1.5]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
@@ -672,7 +672,7 @@ def single_rollout_s_path(
         x_current = x_nominal[tstep - 1, :, :]
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
-            u = clbf_controller.dynamics_model.u_nominal(x_current, pt)
+            u = clbf_controller.dynamics_model.u_nominal(x_current)
             u_nominal[tstep, :, :] = u
 
             # Also predict the difference in V from linearization
