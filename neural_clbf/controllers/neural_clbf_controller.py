@@ -591,7 +591,7 @@ class NeuralCLBFController(pl.LightningModule):
             # When both conditions are positive, we add a loss on LgV
             LgV_big_enough = F.relu(
                 eps
-                + (Lf_V[:, i, :] + self.clbf_lambda * V) / Lf_V[:, i, :].norm(dim=-1)
+                + (Lf_V[:, i, :] + self.clbf_lambda * V) / (0.0001 + Lg_V[:, i, :].norm(dim=-1))
                 - u_max_norm
             )
 
@@ -759,6 +759,7 @@ class NeuralCLBFController(pl.LightningModule):
         component_losses.update(
             self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
         )
+        component_losses.update(self.u_loss(x))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
