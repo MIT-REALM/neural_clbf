@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 from copy import copy
 import subprocess
 
+import numpy as np
 import torch
 import torch.multiprocessing
 import pytorch_lightning as pl
@@ -27,10 +28,8 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 start_x = torch.tensor(
     [
-        [0.0, 0.0, 0.0, 0.0, 0.0],
-        # [0.6, 0.0, 0.0, 0.0, -np.pi / 6],
-        # [0.0, 0.6, 0.0, 0.0, np.pi / 6],
-        # [0.6, 0.0, 0.0, 0.0, np.pi / 6],
+        [0.0, 0.0, 0.0, 0.0, -np.pi / 6, 0.0, 0.0],
+        # [0.0, 0.0, 0.0, 0.0, np.pi / 6, 0.0, 0.0],
     ]
 )
 controller_period = 0.01
@@ -56,7 +55,7 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
+        domain=[(-1.0, 1.0), (-1.0, 1.0)],
         n_grid=50,
         x_axis_index=KSCar.SXE,
         y_axis_index=KSCar.SYE,
@@ -110,9 +109,9 @@ def main(args):
     plotting_callbacks = [
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
-        # This plotting function simulates rollouts of the controller
-        rollout_plotting_cb,
-        # Plot some rollouts
+        # # This plotting function simulates rollouts of the controller
+        # rollout_plotting_cb,
+        # # Plot some rollouts
         # single_rollout_straight_path,
         # single_rollout_circle_path,
         single_rollout_s_path,
