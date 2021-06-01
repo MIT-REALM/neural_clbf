@@ -558,53 +558,67 @@ class NeuralCLBFController(pl.LightningModule):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        eps = 0.01
+        eps = 0.05
 
-        #   1.) A term to encourage satisfaction of the CLBF decrease condition,
-        # which requires that V is decreasing everywhere where V <= safe_level
+        #   1.) A term to encourage V to be a valid CLBF, which requires that, in each
+        # scenario, there exist some u in U such that
+        #
+        #       LfV + LgV * u + lambda * V <= 0
+        #
+        # Approximately (relaxing constraints on the size of the control input and only
+        # requiring V to decrease in the safe region), this
+        # is equivalent to
+        #
+        #       LfV + lambda * V > 0 and V < safe_level
+        #
+        #       implies that
+        #
+        #       ||LgV|| != 0 and ||LfV + lambda * V|| / ||LgV|| <= ||u_max||
+
+        # For convenience, calculate u_max
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        u_max_norm = (upper_lim.norm() + lower_lim.norm()) / 2
 
         # First figure out where this condition needs to hold
+        # It needs to hold when V < safe level
         V = self.V(x)
         condition_active = F.relu(self.safe_level + eps - V)
 
-        # Now compute the decrease in that region, using the proof controller
-        clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
-        # Get the current value of the CLBF and its Lie derivatives
-        # (Lie derivatives are computed using a linear fit of the dynamics)
-        # TODO @dawsonc do we need dynamics learning here?
+        # It also needs to hold in each scenario when LfV + lambda * V > 0
         Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u(x)
-        u_nn = u_nn.unsqueeze(-1)
+        clbf_descent_term = torch.tensor(0.0).type_as(x)
         for i, s in enumerate(self.scenarios):
-            # Use the dynamics to compute the derivative of V
-            Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
-                Lg_V[:, i, :].unsqueeze(1), u_nn
+            # When both conditions are positive, we add a loss on LgV
+            LgV_big_enough = F.relu(
+                eps
+                + (Lf_V[:, i, :] + self.clbf_lambda * V) / Lf_V[:, i, :].norm(dim=-1)
+                - u_max_norm
             )
-            Vdot = Vdot.reshape(-1, 1)
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
-            clbf_descent_term_lin += violation.mean()
-        loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
-        #   2.) A term to encourage satisfaction of CLF condition, using the method from
-        # the RSS paper.
-        # We compute the change in V in two ways: simulating x forward in time and check
-        # if V decreases in each scenario
-        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn.squeeze(), params=s)
-            x_next = x + self.controller_period * xdot
-            V_next = self.V(x_next)
-            violation = (
-                F.relu(
-                    eps
-                    + V_next
-                    - (1 - self.clbf_lambda * self.controller_period) * V.squeeze()
-                )
-                * condition_active
-            )
-            clbf_descent_term_sim += violation.mean()
-        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+            violation = LgV_big_enough * condition_active
+
+            clbf_descent_term += violation.mean()
+
+        loss.append(("CLBF descent term", clbf_descent_term))
+
+        # # Now compute the decrease in that region, using the proof controller
+        # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
+        # # Get the current value of the CLBF and its Lie derivatives
+        # # (Lie derivatives are computed using a linear fit of the dynamics)
+        # # TODO @dawsonc do we need dynamics learning here?
+        # Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # # Get the control and reshape it to bs x n_controls x 1
+        # u_nn = self.u(x)
+        # u_nn = u_nn.unsqueeze(-1)
+        # for i, s in enumerate(self.scenarios):
+        #     # Use the dynamics to compute the derivative of V
+        #     Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
+        #         Lg_V[:, i, :].unsqueeze(1), u_nn
+        #     )
+        #     Vdot = Vdot.reshape(-1, 1)
+        #     violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
+        #     clbf_descent_term_lin += violation.mean()
+        # loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
         return loss
 
@@ -636,20 +650,17 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def initial_u_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
+    def u_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
         """
         Compute the loss during the initialization epochs, which trains the net to
         match the nominal controller and local linear lyapunov function
         """
         loss = []
-        # Get the learned CLBF
-        V = self.V(x)
-
-        # The initial losses should decrease exponentially to zero, based on the epoch
-        epoch_count = max(self.current_epoch - self.num_init_epochs, 0)
-        decrease_factor = 0.5 ** epoch_count
+        eps = 1.0
 
         #   1.) Controller should initially prioritize fastest descent
+        # Get the learned CLBF
+        V = self.V(x)
         u_descent_term = torch.tensor(0.0).type_as(x)
         u_nn = self.u(x)
         Lf_V, Lg_V = self.V_lie_derivatives(x)
@@ -662,8 +673,8 @@ class NeuralCLBFController(pl.LightningModule):
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
             Vdot = Vdot.reshape(-1, 1)
-            Vdot_clamped = F.relu(1.0 + Vdot + self.clbf_lambda * V)
-            u_descent_term += decrease_factor * Vdot_clamped.mean()
+            Vdot_clamped = F.relu(eps + Vdot + self.clbf_lambda * V)
+            u_descent_term += Vdot_clamped.mean()
         loss.append(("Controler descent", u_descent_term))
 
         return loss
@@ -677,14 +688,19 @@ class NeuralCLBFController(pl.LightningModule):
         component_losses = {}
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             component_losses.update(self.initial_V_loss(x))
+            if self.current_epoch > self.num_init_epochs:
+                component_losses.update(
+                    self.descent_loss(
+                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+                    )
+                )
+                component_losses.update(
+                    self.boundary_loss(
+                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+                    )
+                )
         else:
-            component_losses.update(self.initial_u_loss(x))
-        # component_losses.update(
-        #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        # )
-        # component_losses.update(
-        #     self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        # )
+            component_losses.update(self.u_loss(x))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
