@@ -1,3 +1,4 @@
+import itertools
 from typing import Tuple, List, Optional, Callable
 from collections import OrderedDict
 
