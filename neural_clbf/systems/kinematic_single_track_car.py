@@ -157,24 +157,12 @@ class KSCar(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.3
-        tracking_error = x[
-            :,
-            [
-                KSCar.SXE,
-                KSCar.SYE,
-                KSCar.VE,
-                KSCar.PSI_E,
-            ],
-        ]
+        max_safe_tracking_error = 0.35
+        tracking_error = x
         tracking_error_small_enough = (
             tracking_error.norm(dim=-1) <= max_safe_tracking_error
         )
         safe_mask.logical_and_(tracking_error_small_enough)
-
-        # We need slightly lower heading angle to be "close"
-        psi_err_small_enough = x[:, KSCar.PSI_E].abs() <= np.pi / 3
-        safe_mask.logical_and_(psi_err_small_enough)
 
         return safe_mask
 
@@ -189,15 +177,7 @@ class KSCar(ControlAffineSystem):
         # Avoid angles that are too large
         # Avoid tracking errors that are too large
         max_safe_tracking_error = 0.5
-        tracking_error = x[
-            :,
-            [
-                KSCar.SXE,
-                KSCar.SYE,
-                KSCar.VE,
-                KSCar.PSI_E,
-            ],
-        ]
+        tracking_error = x
         tracking_error_too_big = tracking_error.norm(dim=-1) >= max_safe_tracking_error
         unsafe_mask.logical_or_(tracking_error_too_big)
 
@@ -212,7 +192,7 @@ class KSCar(ControlAffineSystem):
             x: the points from which we calculate distance
         """
         upper_limit, _ = self.state_limits
-        return x.norm(dim=-1) / upper_limit.norm()
+        return (x.norm(dim=-1) - 0.25) / upper_limit.norm()
 
     def goal_mask(self, x):
         """Return the mask of x indicating points in the goal set
@@ -221,23 +201,9 @@ class KSCar(ControlAffineSystem):
             x: a tensor of points in the state space
         """
         goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
-
-        # Define the goal region as being near the goal
-        tracking_error = x[
-            :,
-            [
-                KSCar.SXE,
-                KSCar.SYE,
-                KSCar.VE,
-                KSCar.PSI_E,
-            ],
-        ]
-        near_goal = tracking_error.norm(dim=-1) <= 0.3
+        tracking_error = x
+        near_goal = tracking_error.norm(dim=-1) <= 0.25
         goal_mask.logical_and_(near_goal)
-
-        # We need slightly lower heading angle to be "close"
-        near_goal_psi = x[:, KSCar.PSI_E].abs() <= 0.3
-        goal_mask.logical_and_(near_goal_psi)
 
         # The goal set has to be a subset of the safe set
         goal_mask.logical_and_(self.safe_mask(x))
@@ -360,5 +326,15 @@ class KSCar(ControlAffineSystem):
         # Compute nominal control from feedback + equilibrium control
         u_nominal = -(self.K.type_as(x) @ (x - x0).T).T
         u_eq = torch.zeros_like(u_nominal)
+        u = u_nominal + u_eq
 
-        return u_nominal + u_eq
+        # Clamp given the control limits
+        upper_u_lim, lower_u_lim = self.control_limits
+        for dim_idx in range(self.n_controls):
+            u[:, dim_idx] = torch.clamp(
+                u[:, dim_idx],
+                min=lower_u_lim[dim_idx].item(),
+                max=upper_u_lim[dim_idx].item(),
+            )
+
+        return u
