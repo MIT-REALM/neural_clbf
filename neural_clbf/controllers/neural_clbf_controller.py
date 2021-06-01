@@ -608,7 +608,35 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def initial_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
+    def initial_V_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
+        """
+        Compute the loss during the initialization epochs, which trains the net to
+        match the nominal controller and local linear lyapunov function
+        """
+        loss = []
+
+        # The initial losses should decrease exponentially to zero, based on the epoch
+        epoch_count = max(self.current_epoch - self.num_init_epochs, 0)
+        decrease_factor = 0.5 ** epoch_count
+
+        #   2.) Compare the CLBF to the nominal solution
+        # Get the learned CLBF
+        V = self.V(x)
+
+        # Get the nominal Lyapunov function
+        P = self.dynamics_model.P.type_as(x)
+        # Reshape to use pytorch's bilinear function
+        P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+        V_nominal = 0.5 * F.bilinear(x, x, P).squeeze()
+
+        # Compute the error between the two
+        clbf_mse_loss = (V - V_nominal) ** 2
+        clbf_mse_loss = decrease_factor * clbf_mse_loss.mean()
+        loss.append(("CLBF MSE", clbf_mse_loss))
+
+        return loss
+
+    def initial_u_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
         """
         Compute the loss during the initialization epochs, which trains the net to
         match the nominal controller and local linear lyapunov function
@@ -635,21 +663,8 @@ class NeuralCLBFController(pl.LightningModule):
             )
             Vdot = Vdot.reshape(-1, 1)
             Vdot_clamped = F.relu(1.0 + Vdot + self.clbf_lambda * V)
-            u_descent_term += Vdot_clamped.mean()
+            u_descent_term += decrease_factor * Vdot_clamped.mean()
         loss.append(("Controler descent", u_descent_term))
-
-        #   2.) Compare the CLBF to the nominal solution
-
-        # Get the nominal Lyapunov function
-        P = self.dynamics_model.P.type_as(x)
-        # Reshape to use pytorch's bilinear function
-        P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        V_nominal = 0.5 * F.bilinear(x, x, P).squeeze()
-
-        # Compute the error between the two
-        clbf_mse_loss = (V - V_nominal) ** 2
-        clbf_mse_loss = decrease_factor * clbf_mse_loss.mean()
-        loss.append(("CLBF MSE", clbf_mse_loss))
 
         return loss
 
@@ -660,7 +675,10 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the losses
         component_losses = {}
-        component_losses.update(self.initial_loss(x))
+        if self.opt_idx_dict[optimizer_idx] == "clbf":
+            component_losses.update(self.initial_V_loss(x))
+        else:
+            component_losses.update(self.initial_u_loss(x))
         # component_losses.update(
         #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
         # )
