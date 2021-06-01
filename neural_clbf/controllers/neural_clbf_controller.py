@@ -630,7 +630,7 @@ class NeuralCLBFController(pl.LightningModule):
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
             u_descent_term += V_descent_from_u.mean()
-        loss.append(("Controler descent", u_nn))
+        loss.append(("Controler descent", u_descent_term))
 
         #   2.) Compare the CLBF to the nominal solution
 
