@@ -618,12 +618,19 @@ class NeuralCLBFController(pl.LightningModule):
         epoch_count = max(self.current_epoch - self.num_init_epochs, 0)
         decrease_factor = 0.5 ** epoch_count
 
-        # #   1.) Compare the controller to the nominal
-        # u_nn = self.u(x)
-        # u_nominal = self.dynamics_model.u_nominal(x)
-        # dynamics_mse_loss = (u_nn - u_nominal) ** 2
-        # dynamics_mse_loss = decrease_factor * dynamics_mse_loss.mean()
-        # loss.append(("Controller MSE", dynamics_mse_loss))
+        #   1.) Controller should initially prioritize fastest descent
+        u_descent_term = torch.tensor(0.0).type_as(x)
+        u_nn = self.u(x)
+        Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # Get the control and reshape it to bs x n_controls x 1
+        u_nn = self.u(x)
+        u_nn = u_nn.unsqueeze(-1)
+        for i, s in enumerate(self.scenarios):
+            V_descent_from_u = torch.bmm(
+                Lg_V[:, i, :].unsqueeze(1), u_nn
+            )
+            u_descent_term += V_descent_from_u.mean()
+        loss.append(("Controler descent", u_nn))
 
         #   2.) Compare the CLBF to the nominal solution
 
@@ -643,7 +650,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, optimizer_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
@@ -671,6 +678,10 @@ class NeuralCLBFController(pl.LightningModule):
 
     def training_epoch_end(self, outputs):
         """This function is called after every epoch is completed."""
+        # Outputs contains a list for each optimizer, and we need to collect the losses
+        # from all of them
+        outputs = itertools.chain(*outputs)
+
         # Gather up all of the losses for each component from all batches
         losses = {}
         for batch_output in outputs:
@@ -835,12 +846,17 @@ class NeuralCLBFController(pl.LightningModule):
             self.datamodule.add_data(simulator_fn_wrapper)
 
     def configure_optimizers(self):
-        primal_opt = torch.optim.SGD(
-            list(self.V_nn.parameters()) + list(self.u_NN.parameters()),
+        clbf_opt = torch.optim.SGD(
+            self.V_nn.parameters(),
+            lr=self.primal_learning_rate,
+            weight_decay=1e-6,
+        )
+        u_opt = torch.optim.SGD(
+            self.u_NN.parameters(),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
 
-        # self.opt_idx_dict = {0: "descent", 1: "boundary"}
+        self.opt_idx_dict = {0: "clbf", 1: "controller"}
 
-        return [primal_opt]
+        return [clbf_opt, u_opt]
