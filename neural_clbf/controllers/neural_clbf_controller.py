@@ -614,6 +614,8 @@ class NeuralCLBFController(pl.LightningModule):
         match the nominal controller and local linear lyapunov function
         """
         loss = []
+        # Get the learned CLBF
+        V = self.V(x)
 
         # The initial losses should decrease exponentially to zero, based on the epoch
         epoch_count = max(self.current_epoch - self.num_init_epochs, 0)
@@ -627,16 +629,16 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn = self.u(x)
         u_nn = u_nn.unsqueeze(-1)
         for i, s in enumerate(self.scenarios):
-            V_descent_from_u = torch.bmm(
+            # Use the dynamics to compute the derivative of V
+            Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
-            u_descent_term += V_descent_from_u.mean()
+            Vdot = Vdot.reshape(-1, 1)
+            Vdot_clamped = F.relu(1.0 + Vdot + self.clbf_lambda * V)
+            u_descent_term += Vdot_clamped.mean()
         loss.append(("Controler descent", u_descent_term))
 
         #   2.) Compare the CLBF to the nominal solution
-
-        # Get the learned CLBF
-        V = self.V(x)
 
         # Get the nominal Lyapunov function
         P = self.dynamics_model.P.type_as(x)
