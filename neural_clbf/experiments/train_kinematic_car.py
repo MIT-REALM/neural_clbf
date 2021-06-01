@@ -111,8 +111,8 @@ def main(args):
         clbf_plotting_cb,
         # # This plotting function simulates rollouts of the controller
         # rollout_plotting_cb,
-        # Plot some rollouts
-        single_rollout_straight_path,
+        # # Plot some rollouts
+        # single_rollout_straight_path,
         # single_rollout_circle_path,
         single_rollout_s_path,
     ]
