@@ -146,7 +146,7 @@ def main(args):
     clbf_controller.val_dataloader = data_module.val_dataloader
     clbf_controller.test_dataloader = data_module.test_dataloader
 
-    # Initialize the logger and trainer]
+    # Initialize the logger and trainer
     current_git_hash = (
         subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
         .decode("ascii")
