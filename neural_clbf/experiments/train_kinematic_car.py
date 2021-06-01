@@ -114,7 +114,7 @@ def main(args):
         # # Plot some rollouts
         # single_rollout_straight_path,
         # single_rollout_circle_path,
-        # single_rollout_s_path,
+        single_rollout_s_path,
     ]
 
     # Initialize the controller
