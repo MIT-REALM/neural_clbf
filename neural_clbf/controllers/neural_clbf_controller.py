@@ -680,14 +680,14 @@ class NeuralCLBFController(pl.LightningModule):
         component_losses = {}
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             component_losses.update(self.initial_V_loss(x))
+            component_losses.update(
+                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            )
+            component_losses.update(
+                self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            )
         else:
             component_losses.update(self.initial_u_loss(x))
-        # component_losses.update(
-        #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        # )
-        # component_losses.update(
-        #     self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        # )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
