@@ -595,33 +595,31 @@ class NeuralCLBFController(pl.LightningModule):
                 / (0.0001 + Lg_V[:, i, :].norm(dim=-1))
                 - u_max_norm
             )
-            if (LgV_big_enough > 1e5).any():
-                import pdb; pdb.set_trace()
 
             violation = LgV_big_enough * condition_active
 
             clbf_descent_term += violation.mean()
 
-        loss.append(("CLBF descent term", clbf_descent_term))
+        loss.append(("CLBF actuation term", clbf_descent_term))
 
-        # # Now compute the decrease in that region, using the proof controller
-        # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
-        # # Get the current value of the CLBF and its Lie derivatives
-        # # (Lie derivatives are computed using a linear fit of the dynamics)
-        # # TODO @dawsonc do we need dynamics learning here?
-        # Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # # Get the control and reshape it to bs x n_controls x 1
-        # u_nn = self.u(x)
-        # u_nn = u_nn.unsqueeze(-1)
-        # for i, s in enumerate(self.scenarios):
-        #     # Use the dynamics to compute the derivative of V
-        #     Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
-        #         Lg_V[:, i, :].unsqueeze(1), u_nn
-        #     )
-        #     Vdot = Vdot.reshape(-1, 1)
-        #     violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
-        #     clbf_descent_term_lin += violation.mean()
-        # loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
+        # Now compute the decrease in that region, using the proof controller
+        clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
+        # Get the current value of the CLBF and its Lie derivatives
+        # (Lie derivatives are computed using a linear fit of the dynamics)
+        # TODO @dawsonc do we need dynamics learning here?
+        Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # Get the control and reshape it to bs x n_controls x 1
+        u_nn = self.u(x)
+        u_nn = u_nn.unsqueeze(-1)
+        for i, s in enumerate(self.scenarios):
+            # Use the dynamics to compute the derivative of V
+            Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
+                Lg_V[:, i, :].unsqueeze(1), u_nn
+            )
+            Vdot = Vdot.reshape(-1, 1)
+            violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
+            clbf_descent_term_lin += violation.mean()
+        loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
         return loss
 
@@ -678,7 +676,7 @@ class NeuralCLBFController(pl.LightningModule):
             Vdot = Vdot.reshape(-1, 1)
             Vdot_clamped = F.relu(eps + Vdot + self.clbf_lambda * V)
             u_descent_term += Vdot_clamped.mean()
-        loss.append(("Controler descent", u_descent_term))
+        loss.append(("Controller descent", u_descent_term))
 
         return loss
 
@@ -691,17 +689,17 @@ class NeuralCLBFController(pl.LightningModule):
         component_losses = {}
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             component_losses.update(self.initial_V_loss(x))
-            if self.current_epoch > self.num_init_epochs:
-                component_losses.update(
-                    self.descent_loss(
-                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                    )
-                )
-                component_losses.update(
-                    self.boundary_loss(
-                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                    )
-                )
+            # if self.current_epoch > self.num_init_epochs:
+            #     component_losses.update(
+            #         self.descent_loss(
+            #             x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+            #         )
+            #     )
+            #     component_losses.update(
+            #         self.boundary_loss(
+            #             x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+            #         )
+            #     )
         else:
             component_losses.update(self.u_loss(x))
 
