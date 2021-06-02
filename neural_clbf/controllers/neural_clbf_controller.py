@@ -598,9 +598,7 @@ class NeuralCLBFController(pl.LightningModule):
             V_next = self.V(x_next)
             violation = (
                 F.relu(
-                    eps
-                    + (V_next - V) / self.controller_period
-                    + self.clbf_lambda * V
+                    eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
                 )
                 * condition_active
             )
@@ -682,13 +680,18 @@ class NeuralCLBFController(pl.LightningModule):
             component_losses.update(self.initial_V_loss(x))
             if self.current_epoch > self.num_init_epochs:
                 component_losses.update(
-                    self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+                    self.boundary_loss(
+                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+                    )
                 )
+            #     component_losses.update(
+            #         self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            #     )
         else:
-            # component_losses.update(self.initial_u_loss(x))
-            component_losses.update(
-                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
+            component_losses.update(self.initial_u_loss(x))
+            # component_losses.update(
+            #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            # )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -741,12 +744,13 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Get the various losses
         component_losses = {}
-        component_losses.update(
-            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        )
-        component_losses.update(
-            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        )
+        # component_losses.update(
+        #     self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        # )
+        # component_losses.update(
+        #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        # )
+        component_losses.update([("dummy loss", torch.tensor(0.0, requires_grad=True))])
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)

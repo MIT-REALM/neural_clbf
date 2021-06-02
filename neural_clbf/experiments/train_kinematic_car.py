@@ -88,8 +88,8 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=10,
-        trajectory_length=1000,
-        fixed_samples=10000,
+        trajectory_length=100,
+        fixed_samples=1000,
         max_points=5000000,
         val_split=0.1,
         batch_size=64,
@@ -114,7 +114,7 @@ def main(args):
         # # Plot some rollouts
         # single_rollout_straight_path,
         # single_rollout_circle_path,
-        single_rollout_s_path,
+        # single_rollout_s_path,
     ]
 
     # Initialize the controller
@@ -153,7 +153,10 @@ def main(args):
         "logs/kscar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True
+        args,
+        logger=tb_logger,
+        reload_dataloaders_every_epoch=True,
+        track_grad_norm=2,
     )
 
     # Train
