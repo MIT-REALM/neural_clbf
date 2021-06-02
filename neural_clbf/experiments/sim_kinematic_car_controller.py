@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/1fd96c1.ckpt"
+    checkpoint_file = "saved_models/kscar/7fd4eb9.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001

@@ -558,7 +558,7 @@ class NeuralCLBFController(pl.LightningModule):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        eps = 0.01
+        eps = 0.1
 
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
@@ -599,8 +599,8 @@ class NeuralCLBFController(pl.LightningModule):
             violation = (
                 F.relu(
                     eps
-                    + V_next
-                    - (1 - self.clbf_lambda * self.controller_period) * V.squeeze()
+                    + (V_next - V) / self.controller_period
+                    + self.clbf_lambda * V
                 )
                 * condition_active
             )
@@ -664,7 +664,7 @@ class NeuralCLBFController(pl.LightningModule):
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
             Vdot = Vdot.reshape(V.shape)
-            Vdot_clamped = Vdot + self.clbf_lambda * V
+            Vdot_clamped = F.relu(1.0 + Vdot + self.clbf_lambda * V)
             u_descent_term += decrease_factor * Vdot_clamped.mean()
 
         loss.append(("Controller descent", u_descent_term))
@@ -680,14 +680,15 @@ class NeuralCLBFController(pl.LightningModule):
         component_losses = {}
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             component_losses.update(self.initial_V_loss(x))
+            if self.current_epoch > self.num_init_epochs:
+                component_losses.update(
+                    self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+                )
+        else:
+            # component_losses.update(self.initial_u_loss(x))
             component_losses.update(
                 self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
             )
-            component_losses.update(
-                self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
-        else:
-            component_losses.update(self.initial_u_loss(x))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
