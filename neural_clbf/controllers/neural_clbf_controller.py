@@ -662,7 +662,7 @@ class NeuralCLBFController(pl.LightningModule):
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
             Vdot = Vdot.reshape(-1, 1)
-            Vdot_clamped = F.relu(10.0 + Vdot + self.clbf_lambda * V)
+            Vdot_clamped = Vdot + self.clbf_lambda * V
             u_descent_term += decrease_factor * Vdot_clamped.mean()
         loss.append(("Controller descent", u_descent_term))
 
