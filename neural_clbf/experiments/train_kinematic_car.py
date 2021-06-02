@@ -114,7 +114,7 @@ def main(args):
         # # Plot some rollouts
         # single_rollout_straight_path,
         # single_rollout_circle_path,
-        single_rollout_s_path,
+        # single_rollout_s_path,
     ]
 
     # Initialize the controller
@@ -133,7 +133,7 @@ def main(args):
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
-        num_init_epochs=25,
+        num_init_epochs=0,
         epochs_per_episode=100,
     )
     # Add the DataModule hooks

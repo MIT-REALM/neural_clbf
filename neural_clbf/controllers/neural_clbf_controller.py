@@ -591,9 +591,12 @@ class NeuralCLBFController(pl.LightningModule):
             # When both conditions are positive, we add a loss on LgV
             LgV_big_enough = F.relu(
                 eps
-                + (Lf_V[:, i, :] + self.clbf_lambda * V) / (0.0001 + Lg_V[:, i, :].norm(dim=-1))
+                + (Lf_V[:, i, :] + self.clbf_lambda * V)
+                / (0.0001 + Lg_V[:, i, :].norm(dim=-1))
                 - u_max_norm
             )
+            if (LgV_big_enough > 1e5).any():
+                import pdb; pdb.set_trace()
 
             violation = LgV_big_enough * condition_active
 
