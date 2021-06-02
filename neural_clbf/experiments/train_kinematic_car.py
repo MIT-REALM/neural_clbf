@@ -88,8 +88,8 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=10,
-        trajectory_length=1000,
-        fixed_samples=10000,
+        trajectory_length=100,
+        fixed_samples=1000,
         max_points=5000000,
         val_split=0.1,
         batch_size=64,
@@ -133,7 +133,7 @@ def main(args):
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
-        num_init_epochs=0,
+        num_init_epochs=25,
         epochs_per_episode=100,
     )
     # Add the DataModule hooks
