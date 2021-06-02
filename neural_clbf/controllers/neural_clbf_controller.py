@@ -581,9 +581,10 @@ class NeuralCLBFController(pl.LightningModule):
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
-            Vdot = Vdot.reshape(-1, 1)
+            Vdot = Vdot.reshape(V.shape)
             violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
             clbf_descent_term_lin += violation.mean()
+
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
 
         #   2.) A term to encourage satisfaction of CLF condition, using the method from
@@ -603,6 +604,7 @@ class NeuralCLBFController(pl.LightningModule):
                 )
                 * condition_active
             )
+
             clbf_descent_term_sim += violation.mean()
         loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
@@ -661,9 +663,10 @@ class NeuralCLBFController(pl.LightningModule):
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1), u_nn
             )
-            Vdot = Vdot.reshape(-1, 1)
+            Vdot = Vdot.reshape(V.shape)
             Vdot_clamped = Vdot + self.clbf_lambda * V
             u_descent_term += decrease_factor * Vdot_clamped.mean()
+
         loss.append(("Controller descent", u_descent_term))
 
         return loss
