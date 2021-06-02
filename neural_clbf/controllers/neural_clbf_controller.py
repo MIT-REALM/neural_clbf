@@ -558,13 +558,13 @@ class NeuralCLBFController(pl.LightningModule):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        eps = 0.1
 
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
 
         # First figure out where this condition needs to hold
         V = self.V(x)
+        eps = 0.1
         condition_active = F.relu(self.safe_level + eps - V)
 
         # Now compute the decrease in that region, using the proof controller
@@ -576,6 +576,7 @@ class NeuralCLBFController(pl.LightningModule):
         # Get the control and reshape it to bs x n_controls x 1
         u_nn = self.u(x)
         u_nn = u_nn.unsqueeze(-1)
+        eps = 1.0
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
@@ -591,6 +592,7 @@ class NeuralCLBFController(pl.LightningModule):
         # the RSS paper.
         # We compute the change in V in two ways: simulating x forward in time and check
         # if V decreases in each scenario
+        eps = 1.0
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn.squeeze(), params=s)
@@ -689,9 +691,6 @@ class NeuralCLBFController(pl.LightningModule):
             #     )
         else:
             component_losses.update(self.initial_u_loss(x))
-            # component_losses.update(
-            #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            # )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -744,13 +743,12 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Get the various losses
         component_losses = {}
-        # component_losses.update(
-        #     self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        # )
-        # component_losses.update(
-        #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        # )
-        component_losses.update([("dummy loss", torch.tensor(0.0, requires_grad=True))])
+        component_losses.update(
+            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(
+            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
