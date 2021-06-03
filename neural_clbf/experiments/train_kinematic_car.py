@@ -108,7 +108,7 @@ def main(args):
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
         # Plot some rollouts
-        single_rollout_s_path,
+        # single_rollout_s_path,
     ]
 
     # Initialize the controller
