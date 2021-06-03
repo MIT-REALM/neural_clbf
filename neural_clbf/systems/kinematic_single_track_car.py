@@ -115,10 +115,10 @@ class KSCar(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[KSCar.SXE] = 1.0
-        upper_limit[KSCar.SYE] = 1.0
+        upper_limit[KSCar.SXE] = 1.5
+        upper_limit[KSCar.SYE] = 1.5
         upper_limit[KSCar.DELTA] = self.car_params.steering.max
-        upper_limit[KSCar.VE] = 1.0
+        upper_limit[KSCar.VE] = 1.5
         upper_limit[KSCar.PSI_E] = np.pi / 2
 
         lower_limit = -1.0 * upper_limit
@@ -157,7 +157,7 @@ class KSCar(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.35
+        max_safe_tracking_error = 0.5
         tracking_error = x
         tracking_error_small_enough = (
             tracking_error.norm(dim=-1) <= max_safe_tracking_error
@@ -176,7 +176,7 @@ class KSCar(ControlAffineSystem):
 
         # Avoid angles that are too large
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.5
+        max_safe_tracking_error = 1.0
         tracking_error = x
         tracking_error_too_big = tracking_error.norm(dim=-1) >= max_safe_tracking_error
         unsafe_mask.logical_or_(tracking_error_too_big)
