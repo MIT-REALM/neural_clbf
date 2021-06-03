@@ -363,13 +363,13 @@ def single_rollout_s_path(
         + clbf_controller.dynamics_model.car_params.b
     )
     x_sim[:, 0, KSCar.DELTA] -= torch.atan(
-        torch.tensor(omega_ref * wheelbase / params["v_ref"])
+        torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_sim)
     )
     x_nn[:, 0, KSCar.DELTA] -= torch.atan(
-        torch.tensor(omega_ref * wheelbase / params["v_ref"])
+        torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_nn)
     )
     x_nominal[:, 0, KSCar.DELTA] -= torch.atan(
-        torch.tensor(omega_ref * wheelbase / params["v_ref"])
+        torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_nominal)
     )
 
     ax2 = fig.add_subplot(gs[0, 1:])
