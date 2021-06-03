@@ -519,11 +519,11 @@ class NeuralCLBFController(pl.LightningModule):
         safe_clbf_term = safe_V_too_big.mean()
         loss.append(("CLBF safe region term", safe_clbf_term))
 
-        # #   3.) V >= unsafe_level in the unsafe region
-        # V_unsafe = V[unsafe_mask]
-        # unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
-        # unsafe_clbf_term = unsafe_V_too_small.mean()
-        # loss.append(("CLBF unsafe region term", unsafe_clbf_term))
+        #   3.) V >= unsafe_level in the unsafe region
+        V_unsafe = V[unsafe_mask]
+        unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
+        unsafe_clbf_term = unsafe_V_too_small.mean()
+        loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
         return loss
 
