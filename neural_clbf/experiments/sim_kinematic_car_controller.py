@@ -150,7 +150,7 @@ def single_rollout_s_path(
     prog_bar_range = tqdm.trange(1, T, desc="S-Curve", leave=True)
     for tstep in prog_bar_range:
         # Get the path parameters at this point
-        omega_ref[tstep] = 1.5 * np.sign(np.sin(tstep * simulation_dt))
+        omega_ref[tstep] = 1.5 * np.sin(tstep * simulation_dt)
         psi_ref[tstep] = simulation_dt * omega_ref[tstep] + psi_ref[tstep - 1]
         pt = copy(params)
         pt["psi_ref"] = psi_ref[tstep]
