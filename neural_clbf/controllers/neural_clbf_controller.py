@@ -418,7 +418,10 @@ class NeuralCLBFController(pl.LightningModule):
             # Instantiate the model
             model = gp.Model("clbf_qp")
             # Create variables for control input and (optionally) the relaxations
-            u = model.addMVar(n_controls, lb=-GRB.INFINITY, ub=GRB.INFINITY)
+            upper_lim, lower_lim = self.dynamics_model.control_limits
+            upper_lim = upper_lim.cpu().numpy()
+            lower_lim = lower_lim.cpu().numpy()
+            u = model.addMVar(n_controls, lb=lower_lim, ub=upper_lim)
             if allow_relaxation:
                 r = model.addMVar(n_scenarios, lb=0, ub=GRB.INFINITY)
 
@@ -438,15 +441,7 @@ class NeuralCLBFController(pl.LightningModule):
                 clbf_constraint = Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np
                 if allow_relaxation:
                     clbf_constraint -= r[i]
-                model.addConstr(clbf_constraint <= 0, name=f"Scenario {i} Decrease")
-
-            # Also add actuation constraints
-            upper_lim, lower_lim = self.dynamics_model.control_limits
-            upper_lim = upper_lim.cpu().numpy()
-            lower_lim = lower_lim.cpu().numpy()
-            for j in range(n_controls):
-                model.addConstr(u[j] <= upper_lim[j])
-                model.addConstr(u[j] >= lower_lim[j])
+                model.addConstr(clbf_constraint <= -1.0, name=f"Scenario {i} Decrease")
 
             # Optimize!
             model.setParam("DualReductions", 0)
@@ -561,11 +556,11 @@ class NeuralCLBFController(pl.LightningModule):
 
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
-
-        # First figure out where this condition needs to hold
         V = self.V(x)
-        eps = 0.1
-        condition_active = F.relu(self.safe_level + eps - V)
+
+        # # First figure out where this condition needs to hold
+        # eps = 0.1
+        # condition_active = F.relu(self.safe_level + eps - V)
 
         # Now compute the decrease in that region, using the proof controller
         clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
@@ -575,15 +570,15 @@ class NeuralCLBFController(pl.LightningModule):
         Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
         u_nn = self.u(x)
-        u_nn = u_nn.unsqueeze(-1)
         eps = 1.0
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
-                Lg_V[:, i, :].unsqueeze(1), u_nn
+                Lg_V[:, i, :].unsqueeze(1),
+                u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
             )
             Vdot = Vdot.reshape(V.shape)
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
+            violation = F.relu(eps + Vdot + self.clbf_lambda * V)
             clbf_descent_term_lin += violation.mean()
 
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
@@ -595,14 +590,11 @@ class NeuralCLBFController(pl.LightningModule):
         eps = 1.0
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn.squeeze(), params=s)
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
-            violation = (
-                F.relu(
-                    eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
-                )
-                * condition_active
+            violation = F.relu(
+                eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
 
             clbf_descent_term_sim += violation.mean()
@@ -687,7 +679,9 @@ class NeuralCLBFController(pl.LightningModule):
                     )
                 )
                 component_losses.update(
-                    self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+                    self.descent_loss(
+                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+                    )
                 )
         else:
             component_losses.update(self.initial_u_loss(x))

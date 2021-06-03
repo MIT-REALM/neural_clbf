@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/7fd4eb9.ckpt"
+    checkpoint_file = "saved_models/kscar/25549e7.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -59,7 +59,7 @@ def doMain():
 
     # Define the scenarios
     scenarios = []
-    omega_ref_vals = [-0.5, 0.5]
+    omega_ref_vals = [-1.5, 1.5]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
@@ -532,7 +532,7 @@ def single_rollout_s_path(
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 5.0 / 1.0
+    t_sim = 5.0 / 10.0
     n_sims = 1
     T = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
@@ -571,14 +571,15 @@ def single_rollout_s_path(
     x_ref = np.zeros(T)
     y_ref = np.zeros(T)
     psi_ref = np.zeros(T)
+    omega_ref = np.zeros(T)
     psi_ref[0] = 1.0
 
     controller_update_freq = int(controller_period / simulation_dt)
     prog_bar_range = tqdm.trange(1, T, desc="S-Curve", leave=True)
     for tstep in prog_bar_range:
         # Get the path parameters at this point
-        omega_ref_t = 1.5 * np.sign(np.sin(tstep * simulation_dt))
-        psi_ref[tstep] = simulation_dt * omega_ref_t + psi_ref[tstep - 1]
+        omega_ref[tstep] = 1.5 * np.sign(np.sin(tstep * simulation_dt))
+        psi_ref[tstep] = simulation_dt * omega_ref[tstep] + psi_ref[tstep - 1]
         pt = copy(params)
         pt["psi_ref"] = psi_ref[tstep]
         x_ref[tstep] = x_ref[tstep - 1] + simulation_dt * pt["v_ref"] * np.cos(
@@ -783,24 +784,39 @@ def single_rollout_s_path(
     ax1.set_xlim([np.min(x_ref) - 3, np.max(x_ref) + 3])
     ax1.set_aspect("equal")
 
+    # # Correct for reference steering angle when calculating tracking error
+    # wheelbase = (
+    #     clbf_controller.dynamics_model.car_params.a
+    #     + clbf_controller.dynamics_model.car_params.b
+    # )
+    # x_sim[:, 0, KSCar.DELTA] -= torch.atan(
+    #     torch.tensor(omega_ref * wheelbase / params["v_ref"])
+    # )
+    # x_nn[:, 0, KSCar.DELTA] -= torch.atan(
+    #     torch.tensor(omega_ref * wheelbase / params["v_ref"])
+    # )
+    # x_nominal[:, 0, KSCar.DELTA] -= torch.atan(
+    #     torch.tensor(omega_ref * wheelbase / params["v_ref"])
+    # )
+
     ax2 = fig.add_subplot(gs[0, 1:])
     ax2.plot(
-        t[:t_final],
-        x_sim[:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
+        t[1:t_final],
+        x_sim[1:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle="-",
         label="CLBF",
         color="red",
     )
     ax2.plot(
-        t[:t_final],
-        x_nn[:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
+        t[1:t_final],
+        x_nn[1:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle=":",
         label="NN",
         color="blue",
     )
     ax2.plot(
-        t[:t_final],
-        x_nominal[:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
+        t[1:t_final],
+        x_nominal[1:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle=":",
         label="Nominal",
         color="green",
