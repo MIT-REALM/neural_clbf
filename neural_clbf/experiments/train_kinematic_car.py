@@ -127,7 +127,7 @@ def main(args):
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
-        num_init_epochs=10,
+        num_init_epochs=1,
         epochs_per_episode=5,
     )
     # Add the DataModule hooks
