@@ -518,17 +518,17 @@ class NeuralCLBFController(pl.LightningModule):
         goal_term += V_goal_pt.mean()
         loss.append(("CLBF goal term", goal_term))
 
-        #   2.) V <= safe_level in the safe region
-        V_safe = V[safe_mask]
-        safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
-        safe_clbf_term = 100 * safe_V_too_big.mean()
-        loss.append(("CLBF safe region term", safe_clbf_term))
+        # #   2.) V <= safe_level in the safe region
+        # V_safe = V[safe_mask]
+        # safe_V_too_big = F.relu(eps + V_safe - self.safe_level)
+        # safe_clbf_term = 100 * safe_V_too_big.mean()
+        # loss.append(("CLBF safe region term", safe_clbf_term))
 
-        #   3.) V >= unsafe_level in the unsafe region
-        V_unsafe = V[unsafe_mask]
-        unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
-        unsafe_clbf_term = 100 * unsafe_V_too_small.mean()
-        loss.append(("CLBF unsafe region term", unsafe_clbf_term))
+        # #   3.) V >= unsafe_level in the unsafe region
+        # V_unsafe = V[unsafe_mask]
+        # unsafe_V_too_small = F.relu(eps + self.unsafe_level - V_unsafe)
+        # unsafe_clbf_term = 100 * unsafe_V_too_small.mean()
+        # loss.append(("CLBF unsafe region term", unsafe_clbf_term))
 
         return loss
 
@@ -678,16 +678,16 @@ class NeuralCLBFController(pl.LightningModule):
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             component_losses.update(self.initial_V_loss(x))
             if self.current_epoch > self.num_init_epochs:
-                # component_losses.update(
-                #     self.boundary_loss(
-                #         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                #     )
-                # )
                 component_losses.update(
-                    self.descent_loss(
+                    self.boundary_loss(
                         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
                     )
                 )
+                # component_losses.update(
+                #     self.descent_loss(
+                #         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+                #     )
+                # )
         else:
             component_losses.update(
                 self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
