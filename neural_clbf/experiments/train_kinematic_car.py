@@ -108,7 +108,7 @@ def main(args):
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
         # Plot some rollouts
-        # single_rollout_s_path,
+        single_rollout_s_path,
     ]
 
     # Initialize the controller
@@ -127,7 +127,7 @@ def main(args):
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
-        num_init_epochs=1,
+        num_init_epochs=5,
         epochs_per_episode=5,
     )
     # Add the DataModule hooks
