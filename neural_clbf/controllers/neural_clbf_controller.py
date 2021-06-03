@@ -86,7 +86,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Save the other parameters
         self.clbf_lambda = clbf_lambda
-        self.safe_level = safety_level
+        self.safe_level = nn.parameter.Parameter(torch.tensor(safety_level))
         self.goal_level = goal_level
         self.unsafe_level = safety_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
@@ -441,7 +441,7 @@ class NeuralCLBFController(pl.LightningModule):
                 clbf_constraint = Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np
                 if allow_relaxation:
                     clbf_constraint -= r[i]
-                model.addConstr(clbf_constraint <= -1.0, name=f"Scenario {i} Decrease")
+                model.addConstr(clbf_constraint <= 0.0, name=f"Scenario {i} Decrease")
 
             # Optimize!
             model.setParam("DualReductions", 0)
@@ -868,7 +868,7 @@ class NeuralCLBFController(pl.LightningModule):
 
     def configure_optimizers(self):
         clbf_opt = torch.optim.SGD(
-            self.V_nn.parameters(),
+            list(self.V_nn.parameters()) + [self.safe_level],
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
