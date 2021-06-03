@@ -357,39 +357,39 @@ def single_rollout_s_path(
     ax1.set_xlim([np.min(x_ref) - 3, np.max(x_ref) + 3])
     ax1.set_aspect("equal")
 
-    # Correct for reference steering angle when calculating tracking error
-    wheelbase = (
-        clbf_controller.dynamics_model.car_params.a
-        + clbf_controller.dynamics_model.car_params.b
-    )
-    x_sim[:, 0, KSCar.DELTA] -= torch.atan(
-        torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_sim)
-    )
-    x_nn[:, 0, KSCar.DELTA] -= torch.atan(
-        torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_nn)
-    )
-    x_nominal[:, 0, KSCar.DELTA] -= torch.atan(
-        torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_nominal)
-    )
+    # # Correct for reference steering angle when calculating tracking error
+    # wheelbase = (
+    #     clbf_controller.dynamics_model.car_params.a
+    #     + clbf_controller.dynamics_model.car_params.b
+    # )
+    # x_sim[:, 0, KSCar.DELTA] -= torch.atan(
+    #     torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_sim)
+    # )
+    # x_nn[:, 0, KSCar.DELTA] -= torch.atan(
+    #     torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_nn)
+    # )
+    # x_nominal[:, 0, KSCar.DELTA] -= torch.atan(
+    #     torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_nominal)
+    # )
 
     ax2 = fig.add_subplot(gs[0, 1:])
     ax2.plot(
         t[1:t_final],
-        x_sim[1:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
+        x_sim[1:t_final, 0, :KSCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle="-",
         label="CLBF",
         color="red",
     )
     ax2.plot(
         t[1:t_final],
-        x_nn[1:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
+        x_nn[1:t_final, 0, :KSCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle=":",
         label="NN",
         color="blue",
     )
     ax2.plot(
         t[1:t_final],
-        x_nominal[1:t_final, 0, :].norm(dim=-1).squeeze().cpu().numpy(),
+        x_nominal[1:t_final, 0, :KSCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle=":",
         label="Nominal",
         color="green",
