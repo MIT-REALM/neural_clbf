@@ -96,7 +96,7 @@ def main(args):
 
     # Define the scenarios
     scenarios = []
-    omega_ref_vals = [-0.5, 0.5]
+    omega_ref_vals = [-1.5, 1.5]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
