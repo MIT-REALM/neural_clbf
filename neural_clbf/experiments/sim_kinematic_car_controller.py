@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/2f413aa.ckpt"
+    checkpoint_file = "saved_models/kscar/5be7af9.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -78,7 +78,7 @@ def doMain():
         u_nn_hidden_layers=2,
         u_nn_hidden_size=64,
         clbf_lambda=0.1,
-        safety_level=0.1,
+        safety_level=0.2,
         goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
@@ -130,6 +130,9 @@ def single_rollout_s_path(
     V_nn = torch.clone(V_sim)
     Vdot_nn = torch.clone(Vdot_sim)
     u_nn = torch.clone(u_sim)
+    lin_descent_loss_nn = torch.clone(V_sim)
+    sim_descent_loss_nn = torch.clone(V_sim)
+    lgv_nn = torch.clone(Vdot_sim)
 
     # And the nominal controller
     x_nominal = torch.clone(x_sim)
@@ -221,6 +224,8 @@ def single_rollout_s_path(
                 )
                 Vdot = Vdot.reshape(-1, 1)
                 Vdot_nn[tstep, :, i, 0] = Vdot
+
+                lgv_nn[tstep, :, i, 0] = Lg_V[:, i, :].norm()
             # and with the true parameters
             Lf_V, Lg_V = clbf_controller.V_lie_derivatives(x_current, [pt])
             Vdot = Lf_V[:, 0, :].unsqueeze(1) + torch.bmm(
@@ -228,6 +233,7 @@ def single_rollout_s_path(
             )
             Vdot = Vdot.reshape(-1, 1)
             Vdot_nn[tstep, :, -1, 0] = Vdot
+            lgv_nn[tstep, :, -1, 0] = Lg_V[:, 0, :].norm()
         else:
             u = u_nn[tstep - 1, :, :]
             u_nn[tstep, :, :] = u
@@ -235,6 +241,9 @@ def single_rollout_s_path(
             # Copy the estimate of Vdot
             Vdot = Vdot_nn[tstep - 1, :, :, :]
             Vdot_nn[tstep, :, :, :] = Vdot
+
+            lgv = lgv_nn[tstep - 1, :, :, :]
+            lgv_nn[tstep, :, :, :] = lgv
 
         # Simulate forward using the dynamics
         for i in range(n_sims):
@@ -247,6 +256,17 @@ def single_rollout_s_path(
 
         # Get the CLBF values
         V_nn[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
+
+        # And get the descent loss for this point
+        goal_mask = clbf_controller.dynamics_model.goal_mask(x_current)
+        safe_mask = clbf_controller.dynamics_model.safe_mask(x_current)
+        unsafe_mask = clbf_controller.dynamics_model.unsafe_mask(x_current)
+        dist_to_goal = clbf_controller.dynamics_model.distance_to_goal(x_current)
+        descent_losses = clbf_controller.descent_loss(
+            x_current, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+        )
+        lin_descent_loss_nn[tstep, :, 0] = descent_losses[0][1]
+        sim_descent_loss_nn[tstep, :, 0] = descent_losses[1][1]
 
         # and repeat for the nominal controller
         # Get the current state
@@ -296,7 +316,7 @@ def single_rollout_s_path(
 
     # Plot!
     fig = plt.figure()
-    gs = fig.add_gridspec(3, 3)
+    gs = fig.add_gridspec(3, 5)
     fig.set_size_inches(12, 12)
 
     # Get reference path
@@ -372,7 +392,7 @@ def single_rollout_s_path(
     #     torch.tensor(omega_ref * wheelbase / params["v_ref"]).type_as(x_nominal)
     # )
 
-    ax2 = fig.add_subplot(gs[0, 1:])
+    ax2 = fig.add_subplot(gs[0, 1:3])
     ax2.plot(
         t[1:t_final],
         x_sim[1:t_final, 0, : KSCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
@@ -399,7 +419,7 @@ def single_rollout_s_path(
     ax2.set_xlabel("$t$")
     ax2.set_ylabel("Tracking error")
 
-    ax3 = fig.add_subplot(gs[1, 1:])
+    ax3 = fig.add_subplot(gs[1, 1:3])
     ax3.plot(
         t[:t_final],
         V_sim[:t_final, :, :].squeeze().cpu().numpy(),
@@ -433,7 +453,7 @@ def single_rollout_s_path(
     ax3.set_xlabel("$t$")
     ax3.set_ylabel("$V$")
 
-    ax4 = fig.add_subplot(gs[2, 1:])
+    ax4 = fig.add_subplot(gs[2, 1:3])
     Vdot_actual_sim = torch.diff(V_sim, dim=0) / simulation_dt
     Vdot_actual_nn = torch.diff(V_nn, dim=0) / simulation_dt
     Vdot_actual_nominal = torch.diff(V_nominal, dim=0) / simulation_dt
@@ -475,6 +495,18 @@ def single_rollout_s_path(
         linestyle="dotted",
         color="blue",
     )
+    # ax4.plot(
+    #     t[1:t_final],
+    #     lin_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
+    #     linestyle="dotted",
+    #     color="red",
+    # )
+    # ax4.plot(
+    #     t[1:t_final],
+    #     sim_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
+    #     linestyle="dashed",
+    #     color="red",
+    # )
     ax4.plot(
         t[1:t_final],
         Vdot_nominal[1:t_final, :, -1, :].squeeze().cpu().numpy(),
@@ -508,6 +540,36 @@ def single_rollout_s_path(
     ax4.legend()
     ax4.set_xlabel("$t$")
     ax4.set_ylabel("$dV/dt$")
+
+    ax5 = fig.add_subplot(gs[2, 3:])
+    # ax5.plot(
+    #     t[1:t_final],
+    #     Vdot_sim[1:t_final, :, -1, :].squeeze().cpu().numpy(),
+    #     linestyle="solid",
+    #     color="red",
+    # )
+    ax5.plot(
+        t[1:t_final],
+        lgv_nn[1:t_final, :, -1, :].squeeze().cpu().numpy(),
+        linestyle="solid",
+        color="blue",
+    )
+    # ax5.plot(
+    #     t[1:t_final],
+    #     Vdot_nominal[1:t_final, :, -1, :].squeeze().cpu().numpy(),
+    #     label="Linearized (true parameters)",
+    #     linestyle="solid",
+    #     color="green",
+    # )
+    ax5.plot(
+        t[:t_final],
+        zeros[:t_final],
+        linestyle="dotted",
+        color="black",
+    )
+    ax5.legend()
+    ax5.set_xlabel("$t$")
+    ax5.set_ylabel("$||L_g V||$")
 
     fig.tight_layout()
 
