@@ -317,7 +317,7 @@ def single_rollout_s_path(
     # Plot!
     fig = plt.figure()
     gs = fig.add_gridspec(3, 5)
-    fig.set_size_inches(12, 12)
+    fig.set_size_inches(16, 12)
 
     # Get reference path
     t = np.linspace(0, t_sim, T)
