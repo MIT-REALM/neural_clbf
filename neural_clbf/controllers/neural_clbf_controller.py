@@ -621,7 +621,7 @@ class NeuralCLBFController(pl.LightningModule):
         epoch_count = max(self.current_epoch - self.num_init_epochs, 0)
         decrease_factor = 0.5 ** epoch_count
 
-        #   2.) Compare the CLBF to the nominal solution
+        #   1.) Compare the CLBF to the nominal solution
         # Get the learned CLBF
         V = self.V(x)
 
@@ -635,6 +635,10 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_mse_loss = (V - V_nominal) ** 2
         clbf_mse_loss = decrease_factor * clbf_mse_loss.mean()
         loss.append(("CLBF MSE", clbf_mse_loss))
+
+        #   2.) Ensure that V >= 0.5 * nominal solution
+        clbf_lower_bound_loss = F.relu(V - 0.5 * V_nominal)
+        loss.append(("CLBF Bound", clbf_lower_bound_loss))
 
         return loss
 
