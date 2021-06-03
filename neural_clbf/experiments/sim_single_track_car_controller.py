@@ -379,21 +379,21 @@ def single_rollout_s_path(
     ax2 = fig.add_subplot(gs[0, 1:])
     ax2.plot(
         t[:t_final],
-        x_sim[:t_final, 0, :STCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
+        x_sim[:t_final, 0, : STCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle="-",
         label="CLBF",
         color="red",
     )
     ax2.plot(
         t[:t_final],
-        x_nn[:t_final, 0, :STCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
+        x_nn[:t_final, 0, : STCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle=":",
         label="NN",
         color="blue",
     )
     ax2.plot(
         t[:t_final],
-        x_nominal[:t_final, 0, :STCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
+        x_nominal[:t_final, 0, : STCar.SYE + 1].norm(dim=-1).squeeze().cpu().numpy(),
         linestyle=":",
         label="Nominal",
         color="green",
