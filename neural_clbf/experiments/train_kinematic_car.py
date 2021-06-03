@@ -122,7 +122,7 @@ def main(args):
         u_nn_hidden_layers=2,
         u_nn_hidden_size=64,
         clbf_lambda=0.1,
-        safety_level=0.1,
+        safety_level=0.2,
         goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
