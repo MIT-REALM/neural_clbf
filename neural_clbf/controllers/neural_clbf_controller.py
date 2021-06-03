@@ -637,7 +637,7 @@ class NeuralCLBFController(pl.LightningModule):
         loss.append(("CLBF MSE", clbf_mse_loss))
 
         #   2.) Ensure that V >= 0.5 * nominal solution
-        clbf_lower_bound_loss = F.relu(V - 0.5 * V_nominal)
+        clbf_lower_bound_loss = F.relu(V - 0.5 * V_nominal).mean()
         loss.append(("CLBF Bound", clbf_lower_bound_loss))
 
         return loss
