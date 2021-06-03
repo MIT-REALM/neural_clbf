@@ -362,14 +362,14 @@ def single_rollout_s_path(
     lf = car_params.a
     lr = car_params.b
     x0 = 0.0 * x_sim
-    x0[:, 0, :] += clbf_controller.dynamics_model.goal_point
-    x0[:, 0, STCar.PSI_E_DOT] = torch.tensor(omega_ref)
+    x0[:, 0, :] += clbf_controller.dynamics_model.goal_point.type_as(x0)
+    x0[:, 0, STCar.PSI_E_DOT] = torch.tensor(omega_ref).type_as(x0)
     x0[:, 0, STCar.DELTA] = torch.tensor(
         (lf ** 2 * C_Sf * g * lr + lr ** 2 * C_Sr * g * lf)
         / (lf * C_Sf * g * lr)
         * omega_ref
         / params["v_ref"]
-    )
+    ).type_as(x0)
     x0[:, 0, STCar.DELTA] /= lf * C_Sf * g * lr
 
     x_sim -= x0
