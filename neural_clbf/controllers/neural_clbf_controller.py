@@ -642,7 +642,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def initial_u_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
+    def u_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
         """
         Compute the loss during the initialization epochs, which trains the net to
         match the nominal controller and local linear lyapunov function
@@ -696,7 +696,7 @@ class NeuralCLBFController(pl.LightningModule):
                     )
                 )
         else:
-            component_losses.update(self.initial_u_loss(x))
+            component_losses.update(self.descent_loss(x))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
