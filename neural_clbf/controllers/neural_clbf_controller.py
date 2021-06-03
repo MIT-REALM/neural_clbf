@@ -1,5 +1,5 @@
 import itertools
-from typing import Tuple, List, Optional, Callable
+from typing import Tuple, List, Optional, Callable, Union
 from collections import OrderedDict
 
 import gurobipy as gp
@@ -46,6 +46,7 @@ class NeuralCLBFController(pl.LightningModule):
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
         ] = None,
+        vary_safe_level: bool = False,
     ):
         """Initialize the controller.
 
@@ -72,6 +73,7 @@ class NeuralCLBFController(pl.LightningModule):
             plotting_callbacks: a list of plotting functions that each take a
                                 NeuralCLBFController and return a tuple of a string
                                 name and figure object to log
+            vary_safe_level: if True, optimize the safe level as a parameter
         """
         super().__init__()
         self.save_hyperparameters()
@@ -86,7 +88,13 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Save the other parameters
         self.clbf_lambda = clbf_lambda
-        self.safe_level = nn.parameter.Parameter(torch.tensor(safety_level))
+        self.vary_safe_level = vary_safe_level
+        self.safe_level: Union[torch.Tensor, float]
+        self.unsafe_level: Union[torch.Tensor, float]
+        if vary_safe_level:
+            self.safe_level = nn.parameter.Parameter(torch.tensor(safety_level))
+        else:
+            self.safe_level = safety_level
         self.goal_level = goal_level
         self.unsafe_level = self.safe_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
@@ -867,8 +875,12 @@ class NeuralCLBFController(pl.LightningModule):
             self.datamodule.add_data(simulator_fn_wrapper)
 
     def configure_optimizers(self):
+        clbf_params = list(self.V_nn.parameters())
+        if self.vary_safe_level:
+            clbf_params += [self.safe_level]
+
         clbf_opt = torch.optim.SGD(
-            list(self.V_nn.parameters()) + [self.safe_level],
+            clbf_params,
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )

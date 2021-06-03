@@ -17,8 +17,6 @@ from neural_clbf.experiments.common.plotting import (
     rollout_CLBF,
 )
 from neural_clbf.experiments.sim_single_track_car_controller import (
-    # single_rollout_straight_path,
-    # single_rollout_circle_path,
     single_rollout_s_path,
 )
 from neural_clbf.systems import STCar
@@ -112,11 +110,7 @@ def main(args):
     plotting_callbacks = [
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
-        # # This plotting function simulates rollouts of the controller
-        # rollout_plotting_cb,
-        # # Plot some rollouts
-        # single_rollout_straight_path,
-        # single_rollout_circle_path,
+        # Plot some rollouts
         single_rollout_s_path,
     ]
 
