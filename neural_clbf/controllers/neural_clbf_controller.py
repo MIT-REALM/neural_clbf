@@ -88,7 +88,7 @@ class NeuralCLBFController(pl.LightningModule):
         self.clbf_lambda = clbf_lambda
         self.safe_level = nn.parameter.Parameter(torch.tensor(safety_level))
         self.goal_level = goal_level
-        self.unsafe_level = safety_level
+        self.unsafe_level = self.safe_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
         self.controller_period = controller_period
         self.primal_learning_rate = primal_learning_rate
