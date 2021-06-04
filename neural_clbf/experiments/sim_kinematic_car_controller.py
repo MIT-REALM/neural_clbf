@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/5be7af9.ckpt"
+    checkpoint_file = "saved_models/kscar/04750ef.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -77,14 +77,15 @@ def doMain():
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=64,
-        clbf_lambda=0.1,
+        clbf_lambda=0.5,
         safety_level=0.2,
         goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e1,
+        clbf_relaxation_penalty=1e8,
         penalty_scheduling_rate=0,
         num_init_epochs=50,
         epochs_per_episode=100,
+        primal_learning_rate=1e-2,
     )
 
     single_rollout_s_path(clbf_controller)
@@ -104,7 +105,7 @@ def single_rollout_s_path(
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 5.0 / 1.0
+    t_sim = 5.0 / 10.0
     n_sims = 1
     T = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
