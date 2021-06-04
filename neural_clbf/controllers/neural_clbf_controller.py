@@ -639,39 +639,6 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def u_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
-        """
-        Compute the loss during the initialization epochs, which trains the net to
-        match the nominal controller and local linear lyapunov function
-        """
-        loss = []
-        # Get the learned CLBF
-        V = self.V(x)
-
-        # The initial losses should decrease exponentially to zero, based on the epoch
-        epoch_count = max(self.current_epoch - self.num_init_epochs, 0)
-        decrease_factor = 0.5 ** epoch_count
-
-        #   1.) Controller should initially prioritize fastest descent
-        u_descent_term = torch.tensor(0.0).type_as(x)
-        u_nn = self.u(x)
-        Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u(x)
-        u_nn = u_nn.unsqueeze(-1)
-        for i, s in enumerate(self.scenarios):
-            # Use the dynamics to compute the derivative of V
-            Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
-                Lg_V[:, i, :].unsqueeze(1), u_nn
-            )
-            Vdot = Vdot.reshape(V.shape)
-            Vdot_clamped = F.relu(1.0 + Vdot + self.clbf_lambda * V)
-            u_descent_term += decrease_factor * Vdot_clamped.mean()
-
-        loss.append(("Controller descent", u_descent_term))
-
-        return loss
-
     def training_step(self, batch, batch_idx, optimizer_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
