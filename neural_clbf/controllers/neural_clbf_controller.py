@@ -158,27 +158,12 @@ class NeuralCLBFController(pl.LightningModule):
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
             self.u_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
-        # No output layer, so the control saturates at [-1, 1]
+        # Tanh output activation, so the control saturates at [-1, 1]
         self.u_NN_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
         self.u_NN_layers["output_activation"] = nn.Tanh()
         self.u_NN = nn.Sequential(self.u_NN_layers)
-
-        # Also set up the objective and actuation limit constraints for the qp
-        # controller (enforced as G_u @ u <= h)
-        self.G_u = torch.zeros(
-            (2 * self.dynamics_model.n_controls, self.dynamics_model.n_controls)
-        )
-        self.h_u = torch.zeros((2 * self.dynamics_model.n_controls, 1))
-        upper_lim, lower_lim = self.dynamics_model.control_limits
-        for j in range(self.dynamics_model.n_controls):
-            # Upper limit u[j] <= upper_lim[j]
-            self.G_u[2 * j, j] = 1.0
-            self.h_u[2 * j, 0] = upper_lim[j]
-            # Upper limit u[j] >= lower_lim[j] (-> -u[j] <= -lower_lim[j])
-            self.G_u[2 * j + 1, j] = -1.0
-            self.h_u[2 * j + 1, 0] = -lower_lim[j]
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the input using the stored center point and range
@@ -233,8 +218,8 @@ class NeuralCLBFController(pl.LightningModule):
         # And adjust the Jacobian for the angle dimensions
         for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
             cos_idx = self.dynamics_model.n_dims + offset
-            JV[:, sin_idx, sin_idx] = x[:, cos_idx] / self.x_range[dim].type_as(x)
-            JV[:, cos_idx, sin_idx] = -x[:, sin_idx] / self.x_range[dim].type_as(x)
+            JV[:, sin_idx, sin_idx] = x[:, cos_idx]
+            JV[:, cos_idx, sin_idx] = -x[:, sin_idx]
 
         # Now step through each layer in V
         V = x
@@ -377,31 +362,14 @@ class NeuralCLBFController(pl.LightningModule):
         #
         # and add the cost term relaxation_penalty * r.
         #
-        # The decision variables here are z=[u r], so our quadratic cost is
-        # 1/2 z^T Q z + p^T z. We want this cost to equal
+        # We want the objective to be to minimize
         #
-        #           ||u - u_nominal||^2 + relaxation_penalty * r^2
+        #           ||u - u_nn||^2 + relaxation_penalty * r^2
         #
         # This reduces to (ignoring constant terms)
         #
-        #           u^T I u - 2 u_nominal^T u + relaxation_penalty * r^2
-        #
-        # so we need (since qpth optimizes 1/2 x^T Q x + p^T x)
-        #
-        #           Q = 2 * [I 0
-        #                    0 relaxation_penalty]
-        #           p = [-2 u_nominal^T 0]
-        #
-        # Expressing the constraints formally:
-        #
-        #       Gz <= h
-        #
-        # where h = [-L_f V - lambda V, 0, h_u]^T and G = [L_g V, -1
-        #                                                  ...repeated for each scenario
-        #                                                  0,     -1
-        #                                                  ...repeated for each scenario
-        #                                                  G_u,    0]
-        # We can optionally add the user-specified inequality constraints as G_u
+        #           u^T I u - 2 u_nn^T u + relaxation_penalty * r^2
+
         n_controls = self.dynamics_model.n_controls
         n_scenarios = self.n_scenarios
         allow_relaxation = relaxation_penalty < 1e6
