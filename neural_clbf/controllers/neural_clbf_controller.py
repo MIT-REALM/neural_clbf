@@ -888,7 +888,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         clbf_opt = torch.optim.SGD(
             clbf_params,
-            lr=self.primal_learning_rate,
+            lr=0.1 * self.primal_learning_rate,
             weight_decay=1e-6,
         )
         u_opt = torch.optim.SGD(
