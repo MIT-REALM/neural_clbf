@@ -596,21 +596,12 @@ class NeuralCLBFController(pl.LightningModule):
             clbf_descent_term_sim += violation.mean()
         loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
 
-        #   2.) Encourage large enough actuation on the CLBF
-        eps = 1.0
-        clbf_actuation_term = torch.tensor(0.0).type_as(x)
-        for s in self.scenarios:
-            small_actuation = F.relu(eps - Lg_V[:, i, :].norm(dim=-1))
-
-            clbf_actuation_term += small_actuation.mean()
-        loss.append(("CLBF actuation term", clbf_actuation_term))
-
         return loss
 
     def initial_V_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
         """
         Compute the loss during the initialization epochs, which trains the net to
-        match the nominal controller and local linear lyapunov function
+        match the local linear lyapunov function
         """
         loss = []
 
