@@ -317,7 +317,7 @@ def single_rollout_s_path(
     # Plot!
     fig = plt.figure()
     gs = fig.add_gridspec(3, 5)
-    fig.set_size_inches(16, 12)
+    fig.set_size_inches(20, 12)
 
     # Get reference path
     t = np.linspace(0, t_sim, T)
@@ -550,7 +550,7 @@ def single_rollout_s_path(
     # )
     ax5.plot(
         t[1:t_final],
-        lgv_nn[1:t_final, :, -1, :].squeeze().cpu().numpy(),
+        u_nn[1:t_final, :, -1, :].squeeze().cpu().numpy(),
         linestyle="solid",
         color="blue",
     )
