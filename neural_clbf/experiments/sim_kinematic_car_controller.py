@@ -104,7 +104,7 @@ def single_rollout_s_path(
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 5.0 / 1.0
+    t_sim = 5.0 / 10.0
     n_sims = 1
     T = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
@@ -542,25 +542,44 @@ def single_rollout_s_path(
     ax4.set_ylabel("$dV/dt$")
 
     ax5 = fig.add_subplot(gs[2, 3:])
-    # ax5.plot(
-    #     t[1:t_final],
-    #     Vdot_sim[1:t_final, :, -1, :].squeeze().cpu().numpy(),
-    #     linestyle="solid",
-    #     color="red",
-    # )
     ax5.plot(
         t[1:t_final],
-        u_nn[1:t_final, :, -1, :].squeeze().cpu().numpy(),
-        linestyle="solid",
+        u_sim[1:t_final, :, 0].squeeze().cpu().numpy(),
+        linestyle="dotted",
+        color="red",
+        label="$v_\\delta$",
+    )
+    ax5.plot(
+        t[1:t_final],
+        u_sim[1:t_final, :, 1].squeeze().cpu().numpy(),
+        linestyle="dashed",
+        color="red",
+        label="$a_l$",
+    )
+    ax5.plot(
+        t[1:t_final],
+        u_nn[1:t_final, :, 0].squeeze().cpu().numpy(),
+        linestyle="dotted",
         color="blue",
     )
-    # ax5.plot(
-    #     t[1:t_final],
-    #     Vdot_nominal[1:t_final, :, -1, :].squeeze().cpu().numpy(),
-    #     label="Linearized (true parameters)",
-    #     linestyle="solid",
-    #     color="green",
-    # )
+    ax5.plot(
+        t[1:t_final],
+        u_nn[1:t_final, :, 1].squeeze().cpu().numpy(),
+        linestyle="dashed",
+        color="blue",
+    )
+    ax5.plot(
+        t[1:t_final],
+        u_nominal[1:t_final, :, 0].squeeze().cpu().numpy(),
+        linestyle="dotted",
+        color="green",
+    )
+    ax5.plot(
+        t[1:t_final],
+        u_nominal[1:t_final, :, 1].squeeze().cpu().numpy(),
+        linestyle="dashed",
+        color="red",
+    )
     ax5.plot(
         t[:t_final],
         zeros[:t_final],
@@ -569,7 +588,7 @@ def single_rollout_s_path(
     )
     ax5.legend()
     ax5.set_xlabel("$t$")
-    ax5.set_ylabel("$||L_g V||$")
+    ax5.set_ylabel("$u$")
 
     fig.tight_layout()
 
