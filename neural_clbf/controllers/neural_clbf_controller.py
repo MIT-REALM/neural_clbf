@@ -574,7 +574,7 @@ class NeuralCLBFController(pl.LightningModule):
                 u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
             )
             Vdot = Vdot.reshape(V.shape)
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V)
+            violation = -F.relu(eps + Vdot + self.clbf_lambda * V)
             clbf_descent_term_lin += violation.mean()
 
         loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
@@ -589,7 +589,7 @@ class NeuralCLBFController(pl.LightningModule):
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
-            violation = F.relu(
+            violation = -F.relu(
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
 
@@ -888,7 +888,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         clbf_opt = torch.optim.SGD(
             clbf_params,
-            lr=0.1 * self.primal_learning_rate,
+            lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
         u_opt = torch.optim.SGD(
