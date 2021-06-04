@@ -774,8 +774,8 @@ class NeuralCLBFController(pl.LightningModule):
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of the validation epoch, using arbitrary plotting callbacks!
 
-        # Only plot every 5 epochs
-        if self.current_epoch % 5 != 0:
+        # Only plot every 10 epochs
+        if self.current_epoch % 10 != 0:
             return
 
         # Figure out the relaxation penalty for this rollout
@@ -898,9 +898,9 @@ class NeuralCLBFController(pl.LightningModule):
         # Otherwise, switch between the controller and CLBF every 10 epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             optimizer.step(closure=optimizer_closure)
-            # if (epoch - self.num_init_epochs) % 20 < 10:
-            #     optimizer.step(closure=optimizer_closure)
+            if (epoch - self.num_init_epochs) % 50 < 25:
+                optimizer.step(closure=optimizer_closure)
 
-        # if self.opt_idx_dict[optimizer_idx] == "controller":
-        #     if (epoch - self.num_init_epochs) % 20 >= 10:
-        #         optimizer.step(closure=optimizer_closure)
+        if self.opt_idx_dict[optimizer_idx] == "controller":
+            if (epoch - self.num_init_epochs) % 50 >= 25:
+                optimizer.step(closure=optimizer_closure)
