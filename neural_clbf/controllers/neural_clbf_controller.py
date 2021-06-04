@@ -544,7 +544,10 @@ class NeuralCLBFController(pl.LightningModule):
 
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
-        V = self.V(x)
+
+        # Get the CLBF value without a gradient, so that we don't just minimize V
+        with torch.no_grad():
+            V = self.V(x)
 
         # # First figure out where this condition needs to hold
         # eps = 0.1
