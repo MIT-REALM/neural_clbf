@@ -566,7 +566,7 @@ class NeuralCLBFController(pl.LightningModule):
         Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
         u_nn = self.u(x)
-        eps = 1.0
+        eps = 0.1
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
@@ -583,7 +583,7 @@ class NeuralCLBFController(pl.LightningModule):
         # the RSS paper.
         # We compute the change in V in two ways: simulating x forward in time and check
         # if V decreases in each scenario
-        eps = 1.0
+        eps = 0.1
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
