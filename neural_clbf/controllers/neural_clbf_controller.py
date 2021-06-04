@@ -500,7 +500,7 @@ class NeuralCLBFController(pl.LightningModule):
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
         safe_violation = F.relu(eps + V_safe - self.safe_level)
-        safe_V_term = safe_violation.mean()
+        safe_V_term = 1e3 * safe_violation.mean()
         loss.append(("CLBF safe region term", safe_V_term))
         if accuracy:
             safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
@@ -509,7 +509,7 @@ class NeuralCLBFController(pl.LightningModule):
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
         unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
-        unsafe_V_term = unsafe_violation.mean()
+        unsafe_V_term = 1e3 * unsafe_violation.mean()
         loss.append(("CLBF unsafe region term", unsafe_V_term))
         if accuracy:
             unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
@@ -544,10 +544,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
-
-        # Get the CLBF value without a gradient, so that we don't just minimize V
-        with torch.no_grad():
-            V = self.V(x)
+        V = self.V(x)
 
         # # First figure out where this condition needs to hold
         # eps = 0.1
@@ -631,8 +628,8 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_mse_loss = decrease_factor * clbf_mse_loss.mean()
         loss.append(("CLBF MSE", clbf_mse_loss))
 
-        #   2.) Ensure that V >= 0.5 * nominal solution
-        clbf_lower_bound_loss = F.relu(0.5 * V_nominal - V).mean()
+        #   2.) Ensure that V >= 0.1 * nominal solution
+        clbf_lower_bound_loss = 10 * F.relu(0.1 * V_nominal - V).mean()
         loss.append(("CLBF Bound", clbf_lower_bound_loss))
 
         return loss
