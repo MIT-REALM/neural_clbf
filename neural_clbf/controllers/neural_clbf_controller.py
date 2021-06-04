@@ -500,7 +500,7 @@ class NeuralCLBFController(pl.LightningModule):
         #   2.) V <= safe_level in the safe region
         V_safe = V[safe_mask]
         safe_violation = F.relu(eps + V_safe - self.safe_level)
-        safe_V_term = 1e3 * safe_violation.mean()
+        safe_V_term = 1e2 * safe_violation.mean()
         loss.append(("CLBF safe region term", safe_V_term))
         if accuracy:
             safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
@@ -509,7 +509,7 @@ class NeuralCLBFController(pl.LightningModule):
         #   3.) V >= unsafe_level in the unsafe region
         V_unsafe = V[unsafe_mask]
         unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
-        unsafe_V_term = 1e3 * unsafe_violation.mean()
+        unsafe_V_term = 1e2 * unsafe_violation.mean()
         loss.append(("CLBF unsafe region term", unsafe_V_term))
         if accuracy:
             unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
@@ -568,7 +568,7 @@ class NeuralCLBFController(pl.LightningModule):
             )
             Vdot = Vdot.reshape(V.shape)
             violation = F.relu(eps + Vdot + self.clbf_lambda * V)
-            clbf_descent_term_lin += violation.mean()
+            clbf_descent_term_lin += 0.1 * violation.mean()
             clbf_descent_acc_lin += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )
@@ -588,7 +588,7 @@ class NeuralCLBFController(pl.LightningModule):
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
-            violation = F.relu(
+            violation = 0.1 * F.relu(
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
 
@@ -897,9 +897,10 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Otherwise, switch between the controller and CLBF every 10 epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % 20 < 10:
-                optimizer.step(closure=optimizer_closure)
+            optimizer.step(closure=optimizer_closure)
+            # if (epoch - self.num_init_epochs) % 20 < 10:
+            #     optimizer.step(closure=optimizer_closure)
 
-        if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % 20 >= 10:
-                optimizer.step(closure=optimizer_closure)
+        # if self.opt_idx_dict[optimizer_idx] == "controller":
+        #     if (epoch - self.num_init_epochs) % 20 >= 10:
+        #         optimizer.step(closure=optimizer_closure)
