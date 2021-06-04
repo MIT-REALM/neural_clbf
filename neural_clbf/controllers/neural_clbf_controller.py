@@ -559,7 +559,7 @@ class NeuralCLBFController(pl.LightningModule):
         Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
         u_nn = self.u(x)
-        eps = 0.1
+        eps = 1.0
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
@@ -581,7 +581,7 @@ class NeuralCLBFController(pl.LightningModule):
         # the RSS paper.
         # We compute the change in V in two ways: simulating x forward in time and check
         # if V decreases in each scenario
-        eps = 0.1
+        eps = 1.0
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
@@ -774,8 +774,8 @@ class NeuralCLBFController(pl.LightningModule):
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of the validation epoch, using arbitrary plotting callbacks!
 
-        # Only plot every 10 epochs
-        if self.current_epoch % 10 != 0:
+        # Only plot every 5 epochs
+        if self.current_epoch % 5 != 0:
             return
 
         # Figure out the relaxation penalty for this rollout
@@ -898,9 +898,9 @@ class NeuralCLBFController(pl.LightningModule):
         # Otherwise, switch between the controller and CLBF every 10 epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             optimizer.step(closure=optimizer_closure)
-            if (epoch - self.num_init_epochs) % 50 < 25:
+            if (epoch - self.num_init_epochs) % 40 < 20:
                 optimizer.step(closure=optimizer_closure)
 
         if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % 50 >= 25:
+            if (epoch - self.num_init_epochs) % 40 >= 20:
                 optimizer.step(closure=optimizer_closure)

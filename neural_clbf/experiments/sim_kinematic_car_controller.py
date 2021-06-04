@@ -495,18 +495,6 @@ def single_rollout_s_path(
         linestyle="dotted",
         color="blue",
     )
-    # ax4.plot(
-    #     t[1:t_final],
-    #     lin_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
-    #     linestyle="dotted",
-    #     color="red",
-    # )
-    # ax4.plot(
-    #     t[1:t_final],
-    #     sim_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
-    #     linestyle="dashed",
-    #     color="red",
-    # )
     ax4.plot(
         t[1:t_final],
         Vdot_nominal[1:t_final, :, -1, :].squeeze().cpu().numpy(),
@@ -541,7 +529,7 @@ def single_rollout_s_path(
     ax4.set_xlabel("$t$")
     ax4.set_ylabel("$dV/dt$")
 
-    ax5 = fig.add_subplot(gs[2, 3:])
+    ax5 = fig.add_subplot(gs[0, 3:])
     ax5.plot(
         t[1:t_final],
         u_sim[1:t_final, :, 0].squeeze().cpu().numpy(),
@@ -589,6 +577,23 @@ def single_rollout_s_path(
     ax5.legend()
     ax5.set_xlabel("$t$")
     ax5.set_ylabel("$u$")
+
+    ax6 = fig.add_subplot(gs[1, 3:])
+    ax6.plot(
+        t[1:t_final],
+        lin_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
+        linestyle="dotted",
+        color="red",
+    )
+    ax6.plot(
+        t[1:t_final],
+        sim_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
+        linestyle="dashed",
+        color="red",
+    )
+    ax6.legend()
+    ax6.set_xlabel("$t$")
+    ax6.set_ylabel("Descent loss")
 
     fig.tight_layout()
 
