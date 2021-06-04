@@ -21,9 +21,9 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/4c85f92.ckpt"
+    checkpoint_file = "saved_models/kscar/9a4e57f.ckpt"
 
-    controller_period = 0.01
+    controller_period = 0.001
     simulation_dt = 0.001
 
     # Define the dynamics model
@@ -81,7 +81,7 @@ def doMain():
         safety_level=0.2,
         goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e1,
+        clbf_relaxation_penalty=1e4,
         penalty_scheduling_rate=0,
         num_init_epochs=50,
         epochs_per_episode=100,
@@ -104,7 +104,7 @@ def single_rollout_s_path(
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 5.0 / 10.0
+    t_sim = 5.0 / 1.0
     n_sims = 1
     T = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
@@ -578,7 +578,7 @@ def single_rollout_s_path(
         t[1:t_final],
         u_nominal[1:t_final, :, 1].squeeze().cpu().numpy(),
         linestyle="dashed",
-        color="red",
+        color="green",
     )
     ax5.plot(
         t[:t_final],

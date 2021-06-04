@@ -30,7 +30,7 @@ start_x = torch.tensor(
         # [0.0, 0.0, 0.0, 0.0, np.pi / 6, 0.0, 0.0],
     ]
 )
-controller_period = 0.01
+controller_period = 0.001
 simulation_dt = 0.001
 
 
@@ -87,7 +87,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=10,
         trajectory_length=1000,
-        fixed_samples=10000,
+        fixed_samples=1000000,
         max_points=5000000,
         val_split=0.1,
         batch_size=64,
