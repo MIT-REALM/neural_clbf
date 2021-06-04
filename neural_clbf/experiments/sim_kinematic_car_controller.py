@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/04750ef.ckpt"
+    checkpoint_file = "saved_models/kscar/4c85f92.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -81,7 +81,7 @@ def doMain():
         safety_level=0.2,
         goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e8,
+        clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
         num_init_epochs=50,
         epochs_per_episode=100,
