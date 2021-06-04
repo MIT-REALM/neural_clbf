@@ -148,22 +148,37 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_nn_hidden_layers = u_nn_hidden_layers
         self.u_nn_hidden_size = u_nn_hidden_size
         # Likewise, build the network up layer by layer, starting with the input
-        self.u_NN_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.u_NN_layers["input_linear"] = nn.Linear(
+        self.u_nn_layers: OrderedDict[str, nn.Module] = OrderedDict()
+        self.u_nn_layers["input_linear"] = nn.Linear(
             self.n_dims_extended, self.u_nn_hidden_size
         )
-        self.u_NN_layers["input_activation"] = nn.Tanh()
+        self.u_nn_layers["input_activation"] = nn.Tanh()
         for i in range(self.u_nn_hidden_layers):
-            self.u_NN_layers[f"layer_{i}_linear"] = nn.Linear(
+            self.u_nn_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_NN_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.u_nn_layers[f"layer_{i}_activation"] = nn.Tanh()
         # Tanh output activation, so the control saturates at [-1, 1]
-        self.u_NN_layers["output_linear"] = nn.Linear(
+        self.u_nn_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_NN_layers["output_activation"] = nn.Tanh()
-        self.u_NN = nn.Sequential(self.u_NN_layers)
+        self.u_nn_layers["output_activation"] = nn.Tanh()
+        self.u_nn = nn.Sequential(self.u_nn_layers)
+
+    def prepare_data(self):
+        return self.datamodule.prepare_data()
+
+    def setup(self, stage: Optional[str] = None):
+        return self.datamodule.setup(stage)
+
+    def train_dataloader(self):
+        return self.datamodule.train_dataloader()
+
+    def val_dataloader(self):
+        return self.datamodule.val_dataloader()
+
+    def test_dataloader(self):
+        return self.datamodule.test_dataloader()
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the input using the stored center point and range
@@ -270,7 +285,7 @@ class NeuralCLBFController(pl.LightningModule):
         x = self.normalize_with_angles(x)
 
         # Compute the control effort using the neural network
-        u = self.u_NN(x)
+        u = self.u_nn(x)
 
         # Scale to reflect plant actuator limits
         upper_lim, lower_lim = self.dynamics_model.control_limits
@@ -658,8 +673,9 @@ class NeuralCLBFController(pl.LightningModule):
     def training_epoch_end(self, outputs):
         """This function is called after every epoch is completed."""
         # Outputs contains a list for each optimizer, and we need to collect the losses
-        # from all of them
-        outputs = itertools.chain(*outputs)
+        # from all of them if there is a nested list
+        if isinstance(outputs[0], list):
+            outputs = itertools.chain(*outputs)
 
         # Gather up all of the losses for each component from all batches
         losses = {}
@@ -851,7 +867,7 @@ class NeuralCLBFController(pl.LightningModule):
             weight_decay=1e-6,
         )
         u_opt = torch.optim.SGD(
-            self.u_NN.parameters(),
+            self.u_nn.parameters(),
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
@@ -859,6 +875,9 @@ class NeuralCLBFController(pl.LightningModule):
         self.opt_idx_dict = {0: "clbf", 1: "controller"}
 
         return [clbf_opt, u_opt]
+
+    def optimizer_zero_grad(self, current_epoch, batch_idx, optimizer, opt_idx):
+        optimizer.zero_grad()
 
     def optimizer_step(
         self,
@@ -872,13 +891,15 @@ class NeuralCLBFController(pl.LightningModule):
         using_lbfgs=False,
     ):
         # During initialization epochs, step both
-        if epoch < self.num_init_epochs:
+        if epoch <= self.num_init_epochs:
             optimizer.step(closure=optimizer_closure)
             return
 
         # Otherwise, switch between the controller and CLBF every 10 epochs
-        if (epoch - self.num_init_epochs) % 20 < 10:
-            if self.opt_idx_dict[optimizer_idx] == "clbf":
+        if self.opt_idx_dict[optimizer_idx] == "clbf":
+            if (epoch - self.num_init_epochs) % 20 < 10:
                 optimizer.step(closure=optimizer_closure)
-        elif self.opt_idx_dict[optimizer_idx] == "u":
-            optimizer.step(closure=optimizer_closure)
+
+        if self.opt_idx_dict[optimizer_idx] == "controller":
+            if (epoch - self.num_init_epochs) % 20 >= 10:
+                optimizer.step(closure=optimizer_closure)

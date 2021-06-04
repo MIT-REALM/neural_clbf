@@ -130,12 +130,6 @@ def main(args):
         num_init_epochs=10,
         epochs_per_episode=100,
     )
-    # Add the DataModule hooks
-    clbf_controller.prepare_data = data_module.prepare_data
-    clbf_controller.setup = data_module.setup
-    clbf_controller.train_dataloader = data_module.train_dataloader
-    clbf_controller.val_dataloader = data_module.val_dataloader
-    clbf_controller.test_dataloader = data_module.test_dataloader
 
     # Initialize the logger and trainer
     current_git_hash = (
