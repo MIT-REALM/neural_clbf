@@ -85,7 +85,6 @@ def doMain():
         penalty_scheduling_rate=0,
         num_init_epochs=50,
         epochs_per_episode=100,
-        primal_learning_rate=1e-2,
     )
 
     single_rollout_s_path(clbf_controller)
@@ -105,7 +104,7 @@ def single_rollout_s_path(
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 5.0 / 10.0
+    t_sim = 5.0 / 1.0
     n_sims = 1
     T = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
