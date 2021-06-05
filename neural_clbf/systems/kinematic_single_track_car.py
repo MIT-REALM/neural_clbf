@@ -1,5 +1,6 @@
 """Define a dymamical system for an inverted pendulum"""
-from typing import Tuple, Optional, List
+from copy import copy
+from typing import Callable, Tuple, Optional, List
 
 import torch
 import numpy as np
@@ -274,6 +275,79 @@ class KSCar(ControlAffineSystem):
         g[:, KSCar.VE, KSCar.ALONG] = 1.0
 
         return g
+
+    @torch.no_grad()
+    def simulate(
+        self,
+        x_init: torch.Tensor,
+        num_steps: int,
+        controller: Callable[[torch.Tensor], torch.Tensor],
+        controller_period: Optional[float] = None,
+        guard: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+        params: Optional[Scenario] = None,
+    ) -> torch.Tensor:
+        """
+        Simulate the system for the specified number of steps using the given controller
+
+        args:
+            x_init - bs x n_dims tensor of initial conditions
+            num_steps - a positive integer
+            controller - a mapping from state to control action
+            controller_period - the period determining how often the controller is run
+                                (in seconds). If none, defaults to self.dt
+            guard - a function that takes a bs x n_dims tensor and returns a length bs
+                    mask that's True for any trajectories that should be reset to x_init
+            params - a dictionary giving the parameter values for the system. If None,
+                     default to the nominal parameters used at initialization
+        returns
+            a bs x num_steps x self.n_dims tensor of simulated trajectories. If an error
+            occurs on any trajectory, the simulation of all trajectories will stop and
+            the second dimension will be less than num_steps
+        """
+        # Create a tensor to hold the simulation results
+        x_sim = torch.zeros(x_init.shape[0], num_steps, self.n_dims).type_as(x_init)
+        x_sim[:, 0, :] = x_init
+        u = torch.zeros(x_init.shape[0], self.n_controls).type_as(x_init)
+
+        # Compute controller update frequency
+        if controller_period is None:
+            controller_period = self.dt
+        controller_update_freq = int(controller_period / self.dt)
+
+        # Run the simulation until it's over or an error occurs
+        t_sim_final = 0
+        params_t = copy(params)
+        for tstep in range(1, num_steps):
+            try:
+                # Update parameters
+                omega_ref_t = 1.5 * np.sin(tstep * self.dt)
+                params_t["omega_ref"] = omega_ref_t
+                params_t["psi_ref"] = self.dt * omega_ref_t + params_t["psi_ref"]
+
+                # Get the current state
+                x_current = x_sim[:, tstep - 1, :]
+                # Get the control input at the current state if it's time
+                if tstep == 1 or tstep % controller_update_freq == 0:
+                    u = controller(x_current)
+
+                # Simulate forward using the dynamics
+                xdot = self.closed_loop_dynamics(x_current, u, params_t)
+                x_sim[:, tstep, :] = x_current + self.dt * xdot
+
+                # If the guard is activated for any trajectory, reset that trajectory
+                # to a random state
+                if guard is not None:
+                    guard_activations = guard(x_sim[:, tstep, :])
+                    n_to_resample = int(guard_activations.sum().item())
+                    x_new = self.sample_state_space(n_to_resample).type_as(x_sim)
+                    x_sim[guard_activations, tstep, :] = x_new
+
+                # Update the final simulation time if the step was successful
+                t_sim_final = tstep
+            except ValueError:
+                break
+
+        return x_sim[:, : t_sim_final + 1, :]
 
     def u_nominal(
         self, x: torch.Tensor, params: Optional[Scenario] = None
