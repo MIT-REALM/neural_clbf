@@ -265,8 +265,8 @@ def single_rollout_s_path(
         descent_losses = clbf_controller.descent_loss(
             x_current, goal_mask, safe_mask, unsafe_mask, dist_to_goal
         )
-        lin_descent_loss_nn[tstep, :, 0] = descent_losses[0][1]
-        sim_descent_loss_nn[tstep, :, 0] = descent_losses[1][1]
+        # lin_descent_loss_nn[tstep, :, 0] = descent_losses[0][1]
+        sim_descent_loss_nn[tstep, :, 0] = descent_losses[0][1]
 
         # and repeat for the nominal controller
         # Get the current state
