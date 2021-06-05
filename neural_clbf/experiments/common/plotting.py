@@ -315,7 +315,7 @@ def rollout_CLBF(
         num_timesteps, n_sims, clbf_net.dynamics_model.n_controls
     ).type_as(start_x)
     V_sim = torch.zeros(num_timesteps, n_sims, 1).type_as(start_x)
-    V_sim[0, :, :] = clbf_net.V(x_sim[0, :, :])
+    V_sim[0, :, 0] = clbf_net.V(x_sim[0, :, :])
     t_final = 0
     controller_failed = False
     goal_reached = False
@@ -345,7 +345,7 @@ def rollout_CLBF(
                 x_sim[tstep, i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
             # Compute the CLBF value
-            V_sim[tstep, :, :] = clbf_net.V(x_sim[tstep, :, :])
+            V_sim[tstep, :, 0] = clbf_net.V(x_sim[tstep, :, :])
 
             t_final = tstep
             # If we've reached the goal, then stop the rollout
