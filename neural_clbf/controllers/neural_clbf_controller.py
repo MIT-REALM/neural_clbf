@@ -135,13 +135,13 @@ class NeuralCLBFController(pl.LightningModule):
         self.V_layers["input_linear"] = nn.Linear(
             self.n_dims_extended, self.clbf_hidden_size
         )
-        self.V_layers["input_activation"] = nn.ReLU()
+        self.V_layers["input_activation"] = nn.Tanh()
         for i in range(self.clbf_hidden_layers):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
             if i < self.clbf_hidden_layers - 1:
-                self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
+                self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
         # self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
@@ -153,17 +153,17 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_nn_layers["input_linear"] = nn.Linear(
             self.n_dims_extended, self.u_nn_hidden_size
         )
-        self.u_nn_layers["input_activation"] = nn.ReLU()
+        self.u_nn_layers["input_activation"] = nn.Tanh()
         for i in range(self.u_nn_hidden_layers):
             self.u_nn_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_nn_layers[f"layer_{i}_activation"] = nn.ReLU()
-        # ReLU output activation, so the control saturates at [-1, 1]
+            self.u_nn_layers[f"layer_{i}_activation"] = nn.Tanh()
+        # Tanh output activation, so the control saturates at [-1, 1]
         self.u_nn_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_nn_layers["output_activation"] = nn.ReLU()
+        self.u_nn_layers["output_activation"] = nn.Tanh()
         self.u_nn = nn.Sequential(self.u_nn_layers)
 
     def prepare_data(self):
@@ -282,22 +282,22 @@ class NeuralCLBFController(pl.LightningModule):
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                controller
         """
-        # Apply the offset and range to normalize about zero
-        x = self.normalize_with_angles(x)
+        # # Apply the offset and range to normalize about zero
+        # x = self.normalize_with_angles(x)
 
-        # Compute the control effort using the neural network
-        u = self.u_nn(x)
+        # # Compute the control effort using the neural network
+        # u = self.u_nn(x)
 
-        # Scale to reflect plant actuator limits
-        upper_lim, lower_lim = self.dynamics_model.control_limits
-        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
-        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
+        # # Scale to reflect plant actuator limits
+        # upper_lim, lower_lim = self.dynamics_model.control_limits
+        # u_center = (upper_lim + lower_lim).type_as(x) / 2.0
+        # u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
 
-        u_scaled = u * u_semi_range + u_center
+        # u_scaled = u * u_semi_range + u_center
 
-        # # For now, set u to u_nominal to test V learning
-        # # TODO @dawsonc, not permanent
-        # u_scaled = self.dynamics_model.u_nominal(x)
+        # For now, set u to u_nominal to test V learning
+        # TODO @dawsonc, not permanent
+        u_scaled = self.dynamics_model.u_nominal(x)
 
         return u_scaled
 
@@ -642,18 +642,23 @@ class NeuralCLBFController(pl.LightningModule):
         # Compute the losses
         component_losses = {}
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            component_losses.update(self.initial_V_loss(x))
-            if self.current_epoch > self.num_init_epochs:
-                # component_losses.update(
-                #     self.boundary_loss(
-                #         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                #     )
-                # )
-                component_losses.update(
-                    self.descent_loss(
-                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                    )
+            # component_losses.update(self.initial_V_loss(x))
+            component_losses.update(
+                self.descent_loss(
+                    x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
                 )
+            )
+            # if self.current_epoch > self.num_init_epochs:
+            #     component_losses.update(
+            #         self.boundary_loss(
+            #             x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+            #         )
+            #     )
+            #     component_losses.update(
+            #         self.descent_loss(
+            #             x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+            #         )
+            #     )
         else:
             component_losses.update(
                 self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
@@ -869,13 +874,15 @@ class NeuralCLBFController(pl.LightningModule):
         if self.vary_safe_level:
             clbf_params += [self.safe_level]
 
-        clbf_opt = torch.optim.Adam(
+        clbf_opt = torch.optim.SGD(
             clbf_params,
             lr=self.primal_learning_rate,
+            weight_decay=1e-6,
         )
-        u_opt = torch.optim.Adam(
+        u_opt = torch.optim.SGD(
             self.u_nn.parameters(),
             lr=self.primal_learning_rate,
+            weight_decay=1e-6,
         )
 
         self.opt_idx_dict = {0: "clbf", 1: "controller"}
@@ -896,10 +903,10 @@ class NeuralCLBFController(pl.LightningModule):
         using_native_amp=False,
         using_lbfgs=False,
     ):
-        # During initialization epochs, step both
-        if epoch <= self.num_init_epochs:
-            optimizer.step(closure=optimizer_closure)
-            return
+        # # During initialization epochs, step both
+        # if epoch <= self.num_init_epochs:
+        #     optimizer.step(closure=optimizer_closure)
+        #     return
 
         # Otherwise, switch between the controller and CLBF every 10 epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
