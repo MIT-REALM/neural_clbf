@@ -158,7 +158,7 @@ class KSCar(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.5
+        max_safe_tracking_error = 1.0
         tracking_error = x
         tracking_error_small_enough = (
             tracking_error.norm(dim=-1) <= max_safe_tracking_error
@@ -177,7 +177,7 @@ class KSCar(ControlAffineSystem):
 
         # Avoid angles that are too large
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.75
+        max_safe_tracking_error = 1.5
         tracking_error = x
         tracking_error_too_big = tracking_error.norm(dim=-1) >= max_safe_tracking_error
         unsafe_mask.logical_or_(tracking_error_too_big)
