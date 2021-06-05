@@ -135,13 +135,13 @@ class NeuralCLBFController(pl.LightningModule):
         self.V_layers["input_linear"] = nn.Linear(
             self.n_dims_extended, self.clbf_hidden_size
         )
-        self.V_layers["input_activation"] = nn.Tanh()
+        self.V_layers["input_activation"] = nn.ReLU()
         for i in range(self.clbf_hidden_layers):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.clbf_hidden_size, self.clbf_hidden_size
             )
             if i < self.clbf_hidden_layers - 1:
-                self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
+                self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
         # self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
@@ -153,17 +153,17 @@ class NeuralCLBFController(pl.LightningModule):
         self.u_nn_layers["input_linear"] = nn.Linear(
             self.n_dims_extended, self.u_nn_hidden_size
         )
-        self.u_nn_layers["input_activation"] = nn.Tanh()
+        self.u_nn_layers["input_activation"] = nn.ReLU()
         for i in range(self.u_nn_hidden_layers):
             self.u_nn_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_nn_hidden_size, self.u_nn_hidden_size
             )
-            self.u_nn_layers[f"layer_{i}_activation"] = nn.Tanh()
-        # Tanh output activation, so the control saturates at [-1, 1]
+            self.u_nn_layers[f"layer_{i}_activation"] = nn.ReLU()
+        # ReLU output activation, so the control saturates at [-1, 1]
         self.u_nn_layers["output_linear"] = nn.Linear(
             self.u_nn_hidden_size, self.dynamics_model.n_controls
         )
-        self.u_nn_layers["output_activation"] = nn.Tanh()
+        self.u_nn_layers["output_activation"] = nn.ReLU()
         self.u_nn = nn.Sequential(self.u_nn_layers)
 
     def prepare_data(self):
