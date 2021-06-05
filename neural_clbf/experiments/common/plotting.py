@@ -61,7 +61,7 @@ def plot_CLBF(
 
     # Set up tensors to store the results
     V_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    V_lqr_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    descent_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     # V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     unsafe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     safe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
@@ -89,13 +89,15 @@ def plot_CLBF(
             # Get the value of the CLBF
             V_grid[j, i] = clbf_net.V(x)
 
-            P = clbf_net.dynamics_model.P.type_as(x)
-            # Reshape to use pytorch's bilinear function
-            P = P.reshape(
-                1, clbf_net.dynamics_model.n_dims, clbf_net.dynamics_model.n_dims
+            # And get the descent loss for this point
+            goal_mask = clbf_net.dynamics_model.goal_mask(x)
+            safe_mask = clbf_net.dynamics_model.safe_mask(x)
+            unsafe_mask = clbf_net.dynamics_model.unsafe_mask(x)
+            dist_to_goal = clbf_net.dynamics_model.distance_to_goal(x)
+            descent_losses = clbf_net.descent_loss(
+                x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
             )
-            V_nominal = 0.5 * torch.nn.functional.bilinear(x, x, P)
-            V_lqr_grid[j, i] = V_nominal
+            descent_loss_grid[j, i] = descent_losses[0][1]
 
             # Get the goal, safe, or unsafe classification
             if clbf_net.dynamics_model.goal_mask(x).all():
@@ -120,14 +122,16 @@ def plot_CLBF(
     # First for V
     axs = axes[0]
     contours = axs.contourf(
-        x_vals.cpu(), y_vals.cpu(), (V_grid - V_lqr_grid).cpu(), cmap="magma", levels=20
+        x_vals.cpu(), y_vals.cpu(), descent_loss_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
+    plt.title("Descent Loss")
     axs = axes[1]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
+    plt.title("CLBF")
     # Plot safe levels
     safe_level = clbf_net.safe_level
     if isinstance(safe_level, torch.Tensor):
