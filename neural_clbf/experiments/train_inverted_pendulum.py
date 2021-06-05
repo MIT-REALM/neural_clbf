@@ -21,7 +21,6 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 64
 controller_period = 0.01
-clbf_lambda = 0.5
 
 start_x = torch.tensor(
     [
@@ -111,13 +110,14 @@ def main(args):
         data_module,
         plotting_callbacks=plotting_callbacks,
         clbf_hidden_layers=2,
-        clbf_hidden_size=256,
+        clbf_hidden_size=64,
         u_nn_hidden_layers=2,
-        u_nn_hidden_size=256,
-        clbf_lambda=clbf_lambda,
+        u_nn_hidden_size=64,
+        clbf_lambda=0.1,
+        safety_level=0.2,
+        goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e5,
-        # clbf_relaxation_penalty=2e6,
+        clbf_relaxation_penalty=1e1,
         epochs_per_episode=10,
     )
     # Add the DataModule hooks
@@ -129,8 +129,8 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/basic_experiments",
-        name="sim_only",
+        "logs/kscar",
+        name="IP",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
