@@ -1,6 +1,7 @@
 import itertools
 from typing import Tuple, List, Optional, Callable, Union
 from collections import OrderedDict
+import random
 
 import gurobipy as gp
 from gurobipy import GRB
@@ -824,12 +825,20 @@ class NeuralCLBFController(pl.LightningModule):
             def controller_fn(x):
                 return self.u(x)
 
+        # Choose parameters randomly
+        random_scenario = {}
+        for param_name in self.scenarios[0].keys():
+            param_max = max([s[param_name] for s in self.scenarios])
+            param_min = min([s[param_name] for s in self.scenarios])
+            random_scenario[param_name] = random.uniform(param_min, param_max)
+
         return self.dynamics_model.simulate(
             x_init,
             num_steps,
             controller_fn,
             guard=self.dynamics_model.out_of_bounds_mask,
             controller_period=self.controller_period,
+            params=random_scenario,
         )
 
     def on_validation_epoch_end(self):
@@ -897,7 +906,6 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Otherwise, switch between the controller and CLBF every 10 epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            optimizer.step(closure=optimizer_closure)
             if (epoch - self.num_init_epochs) % 40 < 20:
                 optimizer.step(closure=optimizer_closure)
 
