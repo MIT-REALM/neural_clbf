@@ -127,8 +127,8 @@ def main(args):
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
-        num_init_epochs=15,
-        epochs_per_episode=10,
+        num_init_epochs=5,
+        epochs_per_episode=50,
     )
 
     # Initialize the logger and trainer
