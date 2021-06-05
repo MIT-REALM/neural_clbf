@@ -76,18 +76,18 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-0.0, 0.0),  # sxe
-        (-0.0, 0.0),  # sye
-        (-0.0, 0.0),  # delta
-        (-0.0, 0.0),  # ve
-        (-0.0, 0.0),  # psi_e
+        (-0.1, 0.1),  # sxe
+        (-0.1, 0.1),  # sye
+        (-0.1, 0.1),  # delta
+        (-0.1, 0.1),  # ve
+        (-0.1, 0.1),  # psi_e
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=1,
-        trajectory_length=5000,
-        fixed_samples=0,
+        trajectories_per_episode=100,
+        trajectory_length=500,
+        fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
@@ -127,9 +127,8 @@ def main(args):
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
-        num_init_epochs=5,
-        epochs_per_episode=50,
-        primal_learning_rate=1e-3,
+        num_init_epochs=15,
+        epochs_per_episode=10,
     )
 
     # Initialize the logger and trainer
@@ -145,7 +144,6 @@ def main(args):
         args,
         logger=tb_logger,
         reload_dataloaders_every_epoch=True,
-        track_grad_norm=2,
     )
 
     # Train

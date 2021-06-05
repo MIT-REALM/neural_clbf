@@ -94,7 +94,7 @@ def plot_CLBF(
             safe_mask = clbf_net.dynamics_model.safe_mask(x)
             unsafe_mask = clbf_net.dynamics_model.unsafe_mask(x)
             dist_to_goal = clbf_net.dynamics_model.distance_to_goal(x)
-            descent_losses = clbf_net.descent_loss(
+            descent_losses = clbf_net.descent_loss(  # type: ignore
                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
             )
             descent_loss_grid[j, i] = descent_losses[0][1]
