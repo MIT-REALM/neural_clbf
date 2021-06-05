@@ -906,9 +906,10 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Otherwise, switch between the controller and CLBF every 10 epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % 40 < 20:
-                optimizer.step(closure=optimizer_closure)
+            # if (epoch - self.num_init_epochs) % 40 < 20:
+            #     optimizer.step(closure=optimizer_closure)
+            optimizer.step(closure=optimizer_closure)
 
-        if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % 40 >= 20:
-                optimizer.step(closure=optimizer_closure)
+        # if self.opt_idx_dict[optimizer_idx] == "controller":
+        #     if (epoch - self.num_init_epochs) % 40 >= 20:
+        #         optimizer.step(closure=optimizer_closure)
