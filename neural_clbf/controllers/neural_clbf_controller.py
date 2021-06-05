@@ -592,7 +592,7 @@ class NeuralCLBFController(pl.LightningModule):
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
 
-            clbf_descent_term_sim += violation.mean()
+            clbf_descent_term_sim += 1e2 * violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )
