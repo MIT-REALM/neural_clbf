@@ -282,22 +282,22 @@ class NeuralCLBFController(pl.LightningModule):
             x: bs x self.dynamics_model.n_dims the points at which to evaluate the
                controller
         """
-        # # Apply the offset and range to normalize about zero
-        # x = self.normalize_with_angles(x)
+        # Apply the offset and range to normalize about zero
+        x = self.normalize_with_angles(x)
 
-        # # Compute the control effort using the neural network
-        # u = self.u_nn(x)
+        # Compute the control effort using the neural network
+        u = self.u_nn(x)
 
-        # # Scale to reflect plant actuator limits
-        # upper_lim, lower_lim = self.dynamics_model.control_limits
-        # u_center = (upper_lim + lower_lim).type_as(x) / 2.0
-        # u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
+        # Scale to reflect plant actuator limits
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
+        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
 
-        # u_scaled = u * u_semi_range + u_center
+        u_scaled = u * u_semi_range + u_center
 
-        # For now, set u to u_nominal to test V learning
-        # TODO @dawsonc, not permanent
-        u_scaled = self.dynamics_model.u_nominal(x)
+        # # For now, set u to u_nominal to test V learning
+        # # TODO @dawsonc, not permanent
+        # u_scaled = self.dynamics_model.u_nominal(x)
 
         return u_scaled
 
@@ -547,6 +547,7 @@ class NeuralCLBFController(pl.LightningModule):
         # which requires that V is decreasing everywhere where V <= safe_level
         V = self.V(x)
         u_nn = self.u(x)
+        u, _, _ = self.solve_CLBF_QP(x)
 
         # # First figure out where this condition needs to hold
         # eps = 0.1
@@ -585,7 +586,7 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u, params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
             violation = F.leaky_relu(
@@ -600,6 +601,10 @@ class NeuralCLBFController(pl.LightningModule):
         loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
         if accuracy:
             loss.append(("CLBF descent accuracy (simulated)", clbf_descent_acc_sim))
+
+        #   3.) Imitate the QP output using the neural net
+        u_mse_loss = (u - u_nn) ** 2
+        loss.append(("U MSE", u_mse_loss.mean()))
 
         return loss
 
