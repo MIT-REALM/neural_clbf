@@ -498,23 +498,23 @@ class NeuralCLBFController(pl.LightningModule):
         goal_term = V_goal_pt.mean()
         loss.append(("CLBF goal term", goal_term))
 
-        #   2.) V <= safe_level in the safe region
-        V_safe = V[safe_mask]
-        safe_violation = F.relu(eps + V_safe - self.safe_level)
-        safe_V_term = 1e2 * safe_violation.mean()
-        loss.append(("CLBF safe region term", safe_V_term))
-        if accuracy:
-            safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
-            loss.append(("CLBF safe region accuracy", safe_V_acc))
+        # #   2.) V <= safe_level in the safe region
+        # V_safe = V[safe_mask]
+        # safe_violation = F.relu(eps + V_safe - self.safe_level)
+        # safe_V_term = 1e2 * safe_violation.mean()
+        # loss.append(("CLBF safe region term", safe_V_term))
+        # if accuracy:
+        #     safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
+        #     loss.append(("CLBF safe region accuracy", safe_V_acc))
 
-        #   3.) V >= unsafe_level in the unsafe region
-        V_unsafe = V[unsafe_mask]
-        unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
-        unsafe_V_term = 1e2 * unsafe_violation.mean()
-        loss.append(("CLBF unsafe region term", unsafe_V_term))
-        if accuracy:
-            unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
-            loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
+        # #   3.) V >= unsafe_level in the unsafe region
+        # V_unsafe = V[unsafe_mask]
+        # unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
+        # unsafe_V_term = 1e2 * unsafe_violation.mean()
+        # loss.append(("CLBF unsafe region term", unsafe_V_term))
+        # if accuracy:
+        #     unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
+        #     loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
 
         return loss
 
@@ -546,37 +546,36 @@ class NeuralCLBFController(pl.LightningModule):
         #   1.) A term to encourage satisfaction of the CLBF decrease condition,
         # which requires that V is decreasing everywhere where V <= safe_level
         V = self.V(x)
+        u_nn = self.u(x)
 
         # # First figure out where this condition needs to hold
         # eps = 0.1
         # condition_active = F.relu(self.safe_level + eps - V)
 
-        # Now compute the decrease in that region, using the proof controller
-        clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
-        clbf_descent_acc_lin = torch.tensor(0.0).type_as(x)
-        # Get the current value of the CLBF and its Lie derivatives
-        # (Lie derivatives are computed using a linear fit of the dynamics)
-        # TODO @dawsonc do we need dynamics learning here?
-        Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u(x)
-        eps = 1.0
-        for i, s in enumerate(self.scenarios):
-            # Use the dynamics to compute the derivative of V
-            Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
-                Lg_V[:, i, :].unsqueeze(1),
-                u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
-            )
-            Vdot = Vdot.reshape(V.shape)
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V)
-            clbf_descent_term_lin += 0.1 * violation.mean()
-            clbf_descent_acc_lin += (violation <= eps).sum() / (
-                violation.nelement() * self.n_scenarios
-            )
+        # # Now compute the decrease in that region, using the proof controller
+        # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
+        # clbf_descent_acc_lin = torch.tensor(0.0).type_as(x)
+        # # Get the current value of the CLBF and its Lie derivatives
+        # # (Lie derivatives are computed using a linear fit of the dynamics)
+        # # TODO @dawsonc do we need dynamics learning here?
+        # Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # eps = 1.0
+        # for i, s in enumerate(self.scenarios):
+        #     # Use the dynamics to compute the derivative of V
+        #     Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
+        #         Lg_V[:, i, :].unsqueeze(1),
+        #         u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
+        #     )
+        #     Vdot = Vdot.reshape(V.shape)
+        #     violation = F.relu(eps + Vdot + self.clbf_lambda * V)
+        #     clbf_descent_term_lin += 0.1 * violation.mean()
+        #     clbf_descent_acc_lin += (violation <= eps).sum() / (
+        #         violation.nelement() * self.n_scenarios
+        #     )
 
-        loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
-        if accuracy:
-            loss.append(("CLBF descent accuracy (linearized)", clbf_descent_acc_lin))
+        # loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
+        # if accuracy:
+        #     loss.append(("CLBF descent accuracy (linearized)", clbf_descent_acc_lin))
 
         #   2.) A term to encourage satisfaction of CLF condition, using the method from
         # the RSS paper.
