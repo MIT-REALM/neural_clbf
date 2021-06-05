@@ -77,14 +77,13 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=2000,
-        trajectory_length=10,
-        # fixed_samples=10000,
-        fixed_samples=0,
+        trajectories_per_episode=100,
+        trajectory_length=500,
+        fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
-        batch_size=batch_size,
-        quotas={"safe": 0.2, "goal": 0.2, "unsafe": 0.2},
+        batch_size=64,
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
     )
 
     # Define the scenarios
@@ -120,12 +119,6 @@ def main(args):
         clbf_relaxation_penalty=1e1,
         epochs_per_episode=10,
     )
-    # Add the DataModule hooks
-    clbf_controller.prepare_data = data_module.prepare_data
-    clbf_controller.setup = data_module.setup
-    clbf_controller.train_dataloader = data_module.train_dataloader
-    clbf_controller.val_dataloader = data_module.val_dataloader
-    clbf_controller.test_dataloader = data_module.test_dataloader
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
