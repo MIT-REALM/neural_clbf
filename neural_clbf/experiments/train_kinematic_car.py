@@ -144,6 +144,7 @@ def main(args):
         args,
         logger=tb_logger,
         reload_dataloaders_every_epoch=True,
+        track_grad_norm=2,
     )
 
     # Train

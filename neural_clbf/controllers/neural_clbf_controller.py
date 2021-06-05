@@ -592,7 +592,7 @@ class NeuralCLBFController(pl.LightningModule):
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
 
-            clbf_descent_term_sim += violation.mean()
+            clbf_descent_term_sim += 1e2 * violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )
@@ -644,9 +644,7 @@ class NeuralCLBFController(pl.LightningModule):
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             # component_losses.update(self.initial_V_loss(x))
             component_losses.update(
-                self.descent_loss(
-                    x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                )
+                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
             )
             # if self.current_epoch > self.num_init_epochs:
             #     component_losses.update(
