@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/3808607.ckpt"
+    checkpoint_file = "saved_models/kscar/a9be84c.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -81,7 +81,7 @@ def doMain():
         safety_level=0.2,
         goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e4,
+        clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
         num_init_epochs=50,
         epochs_per_episode=100,
@@ -120,6 +120,8 @@ def single_rollout_s_path(
     Vdot_sim = torch.zeros(T, n_sims, clbf_controller.n_scenarios + 1, 1).type_as(
         start_x
     )
+    lin_descent_loss_sim = torch.clone(V_sim)
+    sim_descent_loss_sim = torch.clone(V_sim)
 
     u_sim = torch.zeros(T, n_sims, clbf_controller.dynamics_model.n_controls).type_as(
         start_x
@@ -130,8 +132,8 @@ def single_rollout_s_path(
     V_nn = torch.clone(V_sim)
     Vdot_nn = torch.clone(Vdot_sim)
     u_nn = torch.clone(u_sim)
-    lin_descent_loss_nn = torch.clone(V_sim)
-    sim_descent_loss_nn = torch.clone(V_sim)
+    lin_descent_loss_nn = torch.clone(lin_descent_loss_sim)
+    sim_descent_loss_nn = torch.clone(sim_descent_loss_sim)
     lgv_nn = torch.clone(Vdot_sim)
 
     # And the nominal controller
@@ -139,6 +141,8 @@ def single_rollout_s_path(
     V_nominal = torch.clone(V_sim)
     Vdot_nominal = torch.clone(Vdot_sim)
     u_nominal = torch.clone(u_sim)
+    lin_descent_loss_nominal = torch.clone(lin_descent_loss_sim)
+    sim_descent_loss_nominal = torch.clone(sim_descent_loss_sim)
 
     # And create a place to store the reference path
     params = copy(clbf_controller.dynamics_model.nominal_params)
@@ -207,6 +211,17 @@ def single_rollout_s_path(
         # Get the CLBF values
         V_sim[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
 
+        # And get the descent loss for this point
+        goal_mask = clbf_controller.dynamics_model.goal_mask(x_current)
+        safe_mask = clbf_controller.dynamics_model.safe_mask(x_current)
+        unsafe_mask = clbf_controller.dynamics_model.unsafe_mask(x_current)
+        dist_to_goal = clbf_controller.dynamics_model.distance_to_goal(x_current)
+        descent_losses = clbf_controller.descent_loss(
+            x_current, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+        )
+        # lin_descent_loss_nn[tstep, :, 0] = descent_losses[0][1]
+        sim_descent_loss_sim[tstep, :, 0] = descent_losses[0][1]
+
         # and repeat for the NN controller
         # Get the current state
         x_current = x_nn[tstep - 1, :, :]
@@ -256,7 +271,6 @@ def single_rollout_s_path(
 
         # Get the CLBF values
         V_nn[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
-
         # And get the descent loss for this point
         goal_mask = clbf_controller.dynamics_model.goal_mask(x_current)
         safe_mask = clbf_controller.dynamics_model.safe_mask(x_current)
@@ -311,6 +325,17 @@ def single_rollout_s_path(
 
         # Get the CLBF values
         V_nominal[tstep, :, 0] = clbf_controller.V(x_current).squeeze()
+
+        # And get the descent loss for this point
+        goal_mask = clbf_controller.dynamics_model.goal_mask(x_current)
+        safe_mask = clbf_controller.dynamics_model.safe_mask(x_current)
+        unsafe_mask = clbf_controller.dynamics_model.unsafe_mask(x_current)
+        dist_to_goal = clbf_controller.dynamics_model.distance_to_goal(x_current)
+        descent_losses = clbf_controller.descent_loss(
+            x_current, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+        )
+        # lin_descent_loss_nn[tstep, :, 0] = descent_losses[0][1]
+        sim_descent_loss_nominal[tstep, :, 0] = descent_losses[0][1]
 
         t_final = tstep
 
@@ -581,17 +606,41 @@ def single_rollout_s_path(
     ax6 = fig.add_subplot(gs[1, 3:])
     ax6.plot(
         t[1:t_final],
-        lin_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
+        lin_descent_loss_sim[1:t_final, :, :].squeeze().cpu().numpy(),
         linestyle="dotted",
         color="red",
+    )
+    ax6.plot(
+        t[1:t_final],
+        sim_descent_loss_sim[1:t_final, :, :].squeeze().cpu().numpy(),
+        linestyle="dashed",
+        color="red",
+    )
+    ax6.plot(
+        t[1:t_final],
+        lin_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
+        linestyle="dotted",
+        color="blue",
         label="Lin",
     )
     ax6.plot(
         t[1:t_final],
         sim_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
         linestyle="dashed",
-        color="red",
+        color="blue",
         label="Sim",
+    )
+    ax6.plot(
+        t[1:t_final],
+        lin_descent_loss_nominal[1:t_final, :, :].squeeze().cpu().numpy(),
+        linestyle="dotted",
+        color="green",
+    )
+    ax6.plot(
+        t[1:t_final],
+        sim_descent_loss_nominal[1:t_final, :, :].squeeze().cpu().numpy(),
+        linestyle="dashed",
+        color="green",
     )
     ax6.legend()
     ax6.set_xlabel("$t$")
