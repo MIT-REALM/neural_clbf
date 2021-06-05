@@ -115,10 +115,10 @@ class KSCar(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[KSCar.SXE] = 1.5
-        upper_limit[KSCar.SYE] = 1.5
+        upper_limit[KSCar.SXE] = 3.0
+        upper_limit[KSCar.SYE] = 3.0
         upper_limit[KSCar.DELTA] = self.car_params.steering.max
-        upper_limit[KSCar.VE] = 1.5
+        upper_limit[KSCar.VE] = 3.0
         upper_limit[KSCar.PSI_E] = np.pi / 2
 
         lower_limit = -1.0 * upper_limit
