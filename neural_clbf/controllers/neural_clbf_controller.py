@@ -547,9 +547,9 @@ class NeuralCLBFController(pl.LightningModule):
         # which requires that V is decreasing everywhere where V <= safe_level
         V = self.V(x)
 
-        # # First figure out where this condition needs to hold
-        # eps = 0.1
-        # condition_active = F.relu(self.safe_level + eps - V)
+        # First figure out where this condition needs to hold
+        eps = 0.1
+        condition_active = F.relu(self.safe_level + eps - V)
 
         # Now compute the decrease in that region, using the proof controller
         clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
@@ -568,7 +568,7 @@ class NeuralCLBFController(pl.LightningModule):
                 u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
             )
             Vdot = Vdot.reshape(V.shape)
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V)
+            violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
             clbf_descent_term_lin += 0.1 * violation.mean()
             clbf_descent_acc_lin += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
@@ -589,11 +589,11 @@ class NeuralCLBFController(pl.LightningModule):
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
-            violation = 0.1 * F.relu(
+            violation = F.relu(
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
-            )
+            ) * condition_active
 
-            clbf_descent_term_sim += violation.mean()
+            clbf_descent_term_sim += 0.1 * violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )
