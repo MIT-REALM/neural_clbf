@@ -54,7 +54,7 @@ def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
         domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
-        n_grid=15,
+        n_grid=50,
         x_axis_index=InvertedPendulum.THETA,
         y_axis_index=InvertedPendulum.THETA_DOT,
         x_axis_label="$\\theta$",
