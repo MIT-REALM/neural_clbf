@@ -869,15 +869,13 @@ class NeuralCLBFController(pl.LightningModule):
         if self.vary_safe_level:
             clbf_params += [self.safe_level]
 
-        clbf_opt = torch.optim.SGD(
+        clbf_opt = torch.optim.Adam(
             clbf_params,
             lr=self.primal_learning_rate,
-            weight_decay=1e-6,
         )
-        u_opt = torch.optim.SGD(
+        u_opt = torch.optim.Adam(
             self.u_nn.parameters(),
             lr=self.primal_learning_rate,
-            weight_decay=1e-6,
         )
 
         self.opt_idx_dict = {0: "clbf", 1: "controller"}
