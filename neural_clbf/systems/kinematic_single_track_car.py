@@ -316,7 +316,10 @@ class KSCar(ControlAffineSystem):
 
         # Run the simulation until it's over or an error occurs
         t_sim_final = 0
-        params_t = copy(params)
+        if params is None:
+            params_t = copy(self.nominal_params)
+        else:
+            params_t = copy(params)
         for tstep in range(1, num_steps):
             try:
                 # Update parameters
