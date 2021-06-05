@@ -21,9 +21,9 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/9a4e57f.ckpt"
+    checkpoint_file = "saved_models/kscar/3808607.ckpt"
 
-    controller_period = 0.001
+    controller_period = 0.01
     simulation_dt = 0.001
 
     # Define the dynamics model
@@ -584,16 +584,45 @@ def single_rollout_s_path(
         lin_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
         linestyle="dotted",
         color="red",
+        label="Lin",
     )
     ax6.plot(
         t[1:t_final],
         sim_descent_loss_nn[1:t_final, :, :].squeeze().cpu().numpy(),
         linestyle="dashed",
         color="red",
+        label="Sim",
     )
     ax6.legend()
     ax6.set_xlabel("$t$")
     ax6.set_ylabel("Descent loss")
+
+    ax7 = fig.add_subplot(gs[2, 3:])
+    # ax7.plot(
+    #     t[1:t_final],
+    #     x_sim[1:t_final, 0, :].squeeze().cpu().numpy(),
+    #     linestyle="-",
+    #     label="CLBF",
+    #     color="red",
+    # )
+    ax7.plot(
+        t[1:t_final],
+        x_nn[1:t_final, 0, :].squeeze().cpu().numpy(),
+        linestyle=":",
+        label="NN",
+        color="blue",
+    )
+    # ax7.plot(
+    #     t[1:t_final],
+    #     x_nominal[1:t_final, 0, :].squeeze().cpu().numpy(),
+    #     linestyle=":",
+    #     label="Nominal",
+    #     color="green",
+    # )
+
+    ax7.legend()
+    ax7.set_xlabel("$t$")
+    ax7.set_ylabel("Tracking error")
 
     fig.tight_layout()
 
