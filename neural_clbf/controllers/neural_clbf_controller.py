@@ -495,7 +495,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         #   1.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x))
-        goal_term = 100 * V_goal_pt.mean()
+        goal_term = V_goal_pt.mean()
         loss.append(("CLBF goal term", goal_term))
 
         # #   2.) V <= safe_level in the safe region
@@ -592,7 +592,7 @@ class NeuralCLBFController(pl.LightningModule):
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
 
-            clbf_descent_term_sim += 1e2 * violation.mean()
+            clbf_descent_term_sim += violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )

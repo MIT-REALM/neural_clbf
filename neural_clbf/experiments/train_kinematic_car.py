@@ -76,17 +76,17 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-0.1, 0.1),  # sxe
-        (-0.1, 0.1),  # sye
-        (-0.1, 0.1),  # delta
-        (-0.1, 0.1),  # ve
-        (-0.1, 0.1),  # psi_e
+        (-0.0, 0.0),  # sxe
+        (-0.0, 0.0),  # sye
+        (-0.0, 0.0),  # delta
+        (-0.0, 0.0),  # ve
+        (-0.0, 0.0),  # psi_e
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=10,
-        trajectory_length=1000,
+        trajectories_per_episode=1,
+        trajectory_length=5000,
         fixed_samples=0,
         max_points=100000,
         val_split=0.1,
@@ -129,6 +129,7 @@ def main(args):
         penalty_scheduling_rate=0,
         num_init_epochs=5,
         epochs_per_episode=50,
+        primal_learning_rate=1e-2
     )
 
     # Initialize the logger and trainer
