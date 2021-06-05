@@ -507,14 +507,14 @@ class NeuralCLBFController(pl.LightningModule):
         #     safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
         #     loss.append(("CLBF safe region accuracy", safe_V_acc))
 
-        # #   3.) V >= unsafe_level in the unsafe region
-        # V_unsafe = V[unsafe_mask]
-        # unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
-        # unsafe_V_term = 1e2 * unsafe_violation.mean()
-        # loss.append(("CLBF unsafe region term", unsafe_V_term))
-        # if accuracy:
-        #     unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
-        #     loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
+        #   3.) V >= unsafe_level in the unsafe region
+        V_unsafe = V[unsafe_mask]
+        unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
+        unsafe_V_term = 1e2 * unsafe_violation.mean()
+        loss.append(("CLBF unsafe region term", unsafe_V_term))
+        if accuracy:
+            unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
+            loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
 
         return loss
 
@@ -581,18 +581,19 @@ class NeuralCLBFController(pl.LightningModule):
         # the RSS paper.
         # We compute the change in V in two ways: simulating x forward in time and check
         # if V decreases in each scenario
-        eps = 1.0
+        eps = 0.01
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
-            violation = F.relu(
-                eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
+            violation = F.leaky_relu(
+                eps + (V_next - V) / self.controller_period + self.clbf_lambda * V,
+                0.1
             )
 
-            clbf_descent_term_sim += 1e2 * violation.mean()
+            clbf_descent_term_sim += violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )

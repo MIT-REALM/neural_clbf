@@ -129,7 +129,7 @@ def main(args):
         penalty_scheduling_rate=0,
         num_init_epochs=5,
         epochs_per_episode=50,
-        primal_learning_rate=1e-2,
+        primal_learning_rate=1e-3,
     )
 
     # Initialize the logger and trainer
