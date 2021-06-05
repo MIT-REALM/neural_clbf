@@ -498,23 +498,23 @@ class NeuralCLBFController(pl.LightningModule):
         goal_term = V_goal_pt.mean()
         loss.append(("CLBF goal term", goal_term))
 
-        # #   2.) V <= safe_level in the safe region
-        # V_safe = V[safe_mask]
-        # safe_violation = F.relu(eps + V_safe - self.safe_level)
-        # safe_V_term = 1e2 * safe_violation.mean()
-        # loss.append(("CLBF safe region term", safe_V_term))
-        # if accuracy:
-        #     safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
-        #     loss.append(("CLBF safe region accuracy", safe_V_acc))
+        #   2.) V <= safe_level in the safe region
+        V_safe = V[safe_mask]
+        safe_violation = F.relu(eps + V_safe - self.safe_level)
+        safe_V_term = 1e2 * safe_violation.mean()
+        loss.append(("CLBF safe region term", safe_V_term))
+        if accuracy:
+            safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
+            loss.append(("CLBF safe region accuracy", safe_V_acc))
 
-        # #   3.) V >= unsafe_level in the unsafe region
-        # V_unsafe = V[unsafe_mask]
-        # unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
-        # unsafe_V_term = 1e2 * unsafe_violation.mean()
-        # loss.append(("CLBF unsafe region term", unsafe_V_term))
-        # if accuracy:
-        #     unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
-        #     loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
+        #   3.) V >= unsafe_level in the unsafe region
+        V_unsafe = V[unsafe_mask]
+        unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
+        unsafe_V_term = 1e2 * unsafe_violation.mean()
+        loss.append(("CLBF unsafe region term", unsafe_V_term))
+        if accuracy:
+            unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
+            loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
 
         return loss
 
@@ -588,7 +588,7 @@ class NeuralCLBFController(pl.LightningModule):
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
-            violation = 0.1 * F.relu(
+            violation = F.relu(
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
 
@@ -644,11 +644,11 @@ class NeuralCLBFController(pl.LightningModule):
         if self.opt_idx_dict[optimizer_idx] == "clbf":
             component_losses.update(self.initial_V_loss(x))
             if self.current_epoch > self.num_init_epochs:
-                component_losses.update(
-                    self.boundary_loss(
-                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                    )
-                )
+                # component_losses.update(
+                #     self.boundary_loss(
+                #         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+                #     )
+                # )
                 component_losses.update(
                     self.descent_loss(
                         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
