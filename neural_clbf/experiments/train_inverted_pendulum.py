@@ -117,7 +117,7 @@ def main(args):
         goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
-        epochs_per_episode=10,
+        epochs_per_episode=100,
     )
 
     # Initialize the logger and trainer

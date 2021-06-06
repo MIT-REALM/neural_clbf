@@ -560,7 +560,7 @@ class NeuralCLBFController(pl.LightningModule):
         Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
         u_nn = self.u(x)
-        eps = 1.0
+        eps = 0.01
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
@@ -569,7 +569,7 @@ class NeuralCLBFController(pl.LightningModule):
             )
             Vdot = Vdot.reshape(V.shape)
             violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
-            clbf_descent_term_lin += 0.1 * violation.mean()
+            clbf_descent_term_lin += violation.mean()
             clbf_descent_acc_lin += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )
@@ -582,7 +582,7 @@ class NeuralCLBFController(pl.LightningModule):
         # the RSS paper.
         # We compute the change in V in two ways: simulating x forward in time and check
         # if V decreases in each scenario
-        eps = 1.0
+        eps = 0.01
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
@@ -593,7 +593,7 @@ class NeuralCLBFController(pl.LightningModule):
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             ) * condition_active
 
-            clbf_descent_term_sim += 0.1 * violation.mean()
+            clbf_descent_term_sim += violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )
@@ -906,9 +906,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Otherwise, switch between the controller and CLBF every 10 epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % 40 < 20:
+            if (epoch - self.num_init_epochs) % 20 < 10:
                 optimizer.step(closure=optimizer_closure)
 
         if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % 40 >= 20:
+            if (epoch - self.num_init_epochs) % 20 >= 10:
                 optimizer.step(closure=optimizer_closure)
