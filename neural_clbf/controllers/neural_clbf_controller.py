@@ -785,9 +785,9 @@ class NeuralCLBFController(pl.LightningModule):
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of the validation epoch, using arbitrary plotting callbacks!
 
-        # Only plot every 5 epochs
-        if self.current_epoch % 5 != 0:
-            return
+        # # Only plot every 5 epochs
+        # if self.current_epoch % 5 != 0:
+        #     return
 
         # Figure out the relaxation penalty for this rollout
         if self.penalty_scheduling_rate > 0:
