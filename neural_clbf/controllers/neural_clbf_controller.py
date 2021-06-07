@@ -589,9 +589,12 @@ class NeuralCLBFController(pl.LightningModule):
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
             x_next = x + self.controller_period * xdot
             V_next = self.V(x_next)
-            violation = F.relu(
-                eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
-            ) * condition_active
+            violation = (
+                F.relu(
+                    eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
+                )
+                * condition_active
+            )
 
             clbf_descent_term_sim += violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (
