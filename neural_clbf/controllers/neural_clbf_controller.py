@@ -642,23 +642,33 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the losses
         component_losses = {}
-        if self.opt_idx_dict[optimizer_idx] == "clbf":
-            # component_losses.update(self.initial_V_loss(x))
-            # if self.current_epoch > self.num_init_epochs:
-            component_losses.update(
-                self.boundary_loss(
-                    x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                )
+        # if self.opt_idx_dict[optimizer_idx] == "clbf":
+        #     component_losses.update(self.initial_V_loss(x))
+        #     if self.current_epoch > self.num_init_epochs:
+        #         component_losses.update(
+        #             self.boundary_loss(
+        #                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+        #             )
+        #         )
+        #         component_losses.update(
+        #             self.descent_loss(
+        #                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+        #             )
+        #         )
+        # else:
+        #     component_losses.update(
+        #         self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        #     )
+        component_losses.update(
+            self.boundary_loss(
+                x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
             )
-            component_losses.update(
-                self.descent_loss(
-                    x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                )
+        )
+        component_losses.update(
+            self.descent_loss(
+                x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
             )
-        else:
-            component_losses.update(
-                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            )
+        )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -899,8 +909,10 @@ class NeuralCLBFController(pl.LightningModule):
         using_native_amp=False,
         using_lbfgs=False,
     ):
-        optimizer.step(closure=optimizer_closure)
-        return
+        if self.opt_idx_dict[optimizer_idx] == "clbf":
+            optimizer.step(closure=optimizer_closure)
+        else:
+            return
 
         # During initialization epochs, step both
         if epoch <= self.num_init_epochs:
