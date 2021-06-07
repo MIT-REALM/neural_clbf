@@ -66,6 +66,7 @@ def plot_CLBF(
     sim_descent_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     safe_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     unsafe_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    lower_bound_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     # V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     unsafe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     safe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
@@ -101,13 +102,14 @@ def plot_CLBF(
             descent_losses = clbf_net.descent_loss(  # type: ignore
                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
             )
-            # boundary_losses = clbf_net.boundary_loss(  # type: ignore
-            #     x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-            # )
+            boundary_losses = clbf_net.boundary_loss(  # type: ignore
+                x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+            )
             lin_descent_loss_grid[j, i] = descent_losses[0][1]
             sim_descent_loss_grid[j, i] = descent_losses[1][1]
             # safe_loss_grid[j, i] = boundary_losses[1][1]
             # unsafe_loss_grid[j, i] = boundary_losses[2][1]
+            lower_bound_loss_grid[j, i] = boundary_losses[1][1]
 
             # Get the QP relaxation
             _, r, _ = clbf_net.solve_CLBF_QP(x)  # type: ignore
@@ -129,7 +131,7 @@ def plot_CLBF(
             # V_dot_grid[j, i] = clbf_net.V_decrease_violation(x)
 
     # Make the plots
-    fig, axes = plt.subplots(3, 2)
+    fig, axes = plt.subplots(4, 2)
     # fig, axs = plt.subplots(1, 1)
     fig.set_size_inches(18, 23)
 
