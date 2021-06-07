@@ -61,7 +61,11 @@ def plot_CLBF(
 
     # Set up tensors to store the results
     V_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    descent_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    relax_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    lin_descent_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    sim_descent_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    safe_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    unsafe_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     # V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     unsafe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     safe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
@@ -89,7 +93,7 @@ def plot_CLBF(
             # Get the value of the CLBF
             V_grid[j, i] = clbf_net.V(x)
 
-            # And get the descent loss for this point
+            # And get the losses for this point
             goal_mask = clbf_net.dynamics_model.goal_mask(x)
             safe_mask = clbf_net.dynamics_model.safe_mask(x)
             unsafe_mask = clbf_net.dynamics_model.unsafe_mask(x)
@@ -97,7 +101,18 @@ def plot_CLBF(
             descent_losses = clbf_net.descent_loss(  # type: ignore
                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
             )
-            descent_loss_grid[j, i] = descent_losses[0][1]
+            boundary_losses = clbf_net.boundary_loss(  # type: ignore
+                x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+            )
+            lin_descent_loss_grid[j, i] = descent_losses[0][1]
+
+            sim_descent_loss_grid[j, i] = descent_losses[1][1]
+            safe_loss_grid[j, i] = boundary_losses[1][1]
+            unsafe_loss_grid[j, i] = boundary_losses[2][1]
+
+            # Get the QP relaxation
+            _, r, _ = clbf_net.solve_CLBF_QP(x)  # type: ignore
+            relax_grid[j, i] = r.max()
 
             # Get the goal, safe, or unsafe classification
             if clbf_net.dynamics_model.goal_mask(x).all():
@@ -115,18 +130,12 @@ def plot_CLBF(
             # V_dot_grid[j, i] = clbf_net.V_decrease_violation(x)
 
     # Make the plots
-    fig, axes = plt.subplots(1, 2)
+    fig, axes = plt.subplots(3, 2)
     # fig, axs = plt.subplots(1, 1)
-    fig.set_size_inches(15, 6)
+    fig.set_size_inches(20, 20)
 
-    # First for V
-    axs = axes[0]
-    contours = axs.contourf(
-        x_vals.cpu(), y_vals.cpu(), descent_loss_grid.cpu(), cmap="magma", levels=20
-    )
-    plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("Descent Loss")
-    axs = axes[1]
+    # First plot V
+    axs = axes[0, 0]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
     )
@@ -188,6 +197,40 @@ def plot_CLBF(
     )
     axs.plot([], [], c="white", label="Goal V=0")
     axs.legend()
+
+    # Also plot the QP relaxation
+    axs = axes[0, 1]
+    contours = axs.contourf(
+        x_vals.cpu(), y_vals.cpu(), relax_grid.cpu(), cmap="magma", levels=20
+    )
+    plt.colorbar(contours, ax=axs, orientation="horizontal")
+    plt.title("Max r")
+
+    # Then plot the losses
+    axs = axes[1, 0]
+    contours = axs.contourf(
+        x_vals.cpu(), y_vals.cpu(), lin_descent_loss_grid.cpu(), cmap="magma", levels=20
+    )
+    plt.colorbar(contours, ax=axs, orientation="horizontal")
+    plt.title("Lin Descent Loss")
+    axs = axes[1, 1]
+    contours = axs.contourf(
+        x_vals.cpu(), y_vals.cpu(), sim_descent_loss_grid.cpu(), cmap="magma", levels=20
+    )
+    plt.colorbar(contours, ax=axs, orientation="horizontal")
+    plt.title("Sim Descent Loss")
+    axs = axes[2, 0]
+    contours = axs.contourf(
+        x_vals.cpu(), y_vals.cpu(), safe_loss_grid.cpu(), cmap="magma", levels=20
+    )
+    plt.colorbar(contours, ax=axs, orientation="horizontal")
+    plt.title("Safe loss")
+    axs = axes[2, 1]
+    contours = axs.contourf(
+        x_vals.cpu(), y_vals.cpu(), unsafe_loss_grid.cpu(), cmap="magma", levels=20
+    )
+    plt.colorbar(contours, ax=axs, orientation="horizontal")
+    plt.title("Unsafe loss")
 
     # # Then for dV/dt
     # contours = axs[1].contourf(
@@ -315,7 +358,7 @@ def rollout_CLBF(
         num_timesteps, n_sims, clbf_net.dynamics_model.n_controls
     ).type_as(start_x)
     V_sim = torch.zeros(num_timesteps, n_sims, 1).type_as(start_x)
-    V_sim[0, :, 0] = clbf_net.V(x_sim[0, :, :])
+    V_sim[0, :, 0] = clbf_net.V(x_sim[0, :, :]).squeeze()
     t_final = 0
     controller_failed = False
     goal_reached = False
@@ -345,7 +388,7 @@ def rollout_CLBF(
                 x_sim[tstep, i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
             # Compute the CLBF value
-            V_sim[tstep, :, 0] = clbf_net.V(x_sim[tstep, :, :])
+            V_sim[tstep, :, 0] = clbf_net.V(x_sim[tstep, :, :]).squeeze()
 
             t_final = tstep
             # If we've reached the goal, then stop the rollout
