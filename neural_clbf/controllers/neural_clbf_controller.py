@@ -515,6 +515,14 @@ class NeuralCLBFController(pl.LightningModule):
         #     unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
         #     loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
 
+        #   4.) V >= eps * ||x||^2
+        lower_bound = F.relu(eps * (x ** 2).sum(dim=-1) - V)
+        lower_bound_term = lower_bound.mean()
+        loss.append(("Lower bound term", lower_bound_term))
+        if accuracy:
+            unsafe_V_acc = (lower_bound <= eps).sum() / lower_bound.nelement()
+            loss.append(("Lower bound term", unsafe_V_acc))
+
         return loss
 
     def descent_loss(
