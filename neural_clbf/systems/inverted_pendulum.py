@@ -4,7 +4,7 @@ from typing import Tuple, Optional, List
 import torch
 
 from .control_affine_system import ControlAffineSystem
-from neural_clbf.systems.utils import grav, Scenario
+from neural_clbf.systems.utils import grav, Scenario, ScenarioList
 
 
 class InvertedPendulum(ControlAffineSystem):
@@ -43,6 +43,7 @@ class InvertedPendulum(ControlAffineSystem):
         nominal_params: Scenario,
         dt: float = 0.01,
         controller_dt: Optional[float] = None,
+        scenarios: Optional[ScenarioList] = None,
     ):
         """
         Initialize the inverted pendulum.
@@ -55,7 +56,9 @@ class InvertedPendulum(ControlAffineSystem):
         raises:
             ValueError if nominal_params are not valid for this system
         """
-        super().__init__(nominal_params, dt, controller_dt)
+        super().__init__(
+            nominal_params, dt=dt, controller_dt=controller_dt, scenarios=scenarios
+        )
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -113,8 +116,8 @@ class InvertedPendulum(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = torch.tensor([10.0])
-        lower_limit = -torch.tensor([10.0])
+        upper_limit = torch.tensor([100 * 10.0])
+        lower_limit = -torch.tensor([100 * 10.0])
 
         return (upper_limit, lower_limit)
 
@@ -186,7 +189,7 @@ class InvertedPendulum(ControlAffineSystem):
 
         # Acceleration in theta depends on theta via gravity and theta_dot via damping
         f[:, InvertedPendulum.THETA_DOT, 0] = (
-            grav / L * torch.sin(theta) - b / (m * L ** 2) * theta_dot
+            grav / L * (theta) - b / (m * L ** 2) * theta_dot
         )
 
         return f

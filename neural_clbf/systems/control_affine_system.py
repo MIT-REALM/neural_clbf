@@ -10,7 +10,13 @@ import numpy as np
 import torch
 from torch.autograd.functional import jacobian
 
-from neural_clbf.systems.utils import Scenario, lqr, continuous_lyap
+from neural_clbf.systems.utils import (
+    Scenario,
+    ScenarioList,
+    lqr,
+    robust_continuous_lyap,
+    continuous_lyap,
+)
 
 
 class ControlAffineSystem(ABC):
@@ -32,6 +38,7 @@ class ControlAffineSystem(ABC):
         dt: float = 0.01,
         controller_dt: Optional[float] = None,
         use_linearized_controller: bool = True,
+        scenarios: Optional[ScenarioList] = None,
     ):
         """
         Initialize a system.
@@ -44,6 +51,7 @@ class ControlAffineSystem(ABC):
                                        LQR controller. If false, the system is must
                                        set self.P itself to be a tensor n_dims x n_dims
                                        positive definite matrix.
+            scenarios: an optional list of scenarios for robust control
         raises:
             ValueError if nominal_params are not valid for this system
         """
@@ -65,37 +73,50 @@ class ControlAffineSystem(ABC):
 
         # Compute the linearized controller
         if use_linearized_controller:
-            self.compute_linearized_controller()
+            self.compute_linearized_controller(scenarios)
 
-    def compute_linearized_controller(self):
+    def compute_linearized_controller(self, scenarios: Optional[ScenarioList] = None):
         """
         Computes the linearized controller K and lyapunov matrix P.
         """
-        # Compute the LQR gain matrix for the nominal parameters
-        # Linearize the system about the x = 0, u = 0
-        x0 = self.goal_point
-        u0 = self.u_eq
-        dynamics = lambda x: self.closed_loop_dynamics(
-            x, u0, self.nominal_params
-        ).squeeze()
-        Act = jacobian(dynamics, x0).squeeze().cpu().numpy()
-        Act = np.reshape(Act, (self.n_dims, self.n_dims))
-        A = np.eye(self.n_dims) + self.controller_dt * Act
+        # We need to compute the LQR closed-loop linear dynamics for each scenario
+        Acl_list = []
+        # Default to the nominal scenario if none are provided
+        if scenarios is None:
+            scenarios = [self.nominal_params]
 
-        Bct = self._g(self.goal_point, self.nominal_params).squeeze().cpu().numpy()
-        Bct = np.reshape(Bct, (self.n_dims, self.n_controls))
-        B = self.controller_dt * Bct
+        # For each scenario, get the LQR gain and closed-loop linearization
+        for s in scenarios:
+            # Compute the LQR gain matrix for the nominal parameters
+            # Linearize the system about the x = 0, u = 0
+            x0 = self.goal_point
+            u0 = self.u_eq
+            dynamics = lambda x: self.closed_loop_dynamics(x, u0, s).squeeze()
+            Act = jacobian(dynamics, x0).squeeze().cpu().numpy()
+            Act = np.reshape(Act, (self.n_dims, self.n_dims))
+            A = np.eye(self.n_dims) + self.controller_dt * Act
 
-        # Define cost matrices as identity
-        Q = np.eye(self.n_dims)
-        R = np.eye(self.n_controls)
+            Bct = self._g(self.goal_point, s).squeeze().cpu().numpy()
+            Bct = np.reshape(Bct, (self.n_dims, self.n_controls))
+            B = self.controller_dt * Bct
 
-        # Get feedback matrix
-        K_np = lqr(A, B, Q, R)
-        self.K = torch.tensor(K_np)
+            # Define cost matrices as identity
+            Q = np.eye(self.n_dims)
+            R = np.eye(self.n_controls)
 
-        # compute the closed loop dynamics and get the Lyapunov matrix
-        self.P = torch.tensor(continuous_lyap(Act - Bct @ K_np, Q))
+            # Get feedback matrix
+            K_np = lqr(A, B, Q, R)
+            self.K = torch.tensor(K_np)
+
+            Acl_list.append(Act - Bct @ K_np)
+
+        # If more than one scenario is provided...
+        # get the Lyapunov matrix by robustly solving Lyapunov inequalities
+        if len(scenarios) > 1:
+            self.P = torch.tensor(robust_continuous_lyap(Acl_list, Q))
+        else:
+            # Otherwise, just use the standard Lyapunov equation
+            self.P = torch.tensor(continuous_lyap(Acl_list[0], Q))
 
     @abstractmethod
     def validate_params(self, params: Scenario) -> bool:
