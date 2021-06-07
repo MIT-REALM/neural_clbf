@@ -126,7 +126,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/inverted_pendulum",
-        name="loss_validation",
+        name="V_learning_goal_descent",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
