@@ -42,7 +42,7 @@ class NeuralCLBFController(pl.LightningModule):
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: int = 5,
-        penalty_scheduling_rate: float = 100.0,
+        penalty_scheduling_rate: float = 0.0,
         num_init_epochs: int = 5,
         plotting_callbacks: Optional[
             List[Callable[[Controller], Tuple[str, figure]]]
@@ -283,15 +283,15 @@ class NeuralCLBFController(pl.LightningModule):
                controller
         """
         # Apply the offset and range to normalize about zero
-        x = self.normalize_with_angles(x)
+        x_norm = self.normalize_with_angles(x)
 
         # Compute the control effort using the neural network
-        u = self.u_nn(x)
+        u = self.u_nn(x_norm)
 
         # Scale to reflect plant actuator limits
         upper_lim, lower_lim = self.dynamics_model.control_limits
-        u_center = (upper_lim + lower_lim).type_as(x) / 2.0
-        u_semi_range = (upper_lim - lower_lim).type_as(x) / 2.0
+        u_center = (upper_lim + lower_lim).type_as(x_norm) / 2.0
+        u_semi_range = (upper_lim - lower_lim).type_as(x_norm) / 2.0
 
         u_scaled = u * u_semi_range + u_center
 
@@ -462,7 +462,6 @@ class NeuralCLBFController(pl.LightningModule):
             u: bs x self.dynamics_model.n_controls tensor of control inputs
         """
         u, _, _ = self.solve_CLBF_QP(x)
-        # u = self.u(x)
         return u
 
     def boundary_loss(
@@ -548,8 +547,7 @@ class NeuralCLBFController(pl.LightningModule):
         V = self.V(x)
 
         # First figure out where this condition needs to hold
-        eps = 0.1
-        condition_active = F.relu(self.safe_level + eps - V)
+        condition_active = V < self.safe_level
 
         # Now compute the decrease in that region, using the proof controller
         clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
@@ -560,7 +558,7 @@ class NeuralCLBFController(pl.LightningModule):
         Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
         u_nn = self.u(x)
-        eps = 0.01
+        eps = 0.0
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
@@ -568,7 +566,8 @@ class NeuralCLBFController(pl.LightningModule):
                 u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
             )
             Vdot = Vdot.reshape(V.shape)
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V) * condition_active
+            violation = F.relu(eps + Vdot + self.clbf_lambda * V)
+            violation = violation[condition_active]
             clbf_descent_term_lin += violation.mean()
             clbf_descent_acc_lin += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
@@ -582,19 +581,17 @@ class NeuralCLBFController(pl.LightningModule):
         # the RSS paper.
         # We compute the change in V in two ways: simulating x forward in time and check
         # if V decreases in each scenario
-        eps = 0.01
+        eps = 0.0
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
             xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
-            x_next = x + self.controller_period * xdot
+            x_next = x + self.dynamics_model.dt * xdot
             V_next = self.V(x_next)
-            violation = (
-                F.relu(
-                    eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
-                )
-                * condition_active
+            violation = F.relu(
+                eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
+            violation = violation[condition_active]
 
             clbf_descent_term_sim += violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (

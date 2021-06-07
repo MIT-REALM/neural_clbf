@@ -104,7 +104,7 @@ def single_rollout_s_path(
 
     # Simulate!
     # (but first make somewhere to save the results)
-    t_sim = 5.0 / 1.0
+    t_sim = 5.0 / 50.0
     n_sims = 1
     T = int(t_sim // simulation_dt)
     start_x = 0.0 * torch.tensor(
