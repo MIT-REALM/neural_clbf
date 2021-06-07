@@ -101,14 +101,13 @@ def plot_CLBF(
             descent_losses = clbf_net.descent_loss(  # type: ignore
                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
             )
-            boundary_losses = clbf_net.boundary_loss(  # type: ignore
-                x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-            )
+            # boundary_losses = clbf_net.boundary_loss(  # type: ignore
+            #     x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+            # )
             lin_descent_loss_grid[j, i] = descent_losses[0][1]
-
             sim_descent_loss_grid[j, i] = descent_losses[1][1]
-            safe_loss_grid[j, i] = boundary_losses[1][1]
-            unsafe_loss_grid[j, i] = boundary_losses[2][1]
+            # safe_loss_grid[j, i] = boundary_losses[1][1]
+            # unsafe_loss_grid[j, i] = boundary_losses[2][1]
 
             # Get the QP relaxation
             _, r, _ = clbf_net.solve_CLBF_QP(x)  # type: ignore
