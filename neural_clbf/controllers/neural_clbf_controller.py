@@ -901,6 +901,7 @@ class NeuralCLBFController(pl.LightningModule):
     ):
         optimizer.step(closure=optimizer_closure)
         return
+
         # During initialization epochs, step both
         if epoch <= self.num_init_epochs:
             optimizer.step(closure=optimizer_closure)
