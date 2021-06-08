@@ -516,6 +516,7 @@ class NeuralCLBFController(pl.LightningModule):
         #     loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
 
         #   4.) V >= eps * ||x||^2
+        eps = 0.1
         lower_bound = F.relu(eps * (x ** 2).sum(dim=-1) - V)
         lower_bound_term = lower_bound.mean()
         loss.append(("Lower bound term", lower_bound_term))
