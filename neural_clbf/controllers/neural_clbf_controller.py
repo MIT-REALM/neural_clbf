@@ -441,6 +441,11 @@ class NeuralCLBFController(pl.LightningModule):
             model.optimize()
 
             if model.status != GRB.OPTIMAL:
+                # Make the relaxations nan if the problem was infeasible, as a signal
+                # that something has gone wrong
+                if allow_relaxation:
+                    for i in range(n_scenarios):
+                        r_result[batch_idx, i] = torch.tensor(float('nan'))
                 continue
 
             # Extract the results
@@ -682,7 +687,7 @@ class NeuralCLBFController(pl.LightningModule):
             if not torch.isnan(loss_value):
                 total_loss += loss_value
 
-        batch_dict = {"loss": total_loss, **component_losses}
+        batch_dict = {"loss": total_loss, **component_losses, "opt_idx": optimizer_idx}
 
         return batch_dict
 

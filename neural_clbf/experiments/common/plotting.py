@@ -61,13 +61,15 @@ def plot_CLBF(
 
     # Set up tensors to store the results
     V_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    relax_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    lin_descent_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    sim_descent_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    safe_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    unsafe_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
-    lower_bound_loss_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     # V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
+    # When storing the losses, default to nan to make prettier plots, since the losses
+    # aren't all defined over the entire state space.
+    relax_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    lin_descent_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    sim_descent_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    safe_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    unsafe_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    lower_bound_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
     unsafe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     safe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     goal_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
@@ -111,9 +113,10 @@ def plot_CLBF(
             unsafe_loss_grid[j, i] = boundary_losses[2][1]
             # lower_bound_loss_grid[j, i] = boundary_losses[1][1]
 
-            # Get the QP relaxation
-            _, r, _ = clbf_net.solve_CLBF_QP(x)  # type: ignore
-            relax_grid[j, i] = r.max()
+            # Get the QP relaxation for all points where V < safe_level
+            if V_grid[j, i] <= clbf_net.safe_level:
+                _, r, _ = clbf_net.solve_CLBF_QP(x)  # type: ignore
+                relax_grid[j, i] = r.max()
 
             # Get the goal, safe, or unsafe classification
             if clbf_net.dynamics_model.goal_mask(x).all():
@@ -141,7 +144,6 @@ def plot_CLBF(
         x_vals.cpu(), y_vals.cpu(), V_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("CLBF")
     # Plot safe levels
     safe_level = clbf_net.safe_level
     if isinstance(safe_level, torch.Tensor):
@@ -205,7 +207,7 @@ def plot_CLBF(
         x_vals.cpu(), y_vals.cpu(), relax_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("Max r")
+    axs.set_title("Max r")
 
     # Then plot the losses
     axs = axes[1, 0]
@@ -213,28 +215,28 @@ def plot_CLBF(
         x_vals.cpu(), y_vals.cpu(), lin_descent_loss_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("Lin Descent Loss")
+    axs.set_title("Lin Descent Loss")
 
     axs = axes[1, 1]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), sim_descent_loss_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("Sim Descent Loss")
+    axs.set_title("Sim Descent Loss")
 
     axs = axes[2, 0]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), safe_loss_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("Safe loss")
+    axs.set_title("Safe loss")
 
     axs = axes[2, 1]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), unsafe_loss_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("Unsafe loss")
+    axs.set_title("Unsafe loss")
 
     axs = axes[3, 0]
     contours = axs.contourf(
@@ -245,7 +247,7 @@ def plot_CLBF(
         levels=20,
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("Lower bound loss")
+    axs.set_title("Lower bound loss")
 
     # # Then for dV/dt
     # contours = axs[1].contourf(
@@ -453,6 +455,7 @@ def rollout_CLBF(
         ax1.set_title(f"Controller failure! s[0] = {random_scenarios[0]}")
 
     ax1.set_xlabel("$t$")
+    ax1.set_ylabel("state")
     # ax1.legend(loc="lower center", ncol=n_sims * len(plot_x_labels) + 1)
 
     ax2 = axs[1]
@@ -464,6 +467,7 @@ def rollout_CLBF(
         )
 
     ax2.set_xlabel("$t$")
+    ax2.set_ylabel("$u$")
     # ax2.legend(loc="lower center", ncol=n_sims * len(plot_x_labels))
 
     ax3 = axs[2]
