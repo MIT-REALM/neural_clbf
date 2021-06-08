@@ -649,7 +649,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, optimizer_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
         x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
@@ -903,38 +903,36 @@ class NeuralCLBFController(pl.LightningModule):
 
         self.opt_idx_dict = {0: "clbf", 1: "controller"}
 
-        # return [clbf_opt, u_opt]
-        return [clbf_opt]
+        return [clbf_opt, u_opt]
 
-    # def optimizer_zero_grad(self, current_epoch, batch_idx, optimizer, opt_idx):
-    #     optimizer.zero_grad()
+    def optimizer_zero_grad(self, current_epoch, batch_idx, optimizer, opt_idx):
+        optimizer.zero_grad()
 
-    # def optimizer_step(
-    #     self,
-    #     epoch,
-    #     batch_idx,
-    #     optimizer,
-    #     optimizer_idx,
-    #     optimizer_closure,
-    #     on_tpu=False,
-    #     using_native_amp=False,
-    #     using_lbfgs=False,
-    # ):
-    #     if self.opt_idx_dict[optimizer_idx] == "clbf":
-    #         optimizer.step(closure=optimizer_closure)
-    #     else:
-    #         return
+    def optimizer_step(
+        self,
+        epoch,
+        batch_idx,
+        optimizer,
+        optimizer_idx,
+        optimizer_closure,
+        on_tpu=False,
+        using_native_amp=False,
+        using_lbfgs=False,
+    ):
+        if self.opt_idx_dict[optimizer_idx] == "clbf":
+            optimizer.step(closure=optimizer_closure)
+        return
 
-    #     # During initialization epochs, step both
-    #     if epoch <= self.num_init_epochs:
-    #         optimizer.step(closure=optimizer_closure)
-    #         return
+        # During initialization epochs, step both
+        if epoch <= self.num_init_epochs:
+            optimizer.step(closure=optimizer_closure)
+            return
 
-    #     # Otherwise, switch between the controller and CLBF every 10 epochs
-    #     if self.opt_idx_dict[optimizer_idx] == "clbf":
-    #         if (epoch - self.num_init_epochs) % 20 < 10:
-    #             optimizer.step(closure=optimizer_closure)
+        # Otherwise, switch between the controller and CLBF every 10 epochs
+        if self.opt_idx_dict[optimizer_idx] == "clbf":
+            if (epoch - self.num_init_epochs) % 20 < 10:
+                optimizer.step(closure=optimizer_closure)
 
-    #     if self.opt_idx_dict[optimizer_idx] == "controller":
-    #         if (epoch - self.num_init_epochs) % 20 >= 10:
-    #             optimizer.step(closure=optimizer_closure)
+        if self.opt_idx_dict[optimizer_idx] == "controller":
+            if (epoch - self.num_init_epochs) % 20 >= 10:
+                optimizer.step(closure=optimizer_closure)
