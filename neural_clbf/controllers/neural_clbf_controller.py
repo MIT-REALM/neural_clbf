@@ -687,7 +687,7 @@ class NeuralCLBFController(pl.LightningModule):
             if not torch.isnan(loss_value):
                 total_loss += loss_value
 
-        batch_dict = {"loss": total_loss, **component_losses, "opt_idx": optimizer_idx}
+        batch_dict = {"loss": total_loss, **component_losses, "opt_idx": torch.tensor(optimizer_idx)}
 
         return batch_dict
 
