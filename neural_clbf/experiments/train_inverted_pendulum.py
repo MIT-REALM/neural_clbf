@@ -89,8 +89,8 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=100,
-        trajectory_length=50,
-        fixed_samples=1000,
+        trajectory_length=500,
+        fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
@@ -99,10 +99,10 @@ def main(args):
 
     # Define the plotting callbacks
     plotting_callbacks = [
-        # # This plotting function plots V and dV/dt violation on a grid
-        # clbf_plotting_cb,
-        # # This plotting function simulates rollouts of the controller
-        # rollout_plotting_cb,
+        # This plotting function plots V and dV/dt violation on a grid
+        clbf_plotting_cb,
+        # This plotting function simulates rollouts of the controller
+        rollout_plotting_cb,
     ]
 
     # Initialize the controller
