@@ -214,24 +214,38 @@ def plot_CLBF(
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
     plt.title("Lin Descent Loss")
+
     axs = axes[1, 1]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), sim_descent_loss_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
     plt.title("Sim Descent Loss")
+
     axs = axes[2, 0]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), safe_loss_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
     plt.title("Safe loss")
+
     axs = axes[2, 1]
     contours = axs.contourf(
         x_vals.cpu(), y_vals.cpu(), unsafe_loss_grid.cpu(), cmap="magma", levels=20
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
     plt.title("Unsafe loss")
+
+    axs = axes[3, 0]
+    contours = axs.contourf(
+        x_vals.cpu(),
+        y_vals.cpu(),
+        lower_bound_loss_gridw.cpu(),
+        cmap="magma",
+        levels=20,
+    )
+    plt.colorbar(contours, ax=axs, orientation="horizontal")
+    plt.title("Lowe bound loss")
 
     # # Then for dV/dt
     # contours = axs[1].contourf(
