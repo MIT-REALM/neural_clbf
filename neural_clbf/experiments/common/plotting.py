@@ -240,7 +240,7 @@ def plot_CLBF(
     contours = axs.contourf(
         x_vals.cpu(),
         y_vals.cpu(),
-        lower_bound_loss_gridw.cpu(),
+        lower_bound_loss_grid.cpu(),
         cmap="magma",
         levels=20,
     )
