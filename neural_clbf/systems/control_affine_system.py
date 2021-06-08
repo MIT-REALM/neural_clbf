@@ -462,7 +462,9 @@ class ControlAffineSystem(ABC):
             u_nominal: bs x self.n_controls tensor of controls
         """
         # Compute nominal control from feedback + equilibrium control
-        u_nominal = -(self.K.type_as(x) @ (x - self.goal_point.squeeze()).T).T
+        K = self.K.type_as(x)
+        goal = self.goal_point.squeeze().type_as(x)
+        u_nominal = -(K @ (x - goal).T).T
 
         # Adjust for the equilibrium setpoint
         u = u_nominal + self.u_eq
