@@ -245,7 +245,7 @@ def plot_CLBF(
         levels=20,
     )
     plt.colorbar(contours, ax=axs, orientation="horizontal")
-    plt.title("Lowe bound loss")
+    plt.title("Lower bound loss")
 
     # # Then for dV/dt
     # contours = axs[1].contourf(
