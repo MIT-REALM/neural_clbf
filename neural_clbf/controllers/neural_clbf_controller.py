@@ -506,23 +506,23 @@ class NeuralCLBFController(pl.LightningModule):
         #     safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
         #     loss.append(("CLBF safe region accuracy", safe_V_acc))
 
-        # #   3.) V >= unsafe_level in the unsafe region
-        # V_unsafe = V[unsafe_mask]
-        # unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
-        # unsafe_V_term = 1e2 * unsafe_violation.mean()
-        # loss.append(("CLBF unsafe region term", unsafe_V_term))
-        # if accuracy:
-        #     unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
-        #     loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
-
-        #   4.) V >= eps * ||x||^2
-        eps = 0.1
-        lower_bound = F.relu(eps * (x ** 2).sum(dim=-1) - V)
-        lower_bound_term = lower_bound.mean()
-        loss.append(("Lower bound term", lower_bound_term))
+        #   3.) V >= unsafe_level in the unsafe region
+        V_unsafe = V[unsafe_mask]
+        unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
+        unsafe_V_term = 1e2 * unsafe_violation.mean()
+        loss.append(("CLBF unsafe region term", unsafe_V_term))
         if accuracy:
-            unsafe_V_acc = (lower_bound <= eps).sum() / lower_bound.nelement()
-            loss.append(("Lower bound term", unsafe_V_acc))
+            unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
+            loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
+
+        # #   4.) V >= eps * ||x||^2
+        # eps = 0.1
+        # lower_bound = F.relu(eps * (x ** 2).sum(dim=-1) - V)
+        # lower_bound_term = lower_bound.mean()
+        # loss.append(("Lower bound term", lower_bound_term))
+        # if accuracy:
+        #     unsafe_V_acc = (lower_bound <= eps).sum() / lower_bound.nelement()
+        #     loss.append(("Lower bound term", unsafe_V_acc))
 
         return loss
 
