@@ -467,7 +467,7 @@ class ControlAffineSystem(ABC):
         u_nominal = -(K @ (x - goal).T).T
 
         # Adjust for the equilibrium setpoint
-        u = u_nominal + self.u_eq
+        u = u_nominal + self.u_eq.type_as(x)
 
         # Clamp given the control limits
         upper_u_lim, lower_u_lim = self.control_limits
