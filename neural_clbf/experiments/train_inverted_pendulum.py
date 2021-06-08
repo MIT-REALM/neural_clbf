@@ -99,10 +99,10 @@ def main(args):
 
     # Define the plotting callbacks
     plotting_callbacks = [
-        # This plotting function plots V and dV/dt violation on a grid
-        clbf_plotting_cb,
-        # This plotting function simulates rollouts of the controller
-        rollout_plotting_cb,
+        # # This plotting function plots V and dV/dt violation on a grid
+        # clbf_plotting_cb,
+        # # This plotting function simulates rollouts of the controller
+        # rollout_plotting_cb,
     ]
 
     # Initialize the controller
