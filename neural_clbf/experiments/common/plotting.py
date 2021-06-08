@@ -107,9 +107,9 @@ def plot_CLBF(
             )
             lin_descent_loss_grid[j, i] = descent_losses[0][1]
             sim_descent_loss_grid[j, i] = descent_losses[1][1]
-            # safe_loss_grid[j, i] = boundary_losses[1][1]
-            # unsafe_loss_grid[j, i] = boundary_losses[2][1]
-            lower_bound_loss_grid[j, i] = boundary_losses[1][1]
+            safe_loss_grid[j, i] = boundary_losses[1][1]
+            unsafe_loss_grid[j, i] = boundary_losses[2][1]
+            # lower_bound_loss_grid[j, i] = boundary_losses[1][1]
 
             # Get the QP relaxation
             _, r, _ = clbf_net.solve_CLBF_QP(x)  # type: ignore

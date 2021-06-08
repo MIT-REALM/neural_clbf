@@ -137,7 +137,7 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        unsafe_mask = x.norm(dim=-1) >= 1.2
+        unsafe_mask = x.norm(dim=-1) >= 1.5
 
         return unsafe_mask
 
