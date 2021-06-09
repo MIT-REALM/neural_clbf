@@ -90,11 +90,11 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=100,
         trajectory_length=500,
-        fixed_samples=10000,
+        fixed_samples=20000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
 
     # Define the plotting callbacks
