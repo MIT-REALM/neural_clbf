@@ -509,7 +509,8 @@ class NeuralCLBFController(pl.LightningModule):
 
         V_safe_ex_goal = V[torch.logical_and(safe_mask, torch.logical_not(goal_mask))]
         safe_margin_violation = F.relu(0.1 - V_safe_ex_goal)
-        safe_V_term += 1e2 * safe_margin_violation.mean()
+        if V_safe_ex_goal.nelement() > 0:
+            safe_V_term += 1e2 * safe_margin_violation.mean()
         loss.append(("CLBF safe region term", safe_V_term))
         if accuracy:
             safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
