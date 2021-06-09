@@ -505,7 +505,7 @@ class NeuralCLBFController(pl.LightningModule):
         #   2.) 0 < V <= safe_level in the safe region
         V_safe = V[safe_mask]
         safe_violation = F.relu(eps + V_safe - self.safe_level)
-        safe_violation += F.relu(eps - V_safe)
+        # safe_violation += F.relu(eps - V_safe)
         safe_V_term = 1e2 * safe_violation.mean()
         loss.append(("CLBF safe region term", safe_V_term))
         if accuracy:
@@ -931,9 +931,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Otherwise, switch between the controller and CLBF every 10 epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % 10 < 5:
+            if (epoch - self.num_init_epochs) % 20 < 10:
                 optimizer.step(closure=optimizer_closure)
 
         if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % 10 >= 5:
+            if (epoch - self.num_init_epochs) % 20 >= 10:
                 optimizer.step(closure=optimizer_closure)
