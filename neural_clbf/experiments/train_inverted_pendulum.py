@@ -120,13 +120,14 @@ def main(args):
         goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e5,
+        num_init_epochs=5,
         epochs_per_episode=100,
     )
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/inverted_pendulum",
-        name="V_learning_goal_descent_unsafe_safe_margin",
+        name="full_test",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True

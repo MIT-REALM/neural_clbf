@@ -64,12 +64,12 @@ def plot_CLBF(
     # V_dot_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     # When storing the losses, default to nan to make prettier plots, since the losses
     # aren't all defined over the entire state space.
-    relax_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
-    lin_descent_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
-    sim_descent_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
-    safe_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
-    unsafe_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
-    lower_bound_loss_grid = float('nan') + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    relax_grid = float("nan") + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    lin_descent_loss_grid = float("nan") + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    sim_descent_loss_grid = float("nan") + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    safe_loss_grid = float("nan") + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    unsafe_loss_grid = float("nan") + torch.zeros(n_grid, n_grid).type_as(x_vals)
+    lower_bound_loss_grid = float("nan") + torch.zeros(n_grid, n_grid).type_as(x_vals)
     unsafe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     safe_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
     goal_grid = torch.zeros(n_grid, n_grid).type_as(x_vals)
