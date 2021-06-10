@@ -920,6 +920,7 @@ class NeuralCLBFController(pl.LightningModule):
         using_native_amp=False,
         using_lbfgs=False,
     ):
+        print(self.opt_idx_dict[optimizer_idx])
         # During initialization epochs, step both
         if epoch <= self.num_init_epochs:
             optimizer.step(closure=optimizer_closure)
