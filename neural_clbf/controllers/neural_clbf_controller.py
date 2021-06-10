@@ -295,9 +295,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         u_scaled = u * u_semi_range + u_center
 
-        # For now, set u to u_nominal to test V learning
-        # TODO @dawsonc, not permanent
-        u_scaled = self.dynamics_model.u_nominal(x) + 0.00001 * u_scaled
+        # # For now, set u to u_nominal to test V learning
+        # # TODO @dawsonc, not permanent
+        # u_scaled = self.dynamics_model.u_nominal(x) + 0.00001 * u_scaled
 
         return u_scaled
 
@@ -445,7 +445,7 @@ class NeuralCLBFController(pl.LightningModule):
                 # that something has gone wrong
                 if allow_relaxation:
                     for i in range(n_scenarios):
-                        r_result[batch_idx, i] = torch.tensor(float('nan'))
+                        r_result[batch_idx, i] = torch.tensor(float("nan"))
                 continue
 
             # Extract the results
@@ -506,11 +506,6 @@ class NeuralCLBFController(pl.LightningModule):
         V_safe = V[safe_mask]
         safe_violation = F.relu(eps + V_safe - self.safe_level)
         safe_V_term = 1e2 * safe_violation.mean()
-
-        V_safe_ex_goal = V[torch.logical_and(safe_mask, torch.logical_not(goal_mask))]
-        safe_margin_violation = F.relu(0.1 - V_safe_ex_goal)
-        if V_safe_ex_goal.nelement() > 0:
-            safe_V_term += 1e2 * safe_margin_violation.mean()
         loss.append(("CLBF safe region term", safe_V_term))
         if accuracy:
             safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
@@ -661,29 +656,23 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the losses
         component_losses = {}
-        # if self.opt_idx_dict[optimizer_idx] == "clbf":
-        #     component_losses.update(self.initial_V_loss(x))
-        #     if self.current_epoch > self.num_init_epochs:
-        #         component_losses.update(
-        #             self.boundary_loss(
-        #                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-        #             )
-        #         )
-        #         component_losses.update(
-        #             self.descent_loss(
-        #                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-        #             )
-        #         )
-        # else:
-        #     component_losses.update(
-        #         self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        #     )
-        component_losses.update(
-            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        )
-        component_losses.update(
-            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        )
+        if self.opt_idx_dict[optimizer_idx] == "clbf":
+            component_losses.update(self.initial_V_loss(x))
+            if self.current_epoch > self.num_init_epochs:
+                component_losses.update(
+                    self.boundary_loss(
+                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+                    )
+                )
+                component_losses.update(
+                    self.descent_loss(
+                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+                    )
+                )
+        else:
+            component_losses.update(
+                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -800,9 +789,9 @@ class NeuralCLBFController(pl.LightningModule):
         # We automatically plot and save the CLBF and some simulated rollouts
         # at the end of the validation epoch, using arbitrary plotting callbacks!
 
-        # # Only plot every 5 epochs
-        # if self.current_epoch % 5 != 0:
-        #     return
+        # Only plot every 5 epochs
+        if self.current_epoch % 5 != 0:
+            return
 
         # Figure out the relaxation penalty for this rollout
         if self.penalty_scheduling_rate > 0:
@@ -924,20 +913,16 @@ class NeuralCLBFController(pl.LightningModule):
         using_native_amp=False,
         using_lbfgs=False,
     ):
-        if self.opt_idx_dict[optimizer_idx] == "clbf":
-            optimizer.step(closure=optimizer_closure)
-        return
-
         # During initialization epochs, step both
         if epoch <= self.num_init_epochs:
             optimizer.step(closure=optimizer_closure)
             return
 
-        # Otherwise, switch between the controller and CLBF every 10 epochs
+        # Otherwise, switch between the controller and CLBF every few epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % 20 < 10:
+            if (epoch - self.num_init_epochs) % 40 < 20:
                 optimizer.step(closure=optimizer_closure)
 
         if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % 20 >= 10:
+            if (epoch - self.num_init_epochs) % 40 >= 20:
                 optimizer.step(closure=optimizer_closure)
