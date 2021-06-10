@@ -295,9 +295,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         u_scaled = u * u_semi_range + u_center
 
-        # # For now, set u to u_nominal to test V learning
-        # # TODO @dawsonc, not permanent
-        # u_scaled = self.dynamics_model.u_nominal(x) + 0.00001 * u_scaled
+        # For now, set u to u_nominal to test V learning
+        # TODO @dawsonc, not permanent
+        u_scaled = self.dynamics_model.u_nominal(x) + 0.00001 * u_scaled
 
         return u_scaled
 
@@ -445,7 +445,7 @@ class NeuralCLBFController(pl.LightningModule):
                 # that something has gone wrong
                 if allow_relaxation:
                     for i in range(n_scenarios):
-                        r_result[batch_idx, i] = torch.tensor(float("nan"))
+                        r_result[batch_idx, i] = torch.tensor(float('nan'))
                 continue
 
             # Extract the results
@@ -643,9 +643,9 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_mse_loss = decrease_factor * clbf_mse_loss.mean()
         loss.append(("CLBF MSE", clbf_mse_loss))
 
-        # #   2.) Ensure that V >= 0.1 * nominal solution
-        # clbf_lower_bound_loss = 10 * F.relu(0.1 * V_nominal - V).mean()
-        # loss.append(("CLBF Bound", clbf_lower_bound_loss))
+        #   2.) Ensure that V >= 0.1 * nominal solution
+        clbf_lower_bound_loss = 10 * F.relu(0.1 * V_nominal - V).mean()
+        loss.append(("CLBF Bound", clbf_lower_bound_loss))
 
         return loss
 
@@ -656,28 +656,30 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the losses
         component_losses = {}
-        if self.opt_idx_dict[optimizer_idx] == "clbf":
-            component_losses.update(self.initial_V_loss(x))
-            if self.current_epoch > self.num_init_epochs:
-                component_losses.update(
-                    self.boundary_loss(
-                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                    )
-                )
-                component_losses.update(
-                    self.descent_loss(
-                        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
-                    )
-                )
-        else:
-            # component_losses.update(
-            #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-            # )
-            u_nominal = self.dynamics_model.u_nominal(x)
-            u_nn = self.u(x)
-            component_losses.update(
-                {"Controller MSE": ((u_nn - u_nominal) ** 2).sum(dim=-1).mean()}
-            )
+        # if self.opt_idx_dict[optimizer_idx] == "clbf":
+        #     component_losses.update(self.initial_V_loss(x))
+        #     if self.current_epoch > self.num_init_epochs:
+        #         component_losses.update(
+        #             self.boundary_loss(
+        #                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+        #             )
+        #         )
+        #         component_losses.update(
+        #             self.descent_loss(
+        #                 x, goal_mask, safe_mask, unsafe_mask, dist_to_goal
+        #             )
+        #         )
+        # else:
+        #     component_losses.update(
+        #         self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        #     )
+        component_losses.update(self.initial_V_loss(x))
+        component_losses.update(
+            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
+        component_losses.update(
+            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+        )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -925,9 +927,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Otherwise, switch between the controller and CLBF every few epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % 10 < 5:
+            if (epoch - self.num_init_epochs) % 40 < 20:
                 optimizer.step(closure=optimizer_closure)
 
         if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % 10 >= 5:
+            if (epoch - self.num_init_epochs) % 40 >= 20:
                 optimizer.step(closure=optimizer_closure)
