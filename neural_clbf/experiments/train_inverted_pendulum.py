@@ -89,8 +89,8 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=100,
-        trajectory_length=50,
-        fixed_samples=2000,
+        trajectory_length=500,
+        fixed_samples=20000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
@@ -120,7 +120,7 @@ def main(args):
         goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e5,
-        num_init_epochs=0,
+        num_init_epochs=1,
         epochs_per_episode=100,
     )
 
