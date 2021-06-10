@@ -670,8 +670,13 @@ class NeuralCLBFController(pl.LightningModule):
                     )
                 )
         else:
+            # component_losses.update(
+            #     self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            # )
+            u_nominal = self.dynamics_model.u_nominal(x)
+            u_nn = self.u(x)
             component_losses.update(
-                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+                {"Controller MSE": ((u_nn - u_nominal) ** 2).sum(dim=-1).mean()}
             )
 
         # Compute the overall loss by summing up the individual losses
