@@ -1,35 +1,59 @@
-"""Define a dynamical system for a 3D quadrotor"""
+"""Define a dynamical system for a neural lander"""
 from typing import Tuple, List, Optional
+import os
 
 import torch
+import torch.nn.functional as F
+import torch.nn as nn
 import numpy as np
 
 from .control_affine_system import ControlAffineSystem
 from .utils import grav, Scenario
 
 
-class Quad3D(ControlAffineSystem):
+class FaNetwork(nn.Module):
+    """Ground effect network"""
+
+    def __init__(self):
+        super(FaNetwork, self).__init__()
+        self.fc1 = nn.Linear(12, 25)
+        self.fc2 = nn.Linear(25, 30)
+        self.fc3 = nn.Linear(30, 15)
+        self.fc4 = nn.Linear(15, 3)
+
+    def forward(self, x):
+        if not x.is_cuda:
+            self.cpu()
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
+
+        return x
+
+
+def read_weight(filename):
+    model_weight = torch.load(filename, map_location=torch.device("cpu"))
+    model = FaNetwork().double()
+    model.load_state_dict(model_weight)
+    model = model.float()
+    # .cuda()
+    return model
+
+
+class NeuralLander(ControlAffineSystem):
     """
-    Represents a planar quadrotor.
-
-    The system has state
-
-        x = [px, py, pz, vx, vy, vz, phi, theta, psi]
-
-    representing the position, orientation, and velocities of the quadrotor, and it
-    has control inputs
-
-        u = [f, phi_dot, theta_dot, psi_dot]
-
-    The system is parameterized by
-        m: mass
-
-    NOTE: Z is defined as positive downwards
+    Represents a neural lander (a 3D quadrotor with learned ground effect).
     """
+
+    rho = 1.225
+    gravity = 9.81
+    drone_height = 0.09
+    mass = 1.47
 
     # Number of states and controls
-    N_DIMS = 9
-    N_CONTROLS = 4
+    N_DIMS = 6
+    N_CONTROLS = 3
 
     # State indices
     PX = 0
@@ -40,15 +64,10 @@ class Quad3D(ControlAffineSystem):
     VY = 4
     VZ = 5
 
-    PHI = 6
-    THETA = 7
-    PSI = 8
-
     # Control indices
-    F = 0
-    PHI_DOT = 1
-    THETA_DOT = 2
-    PSI_DOT = 3
+    AX = 0
+    AY = 1
+    AZ = 2
 
     def __init__(
         self,
@@ -61,7 +80,7 @@ class Quad3D(ControlAffineSystem):
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
-                            Requires keys ["m"]
+                            No required keys
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
         raises:
@@ -69,35 +88,34 @@ class Quad3D(ControlAffineSystem):
         """
         super().__init__(nominal_params, dt, controller_dt)
 
+        # Load the ground effect model
+        dir_name = os.path.dirname(os.path.abspath(__file__))
+        self.Fa_model = read_weight(dir_name + "/data/Fa_net_12_3_full_Lip16.pth")
+
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
 
         args:
             params: a dictionary giving the parameter values for the system.
-                    Requires keys ["m"]
+                    No required keys
         returns:
             True if parameters are valid, False otherwise
         """
         valid = True
-        # Make sure all needed parameters were provided
-        valid = valid and "m" in params
-
-        # Make sure all parameters are physically valid
-        valid = valid and params["m"] > 0
 
         return valid
 
     @property
     def n_dims(self) -> int:
-        return Quad3D.N_DIMS
+        return NeuralLander.N_DIMS
 
     @property
     def angle_dims(self) -> List[int]:
-        return [Quad3D.PHI, Quad3D.THETA, Quad3D.PSI]
+        return []
 
     @property
     def n_controls(self) -> int:
-        return Quad3D.N_CONTROLS
+        return NeuralLander.N_CONTROLS
 
     @property
     def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -107,15 +125,12 @@ class Quad3D(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[Quad3D.PX] = 4.0
-        upper_limit[Quad3D.PY] = 4.0
-        upper_limit[Quad3D.PZ] = 4.0
-        upper_limit[Quad3D.VX] = 8.0
-        upper_limit[Quad3D.VY] = 8.0
-        upper_limit[Quad3D.VZ] = 8.0
-        upper_limit[Quad3D.PHI] = np.pi / 2.0
-        upper_limit[Quad3D.THETA] = np.pi / 2.0
-        upper_limit[Quad3D.PSI] = np.pi / 2.0
+        upper_limit[NeuralLander.PX] = 5.0
+        upper_limit[NeuralLander.PY] = 5.0
+        upper_limit[NeuralLander.PZ] = 2.0
+        upper_limit[NeuralLander.VX] = 1.0
+        upper_limit[NeuralLander.VY] = 1.0
+        upper_limit[NeuralLander.VZ] = 1.0
 
         lower_limit = -1.0 * upper_limit
 
@@ -128,7 +143,7 @@ class Quad3D(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = torch.tensor([100, 50, 50, 50])
+        upper_limit = torch.tensor([50, 50, 50])
         lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
@@ -142,10 +157,10 @@ class Quad3D(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # We have a floor that we need to avoid and a radius we need to stay inside of
-        safe_z = 0.0
+        safe_z = -0.05
         safe_radius = 3
         safe_mask = torch.logical_and(
-            x[:, Quad3D.PZ] <= safe_z, x.norm(dim=-1) <= safe_radius
+            x[:, NeuralLander.PZ] >= safe_z, x.norm(dim=-1) <= safe_radius
         )
 
         return safe_mask
@@ -159,10 +174,10 @@ class Quad3D(ControlAffineSystem):
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
 
         # We have a floor that we need to avoid and a radius we need to stay inside of
-        unsafe_z = 0.3
+        unsafe_z = -0.2
         unsafe_radius = 3.5
         unsafe_mask = torch.logical_or(
-            x[:, Quad3D.PZ] >= unsafe_z, x.norm(dim=-1) >= unsafe_radius
+            x[:, NeuralLander.PZ] <= unsafe_z, x.norm(dim=-1) >= unsafe_radius
         )
 
         return unsafe_mask
@@ -200,6 +215,37 @@ class Quad3D(ControlAffineSystem):
 
         return goal_mask
 
+    def Fa_func(self, z, vx, vy, vz):
+        if next(self.Fa_model.parameters()).device != z.device:
+            self.Fa_model.to(z.device)
+
+        bs = z.shape[0]
+
+        # use prediction from NN as ground truth
+        state = torch.zeros([bs, 1, 12]).type_as(z)
+        state[:, 0, 0] = z + NeuralLander.drone_height
+        state[:, 0, 1] = vx  # velocity
+        state[:, 0, 2] = vy  # velocity
+        state[:, 0, 3] = vz  # velocity
+        state[:, 0, 7] = 1.0
+        state[:, 0, 8:12] = 6508.0 / 8000
+        state = state.float()
+
+        Fa = self.Fa_model(state).squeeze(1) * torch.tensor([30.0, 15.0, 10.0]).reshape(
+            1, 3
+        ).type_as(z)
+        return Fa.type(torch.FloatTensor)
+
+    # We need to manually compute the state-state-derivative transfer matrix, since
+    # we don't want to linearize the learned ground effect.
+    def compute_A_matrix(self, scenario: Optional[Scenario]) -> torch.Tensor:
+        """Compute the linearized continuous-time state-state derivative transfer matrix
+        about the goal point"""
+        A = np.zeros((self.n_dims, self.n_dims))
+        A[: NeuralLander.PZ + 1, NeuralLander.VX :] = np.eye(3)
+
+        return A
+
     def _f(self, x: torch.Tensor, params: Scenario):
         """
         Return the control-independent part of the control-affine dynamics.
@@ -217,14 +263,19 @@ class Quad3D(ControlAffineSystem):
         f = f.type_as(x)
 
         # Derivatives of positions are just velocities
-        f[:, Quad3D.PX] = x[:, Quad3D.VX]  # x
-        f[:, Quad3D.PY] = x[:, Quad3D.VY]  # y
-        f[:, Quad3D.PZ] = x[:, Quad3D.VZ]  # z
+        f[:, NeuralLander.PX] = x[:, NeuralLander.VX]  # x
+        f[:, NeuralLander.PY] = x[:, NeuralLander.VY]  # y
+        f[:, NeuralLander.PZ] = x[:, NeuralLander.VZ]  # z
 
         # Constant acceleration in z due to gravity
-        f[:, Quad3D.VZ] = grav
+        f[:, NeuralLander.VZ] = -grav
 
-        # Orientation velocities are directly actuated
+        # Add disturbance from ground effect
+        _, _, z, vx, vy, vz = [x[:, i] for i in range(self.n_dims)]
+        Fa = self.Fa_func(z, vx, vy, vz) / NeuralLander.mass
+        f[:, NeuralLander.VX] += Fa[:, 0]
+        f[:, NeuralLander.VY] += Fa[:, 1]
+        f[:, NeuralLander.VZ] += Fa[:, 2]
 
         return f
 
@@ -244,25 +295,13 @@ class Quad3D(ControlAffineSystem):
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
         g = g.type_as(x)
 
-        # Extract the needed parameters
-        m = params["m"]
-
-        # Derivatives of linear velocities depend on thrust f
-        s_theta = torch.sin(x[:, Quad3D.THETA])
-        c_theta = torch.cos(x[:, Quad3D.THETA])
-        s_phi = torch.sin(x[:, Quad3D.PHI])
-        c_phi = torch.cos(x[:, Quad3D.PHI])
-        g[:, Quad3D.VX, Quad3D.F] = -s_theta / m
-        g[:, Quad3D.VY, Quad3D.F] = c_theta * s_phi / m
-        g[:, Quad3D.VZ, Quad3D.F] = -c_theta * c_phi / m
-
-        # Derivatives of all orientations are control variables
-        g[:, Quad3D.PHI :, Quad3D.PHI_DOT :] = torch.eye(self.n_controls - 1)
+        # Linear accelerations are control variables
+        g[:, NeuralLander.VX :, :] = torch.eye(self.n_controls) / NeuralLander.mass
 
         return g
 
     @property
     def u_eq(self):
         u_eq = torch.zeros((1, self.n_controls))
-        u_eq[0, Quad3D.F] = self.nominal_params["m"] * grav
+        u_eq[0, NeuralLander.AZ] = NeuralLander.mass * grav
         return u_eq
