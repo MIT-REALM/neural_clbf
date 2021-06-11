@@ -262,6 +262,7 @@ class NeuralCLBFController(pl.LightningModule):
         # Reshape to use pytorch's bilinear function
         P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
         V_nominal = 0.5 * F.bilinear(x, x, P).squeeze()
+        P = P.reshape(self.dynamics_model.n_dims, self.dynamics_model.n_dims)
         JV_nominal = F.linear(x, P)
         JV_nominal = JV_nominal.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
 
