@@ -75,6 +75,18 @@ class ControlAffineSystem(ABC):
         if use_linearized_controller:
             self.compute_linearized_controller(scenarios)
 
+    def compute_A_matrix(self, scenario: Optional[Scenario]) -> torch.Tensor:
+        """Compute the linearized continuous-time state-state derivative transfer matrix
+        about the goal point"""
+        # Linearize the system about the x = 0, u = 0
+        x0 = self.goal_point
+        u0 = self.u_eq
+        dynamics = lambda x: self.closed_loop_dynamics(x, u0, scenario).squeeze()
+        A = jacobian(dynamics, x0).squeeze().cpu().numpy()
+        A = np.reshape(A, (self.n_dims, self.n_dims))
+
+        return A
+
     def compute_linearized_controller(self, scenarios: Optional[ScenarioList] = None):
         """
         Computes the linearized controller K and lyapunov matrix P.
@@ -88,12 +100,7 @@ class ControlAffineSystem(ABC):
         # For each scenario, get the LQR gain and closed-loop linearization
         for s in scenarios:
             # Compute the LQR gain matrix for the nominal parameters
-            # Linearize the system about the x = 0, u = 0
-            x0 = self.goal_point
-            u0 = self.u_eq
-            dynamics = lambda x: self.closed_loop_dynamics(x, u0, s).squeeze()
-            Act = jacobian(dynamics, x0).squeeze().cpu().numpy()
-            Act = np.reshape(Act, (self.n_dims, self.n_dims))
+            Act = self.compute_A_matrix(s)
             A = np.eye(self.n_dims) + self.controller_dt * Act
 
             Bct = self._g(self.goal_point, s).squeeze().cpu().numpy()
