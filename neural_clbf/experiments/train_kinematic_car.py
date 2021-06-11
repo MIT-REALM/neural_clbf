@@ -87,11 +87,11 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=100,
         trajectory_length=500,
-        fixed_samples=10000,
+        fixed_samples=20000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
 
     # Define the scenarios
@@ -121,13 +121,13 @@ def main(args):
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=64,
-        clbf_lambda=0.1,
+        clbf_lambda=1.0,
         safety_level=1.0,
         goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
         penalty_scheduling_rate=0,
-        num_init_epochs=15,
+        num_init_epochs=5,
         epochs_per_episode=100,
     )
 
