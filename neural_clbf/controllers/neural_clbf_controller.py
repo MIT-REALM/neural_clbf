@@ -617,7 +617,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         return loss
 
-    def initial_V_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
+    def initial_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
         """
         Compute the loss during the initialization epochs, which trains the net to
         match the local linear lyapunov function
@@ -643,9 +643,11 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_mse_loss = decrease_factor * clbf_mse_loss.mean()
         loss.append(("CLBF MSE", clbf_mse_loss))
 
-        #   2.) Ensure that V >= 0.1 * nominal solution
-        clbf_lower_bound_loss = 10 * F.relu(0.1 * V_nominal - V).mean()
-        loss.append(("CLBF Bound", clbf_lower_bound_loss))
+        #   2.) Provide a very small training signal for the controller
+        u_nn = self.u(x)
+        u_nominal = self.dynamics_model.u_nominal(x)
+        u_mse_loss = ((u_nn - u_nominal) ** 2).sum(dim=-1)
+        u_mse_loss = 1e-3 * decrease_factor * u_mse_loss.mean()
 
         return loss
 
@@ -657,7 +659,7 @@ class NeuralCLBFController(pl.LightningModule):
         # Compute the losses
         component_losses = {}
         # if self.opt_idx_dict[optimizer_idx] == "clbf":
-        #     component_losses.update(self.initial_V_loss(x))
+        #     component_losses.update(self.initial_loss(x))
         #     if self.current_epoch > self.num_init_epochs:
         #         component_losses.update(
         #             self.boundary_loss(
@@ -673,7 +675,7 @@ class NeuralCLBFController(pl.LightningModule):
         #     component_losses.update(
         #         self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
         #     )
-        component_losses.update(self.initial_V_loss(x))
+        component_losses.update(self.initial_loss(x))
         component_losses.update(
             self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
         )
