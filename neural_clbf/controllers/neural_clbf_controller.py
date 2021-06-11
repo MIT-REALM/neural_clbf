@@ -41,6 +41,7 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
+        optimizer_alternate_epochs: int = 20,
         epochs_per_episode: int = 5,
         penalty_scheduling_rate: float = 0.0,
         num_init_epochs: int = 5,
@@ -65,6 +66,7 @@ class NeuralCLBFController(pl.LightningModule):
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
+            optimizer_alternate_epochs: how frequently to switch between optimizers
             epochs_per_episode: the number of epochs to include in each episode
             penalty_scheduling_rate: the rate at which to ramp the rollout relaxation
                                      penalty up to clbf_relaxation_penalty. Set to 0 to
@@ -101,6 +103,7 @@ class NeuralCLBFController(pl.LightningModule):
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
         self.controller_period = controller_period
         self.primal_learning_rate = primal_learning_rate
+        self.optimizer_alternate_epochs = optimizer_alternate_epochs
         self.epochs_per_episode = epochs_per_episode
         self.penalty_scheduling_rate = penalty_scheduling_rate
         self.num_init_epochs = num_init_epochs
@@ -929,10 +932,11 @@ class NeuralCLBFController(pl.LightningModule):
             return
 
         # Otherwise, switch between the controller and CLBF every few epochs
+        switch_every = self.optimizer_alternate_epochs
         if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % 40 < 20:
+            if (epoch - self.num_init_epochs) % 2 * switch_every < switch_every:
                 optimizer.step(closure=optimizer_closure)
 
         if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % 40 >= 20:
+            if (epoch - self.num_init_epochs) % 2 * switch_every >= switch_every:
                 optimizer.step(closure=optimizer_closure)

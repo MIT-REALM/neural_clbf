@@ -128,7 +128,8 @@ def main(args):
         clbf_relaxation_penalty=1e2,
         penalty_scheduling_rate=0,
         num_init_epochs=10,
-        epochs_per_episode=100,
+        optimizer_alternate_epochs=50,
+        epochs_per_episode=200,
     )
 
     # Initialize the logger and trainer
