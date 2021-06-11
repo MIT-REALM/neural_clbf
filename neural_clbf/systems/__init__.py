@@ -1,5 +1,6 @@
 from .control_affine_system import ControlAffineSystem
 from .quad2d import Quad2D
+from .quad3d import Quad3D
 from .inverted_pendulum import InvertedPendulum
 from .kinematic_single_track_car import KSCar
 from .single_track_car import STCar
@@ -9,6 +10,7 @@ __all__ = [
     "ControlAffineSystem",
     "InvertedPendulum",
     "Quad2D",
+    "Quad3D",
     "F16",
     "KSCar",
     "STCar",
