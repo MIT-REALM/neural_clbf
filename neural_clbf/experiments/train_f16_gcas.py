@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
-from neural_clbf.controllers import NeuralSIDCLBFController
+from neural_clbf.controllers import NeuralCLBFController
 from neural_clbf.experiments.common.episodic_datamodule import (
     EpisodicDataModule,
 )
@@ -137,7 +137,7 @@ def main(args):
     ]
 
     # Initialize the controller
-    clbf_controller = NeuralSIDCLBFController(
+    clbf_controller = NeuralCLBFController(
         dynamics_model,
         scenarios,
         data_module,
