@@ -445,7 +445,7 @@ class NeuralCLBFController(pl.LightningModule):
                 # that something has gone wrong
                 if allow_relaxation:
                     for i in range(n_scenarios):
-                        r_result[batch_idx, i] = torch.tensor(float('nan'))
+                        r_result[batch_idx, i] = torch.tensor(float("nan"))
                 continue
 
             # Extract the results
