@@ -256,33 +256,18 @@ class NeuralCLBFController(pl.LightningModule):
         JV = torch.bmm(V.unsqueeze(1), JV)
         V = 0.5 * (V * V).sum(dim=1) - self.goal_level
 
-        # Add this as a correction to the nominal V
-        # Get the nominal Lyapunov function
-        P = self.dynamics_model.P.type_as(x)
-        # Reshape to use pytorch's bilinear function
-        P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        V_nominal = 0.5 * F.bilinear(x, x, P).squeeze()
-        P = P.reshape(self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        JV_nominal = F.linear(x, P)
-        JV_nominal = JV_nominal.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
-
-        V = V + V_nominal
-        JV = JV + JV_nominal
-
-        # # Lol JK use lqr V
+        # # Add this as a correction to the nominal V
         # # Get the nominal Lyapunov function
         # P = self.dynamics_model.P.type_as(x)
         # # Reshape to use pytorch's bilinear function
         # P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        # V = 0.5 * F.bilinear(x, x, P)
+        # V_nominal = 0.5 * F.bilinear(x, x, P).squeeze()
         # P = P.reshape(self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        # JV = F.linear(x, P)
-        # JV = JV.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
+        # JV_nominal = F.linear(x, P)
+        # JV_nominal = JV_nominal.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
 
-        # # Make a gradient
-        # x = self.normalize_with_angles(x)
-        # V_net = self.V_nn(x)
-        # V += 0.0000001 * (V_net * V_net).sum(dim=1).unsqueeze(-1) - self.goal_level
+        # V = V + V_nominal
+        # JV = JV + JV_nominal
 
         return V, JV
 
@@ -578,6 +563,8 @@ class NeuralCLBFController(pl.LightningModule):
 
         # First figure out where this condition needs to hold
         condition_active = V < self.safe_level
+        _, qp_relaxation, _ = self.solve_CLBF_QP(x)
+        relaxation_scaling = F.relu(qp_relaxation - 0.001)
 
         # Now compute the decrease in that region, using the proof controller
         clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
@@ -597,6 +584,7 @@ class NeuralCLBFController(pl.LightningModule):
             )
             Vdot = Vdot.reshape(V.shape)
             violation = F.relu(eps + Vdot + self.clbf_lambda * V)
+            violation *= relaxation_scaling
             violation = violation[condition_active]
             clbf_descent_term_lin += violation.mean()
             clbf_descent_acc_lin += (violation <= eps).sum() / (
@@ -621,6 +609,7 @@ class NeuralCLBFController(pl.LightningModule):
             violation = F.relu(
                 eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
             )
+            violation *= relaxation_scaling
             violation = violation[condition_active]
 
             clbf_descent_term_sim += violation.mean()
