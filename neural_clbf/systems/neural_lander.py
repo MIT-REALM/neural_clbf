@@ -238,7 +238,7 @@ class NeuralLander(ControlAffineSystem):
 
     # We need to manually compute the state-state-derivative transfer matrix, since
     # we don't want to linearize the learned ground effect.
-    def compute_A_matrix(self, scenario: Optional[Scenario]) -> torch.Tensor:
+    def compute_A_matrix(self, scenario: Optional[Scenario]) -> np.ndarray:
         """Compute the linearized continuous-time state-state derivative transfer matrix
         about the goal point"""
         A = np.zeros((self.n_dims, self.n_dims))

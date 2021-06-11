@@ -75,7 +75,7 @@ class ControlAffineSystem(ABC):
         if use_linearized_controller:
             self.compute_linearized_controller(scenarios)
 
-    def compute_A_matrix(self, scenario: Optional[Scenario]) -> torch.Tensor:
+    def compute_A_matrix(self, scenario: Optional[Scenario]) -> np.ndarray:
         """Compute the linearized continuous-time state-state derivative transfer matrix
         about the goal point"""
         # Linearize the system about the x = 0, u = 0
