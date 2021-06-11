@@ -53,7 +53,7 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-1.0, 1.0), (-1.0, 1.0)],
+        domain=[(-2.0, 2.0), (-2.0, 2.0)],
         n_grid=50,
         x_axis_index=KSCar.SXE,
         y_axis_index=KSCar.SYE,
@@ -85,13 +85,13 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
+        trajectories_per_episode=1000,
         trajectory_length=500,
-        fixed_samples=20000,
+        fixed_samples=200000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
+        quotas={"safe": 0.4, "unsafe": 0.2, "goal": 0.2},
     )
 
     # Define the scenarios
@@ -125,9 +125,9 @@ def main(args):
         safety_level=1.0,
         goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e1,
+        clbf_relaxation_penalty=1e2,
         penalty_scheduling_rate=0,
-        num_init_epochs=5,
+        num_init_epochs=10,
         epochs_per_episode=100,
     )
 
