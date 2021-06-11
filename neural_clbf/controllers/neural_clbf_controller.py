@@ -220,13 +220,13 @@ class NeuralCLBFController(pl.LightningModule):
             JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
         # Apply the offset and range to normalize about zero
-        x = self.normalize_with_angles(x)
+        x_norm = self.normalize_with_angles(x)
 
         # Compute the CLBF layer-by-layer, computing the Jacobian alongside
 
         # We need to initialize the Jacobian to reflect the normalization that's already
         # been done to x
-        bs = x.shape[0]
+        bs = x_norm.shape[0]
         JV = torch.zeros(
             (bs, self.n_dims_extended, self.dynamics_model.n_dims)
         ).type_as(x)
@@ -237,11 +237,11 @@ class NeuralCLBFController(pl.LightningModule):
         # And adjust the Jacobian for the angle dimensions
         for offset, sin_idx in enumerate(self.dynamics_model.angle_dims):
             cos_idx = self.dynamics_model.n_dims + offset
-            JV[:, sin_idx, sin_idx] = x[:, cos_idx]
-            JV[:, cos_idx, sin_idx] = -x[:, sin_idx]
+            JV[:, sin_idx, sin_idx] = x_norm[:, cos_idx]
+            JV[:, cos_idx, sin_idx] = -x_norm[:, sin_idx]
 
         # Now step through each layer in V
-        V = x
+        V = x_norm
         for layer in self.V_nn:
             V = layer(V)
 
