@@ -256,6 +256,18 @@ class NeuralCLBFController(pl.LightningModule):
         JV = torch.bmm(V.unsqueeze(1), JV)
         V = 0.5 * (V * V).sum(dim=1) - self.goal_level
 
+        # Add this as a correction to the nominal V
+        # Get the nominal Lyapunov function
+        P = self.dynamics_model.P.type_as(x)
+        # Reshape to use pytorch's bilinear function
+        P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+        V_nominal = 0.5 * F.bilinear(x, x, P).squeeze()
+        JV_nominal = F.linear(x, P)
+        JV_nominal = JV_nominal.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
+
+        V = V + V_nominal
+        JV = JV + JV_nominal
+
         # # Lol JK use lqr V
         # # Get the nominal Lyapunov function
         # P = self.dynamics_model.P.type_as(x)
