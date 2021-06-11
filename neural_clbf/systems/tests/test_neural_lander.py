@@ -1,5 +1,4 @@
 """Test the 2D quadrotor dynamics"""
-import pytest
 import torch
 
 from neural_clbf.systems import NeuralLander
