@@ -127,7 +127,7 @@ def main(args):
         controller_period=controller_period,
         clbf_relaxation_penalty=1e2,
         penalty_scheduling_rate=0,
-        num_init_epochs=21,
+        num_init_epochs=0,
         optimizer_alternate_epochs=50,
         epochs_per_episode=200,
     )
