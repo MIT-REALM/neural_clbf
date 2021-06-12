@@ -574,14 +574,12 @@ class NeuralCLBFController(pl.LightningModule):
         # (Lie derivatives are computed using a linear fit of the dynamics)
         # TODO @dawsonc do we need dynamics learning here?
         Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u(x)
         eps = 0.0
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1),
-                u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
+                u_qp.reshape(-1, self.dynamics_model.n_controls, 1),
             )
             Vdot = Vdot.reshape(V.shape)
             violation = F.relu(eps + Vdot + self.clbf_lambda * V)
@@ -604,7 +602,7 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u_qp, params=s)
             x_next = x + self.dynamics_model.dt * xdot
             V_next = self.V(x_next)
             violation = F.relu(
@@ -622,6 +620,7 @@ class NeuralCLBFController(pl.LightningModule):
             loss.append(("CLBF descent accuracy (simulated)", clbf_descent_acc_sim))
 
         # While we're at it, we might as well train the nn to imitate the QP solution
+        u_nn = self.u(x)
         u_mse_loss = ((u_nn - u_qp) ** 2).sum(dim=-1)
         u_mse_loss = u_mse_loss.mean()
         loss.append(("U/QP MSE", u_mse_loss))

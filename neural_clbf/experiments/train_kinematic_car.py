@@ -126,6 +126,7 @@ def main(args):
         goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e2,
+        primal_learning_rate=1e-4,
         penalty_scheduling_rate=0,
         num_init_epochs=21,
         optimizer_alternate_epochs=50,
