@@ -296,9 +296,9 @@ class NeuralCLBFController(pl.LightningModule):
 
         u_scaled = u * u_semi_range + u_center
 
-        # For now, set u to u_nominal to test V learning
-        # TODO @dawsonc, not permanent
-        u_scaled = self.dynamics_model.u_nominal(x) + 0.00001 * u_scaled
+        # # For now, set u to u_nominal to test V learning
+        # # TODO @dawsonc, not permanent
+        # u_scaled = self.dynamics_model.u_nominal(x) + 0.00001 * u_scaled
 
         return u_scaled
 
@@ -920,31 +920,31 @@ class NeuralCLBFController(pl.LightningModule):
 
         return [clbf_opt, u_opt]
 
-    def optimizer_zero_grad(self, current_epoch, batch_idx, optimizer, opt_idx):
-        optimizer.zero_grad()
+    # def optimizer_zero_grad(self, current_epoch, batch_idx, optimizer, opt_idx):
+    #     optimizer.zero_grad()
 
-    def optimizer_step(
-        self,
-        epoch,
-        batch_idx,
-        optimizer,
-        optimizer_idx,
-        optimizer_closure,
-        on_tpu=False,
-        using_native_amp=False,
-        using_lbfgs=False,
-    ):
-        # During initialization epochs, step both
-        if epoch <= self.num_init_epochs:
-            optimizer.step(closure=optimizer_closure)
-            return
+    # def optimizer_step(
+    #     self,
+    #     epoch,
+    #     batch_idx,
+    #     optimizer,
+    #     optimizer_idx,
+    #     optimizer_closure,
+    #     on_tpu=False,
+    #     using_native_amp=False,
+    #     using_lbfgs=False,
+    # ):
+    #     # During initialization epochs, step both
+    #     if epoch <= self.num_init_epochs:
+    #         optimizer.step(closure=optimizer_closure)
+    #         return
 
-        # Otherwise, switch between the controller and CLBF every few epochs
-        switch_every = self.optimizer_alternate_epochs
-        if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % (2 * switch_every) < switch_every:
-                optimizer.step(closure=optimizer_closure)
+    #     # Otherwise, switch between the controller and CLBF every few epochs
+    #     switch_every = self.optimizer_alternate_epochs
+    #     if self.opt_idx_dict[optimizer_idx] == "clbf":
+    #         if (epoch - self.num_init_epochs) % (2 * switch_every) < switch_every:
+    #             optimizer.step(closure=optimizer_closure)
 
-        if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % (2 * switch_every) >= switch_every:
-                optimizer.step(closure=optimizer_closure)
+    #     if self.opt_idx_dict[optimizer_idx] == "controller":
+    #         if (epoch - self.num_init_epochs) % (2 * switch_every) >= switch_every:
+    #             optimizer.step(closure=optimizer_closure)
