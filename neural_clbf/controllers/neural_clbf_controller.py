@@ -563,7 +563,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         # First figure out where this condition needs to hold
         condition_active = V < self.safe_level
-        _, qp_relaxation, _ = self.solve_CLBF_QP(x)
+        u_qp, qp_relaxation, _ = self.solve_CLBF_QP(x)
         qp_relaxation, _ = torch.max(qp_relaxation, dim=-1)
         relaxation_scaling = F.relu(qp_relaxation - 0.001)
 
@@ -621,6 +621,11 @@ class NeuralCLBFController(pl.LightningModule):
         if accuracy:
             loss.append(("CLBF descent accuracy (simulated)", clbf_descent_acc_sim))
 
+        # While we're at it, we might as well train the nn to imitate the QP solution
+        u_mse_loss = ((u_nn - u_qp) ** 2).sum(dim=-1)
+        u_mse_loss = u_mse_loss.mean()
+        loss.append(("U/QP MSE", u_mse_loss))
+
         return loss
 
     def initial_loss(self, x: torch.Tensor) -> List[Tuple[str, torch.Tensor]]:
@@ -654,7 +659,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nominal = self.dynamics_model.u_nominal(x)
         u_mse_loss = ((u_nn - u_nominal) ** 2).sum(dim=-1)
         u_mse_loss = 1e-3 * decrease_factor * u_mse_loss.mean()
-        loss.append(("U MSE", u_mse_loss))
+        loss.append(("U/NOM MSE", u_mse_loss))
 
         return loss
 
