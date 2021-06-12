@@ -657,7 +657,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn = self.u(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         u_mse_loss = ((u_nn - u_nominal) ** 2).sum(dim=-1)
-        u_mse_loss = 1e-3 * decrease_factor * u_mse_loss.mean()
+        u_mse_loss = 1e-6 * decrease_factor * u_mse_loss.mean()
         loss.append(("U/NOM MSE", u_mse_loss))
 
         return loss
