@@ -563,7 +563,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         # First figure out where this condition needs to hold
         condition_active = V < self.safe_level
-        u_qp, qp_relaxation, _ = self.solve_CLBF_QP(x)
+        _, qp_relaxation, _ = self.solve_CLBF_QP(x)
         qp_relaxation, _ = torch.max(qp_relaxation, dim=-1)
         relaxation_scaling = F.relu(qp_relaxation - 0.001)
 
@@ -574,12 +574,14 @@ class NeuralCLBFController(pl.LightningModule):
         # (Lie derivatives are computed using a linear fit of the dynamics)
         # TODO @dawsonc do we need dynamics learning here?
         Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # Get the control and reshape it to bs x n_controls x 1
+        u_nn = self.u(x)
         eps = 0.0
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1),
-                u_qp.reshape(-1, self.dynamics_model.n_controls, 1),
+                u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
             )
             Vdot = Vdot.reshape(V.shape)
             violation = F.relu(eps + Vdot + self.clbf_lambda * V)
@@ -602,7 +604,7 @@ class NeuralCLBFController(pl.LightningModule):
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_qp, params=s)
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
             x_next = x + self.dynamics_model.dt * xdot
             V_next = self.V(x_next)
             violation = F.relu(
@@ -618,12 +620,6 @@ class NeuralCLBFController(pl.LightningModule):
         loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
         if accuracy:
             loss.append(("CLBF descent accuracy (simulated)", clbf_descent_acc_sim))
-
-        # While we're at it, we might as well train the nn to imitate the QP solution
-        u_nn = self.u(x)
-        u_mse_loss = ((u_nn - u_qp) ** 2).sum(dim=-1)
-        u_mse_loss = u_mse_loss.mean()
-        loss.append(("U/QP MSE", u_mse_loss))
 
         return loss
 
@@ -657,7 +653,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn = self.u(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         u_mse_loss = ((u_nn - u_nominal) ** 2).sum(dim=-1)
-        u_mse_loss = 1e-6 * decrease_factor * u_mse_loss.mean()
+        u_mse_loss = 1e-3 * decrease_factor * u_mse_loss.mean()
         loss.append(("U/NOM MSE", u_mse_loss))
 
         return loss
@@ -919,31 +915,31 @@ class NeuralCLBFController(pl.LightningModule):
 
         return [clbf_opt, u_opt]
 
-    # def optimizer_zero_grad(self, current_epoch, batch_idx, optimizer, opt_idx):
-    #     optimizer.zero_grad()
+    def optimizer_zero_grad(self, current_epoch, batch_idx, optimizer, opt_idx):
+        optimizer.zero_grad()
 
-    # def optimizer_step(
-    #     self,
-    #     epoch,
-    #     batch_idx,
-    #     optimizer,
-    #     optimizer_idx,
-    #     optimizer_closure,
-    #     on_tpu=False,
-    #     using_native_amp=False,
-    #     using_lbfgs=False,
-    # ):
-    #     # During initialization epochs, step both
-    #     if epoch <= self.num_init_epochs:
-    #         optimizer.step(closure=optimizer_closure)
-    #         return
+    def optimizer_step(
+        self,
+        epoch,
+        batch_idx,
+        optimizer,
+        optimizer_idx,
+        optimizer_closure,
+        on_tpu=False,
+        using_native_amp=False,
+        using_lbfgs=False,
+    ):
+        # During initialization epochs, step both
+        if epoch <= self.num_init_epochs:
+            optimizer.step(closure=optimizer_closure)
+            return
 
-    #     # Otherwise, switch between the controller and CLBF every few epochs
-    #     switch_every = self.optimizer_alternate_epochs
-    #     if self.opt_idx_dict[optimizer_idx] == "clbf":
-    #         if (epoch - self.num_init_epochs) % (2 * switch_every) < switch_every:
-    #             optimizer.step(closure=optimizer_closure)
+        # Otherwise, switch between the controller and CLBF every few epochs
+        switch_every = self.optimizer_alternate_epochs
+        if self.opt_idx_dict[optimizer_idx] == "clbf":
+            if (epoch - self.num_init_epochs) % (2 * switch_every) < switch_every:
+                optimizer.step(closure=optimizer_closure)
 
-    #     if self.opt_idx_dict[optimizer_idx] == "controller":
-    #         if (epoch - self.num_init_epochs) % (2 * switch_every) >= switch_every:
-    #             optimizer.step(closure=optimizer_closure)
+        if self.opt_idx_dict[optimizer_idx] == "controller":
+            if (epoch - self.num_init_epochs) % (2 * switch_every) >= switch_every:
+                optimizer.step(closure=optimizer_closure)
