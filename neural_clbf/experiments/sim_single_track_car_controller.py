@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/stcar/774ba0b.ckpt"
+    checkpoint_file = "saved_models/stcar/f6473d0_v0.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -76,12 +76,17 @@ def doMain():
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=64,
-        clbf_lambda=0.1,
+        clbf_lambda=1.0,
+        safety_level=1.0,
+        goal_level=0.00,
         controller_period=controller_period,
-        lookahead=controller_period,
-        clbf_relaxation_penalty=1e1,
-        num_controller_init_epochs=5,
-        epochs_per_episode=10,
+        clbf_relaxation_penalty=1e8,
+        primal_learning_rate=1e-3,
+        penalty_scheduling_rate=0,
+        num_init_epochs=11,
+        optimizer_alternate_epochs=1,
+        epochs_per_episode=200,
+        use_nominal_in_qp=False,
     )
 
     single_rollout_s_path(clbf_controller)
