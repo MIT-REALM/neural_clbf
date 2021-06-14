@@ -8,7 +8,7 @@ pandas
 mypy
 pytest
 flake8
-black
+brunette
 
 # Learning libraries
 # pytorch >= 1.8.0
