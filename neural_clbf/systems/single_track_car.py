@@ -139,13 +139,13 @@ class STCar(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = torch.tensor(
+        upper_limit = 10 * torch.tensor(
             [
                 5.0,  # self.car_params.steering.v_max,
                 self.car_params.longitudinal.a_max,
             ]
         )
-        lower_limit = torch.tensor(
+        lower_limit = 10 * torch.tensor(
             [
                 -5.0,  # self.car_params.steering.v_min,
                 -self.car_params.longitudinal.a_max,
