@@ -87,18 +87,18 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=10,
-        trajectory_length=1000,
+        trajectories_per_episode=100,
+        trajectory_length=250,
         fixed_samples=10000,
-        max_points=5000000,
+        max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
+        quotas={"safe": 0.4, "unsafe": 0.2, "goal": 0.2},
     )
 
     # Define the scenarios
     scenarios = []
-    omega_ref_vals = [-0.5, 0.5]
+    omega_ref_vals = [-1.5, 1.5]
     # omega_ref_vals = [0.0]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
@@ -124,21 +124,17 @@ def main(args):
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=64,
-        clbf_lambda=0.1,
-        safety_level=0.1,
+        clbf_lambda=1.0,
+        safety_level=1.0,
         goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e1,
+        clbf_relaxation_penalty=1e2,
+        primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
-        num_init_epochs=50,
-        epochs_per_episode=100,
+        num_init_epochs=11,
+        optimizer_alternate_epochs=1,
+        epochs_per_episode=200,
     )
-    # Add the DataModule hooks
-    clbf_controller.prepare_data = data_module.prepare_data
-    clbf_controller.setup = data_module.setup
-    clbf_controller.train_dataloader = data_module.train_dataloader
-    clbf_controller.val_dataloader = data_module.val_dataloader
-    clbf_controller.test_dataloader = data_module.test_dataloader
 
     # Initialize the logger and trainer
     current_git_hash = (
