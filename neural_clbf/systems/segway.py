@@ -66,7 +66,7 @@ class Segway(ControlAffineSystem):
 
         args:
             params: a dictionary giving the parameter values for the system.
-                    Requires keys ["m", "L", "b"]
+                    Requires keys ["m"]
         returns:
             True if parameters are valid, False otherwise
         """
@@ -122,7 +122,7 @@ class Segway(ControlAffineSystem):
 
     @property
     def goal_point(self):
-        return torch.tensor([2.0, 0, 0, 0])
+        return torch.tensor([[2.0, 0, 0, 0]])
 
     def safe_mask(self, x):
         """Return the mask of x indicating safe regions for the obstacle task
