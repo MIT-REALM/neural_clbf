@@ -1,12 +1,10 @@
 from argparse import ArgumentParser
-from copy import copy
-import subprocess
 
-import numpy as np
 import torch
 import torch.multiprocessing
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
+import numpy as np
 
 from neural_clbf.controllers import NeuralCLBFController
 from neural_clbf.experiments.common.episodic_datamodule import (
@@ -16,21 +14,22 @@ from neural_clbf.experiments.common.plotting import (
     plot_CLBF,
     rollout_CLBF,
 )
-from neural_clbf.experiments.sim_kinematic_car_controller import (
-    single_rollout_s_path,
-)
-from neural_clbf.systems import KSCar
+from neural_clbf.systems import InvertedPendulum
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
+batch_size = 64
+controller_period = 0.01
+
 start_x = torch.tensor(
     [
-        [0.0, 0.0, 0.0, 0.0, -np.pi / 6, 0.0, 0.0],
-        # [0.0, 0.0, 0.0, 0.0, np.pi / 6, 0.0, 0.0],
+        [0.5, 0.5],
+        # [-0.2, 1.0],
+        # [0.2, -1.0],
+        # [-0.2, -1.0],
     ]
 )
-controller_period = 0.01
 simulation_dt = 0.001
 
 
@@ -38,12 +37,13 @@ def rollout_plotting_cb(clbf_net):
     return rollout_CLBF(
         clbf_net,
         start_x=start_x,
-        plot_x_indices=[KSCar.SXE, KSCar.SYE],
-        plot_x_labels=["$x - x_{ref}$", "$y - y_{ref}$"],
-        plot_u_indices=[KSCar.VDELTA, KSCar.ALONG],
-        plot_u_labels=["$v_\\delta$", "$a_{long}$"],
+        # plot_x_indices=[InvertedPendulum.THETA, InvertedPendulum.THETA_DOT],
+        plot_x_indices=[InvertedPendulum.THETA],
+        plot_x_labels=["$\\theta$"],
+        plot_u_indices=[InvertedPendulum.U],
+        plot_u_labels=["$u$"],
         t_sim=6.0,
-        n_sims_per_start=1,
+        n_sims_per_start=5,
         controller_period=controller_period,
         goal_check_fn=clbf_net.dynamics_model.goal_mask,
         out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
@@ -53,62 +53,56 @@ def rollout_plotting_cb(clbf_net):
 def clbf_plotting_cb(clbf_net):
     return plot_CLBF(
         clbf_net,
-        domain=[(-2.0, 2.0), (-2.0, 2.0)],
+        domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
         n_grid=50,
-        x_axis_index=KSCar.SXE,
-        y_axis_index=KSCar.SYE,
-        x_axis_label="$x - x_{ref}$",
-        y_axis_label="$y - y_{ref}$",
+        x_axis_index=InvertedPendulum.THETA,
+        y_axis_index=InvertedPendulum.THETA_DOT,
+        x_axis_label="$\\theta$",
+        y_axis_label="$\\dot{\\theta}$",
     )
 
 
 def main(args):
+    # Define the scenarios
+    nominal_params = {"m": 1.0, "L": 1.0, "b": 0.01}
+    scenarios = [
+        nominal_params,
+        {"m": 1.25, "L": 1.0, "b": 0.01},
+        {"m": 1.0, "L": 1.25, "b": 0.01},
+        {"m": 1.25, "L": 1.25, "b": 0.01},
+    ]
+
     # Define the dynamics model
-    nominal_params = {
-        "psi_ref": 1.0,
-        "v_ref": 10.0,
-        "a_ref": 0.0,
-        "omega_ref": 0.0,
-    }
-    dynamics_model = KSCar(
-        nominal_params, dt=simulation_dt, controller_dt=controller_period
+    dynamics_model = InvertedPendulum(
+        nominal_params,
+        dt=simulation_dt,
+        controller_dt=controller_period,
+        scenarios=scenarios,
     )
 
     # Initialize the DataModule
     initial_conditions = [
-        (-0.1, 0.1),  # sxe
-        (-0.1, 0.1),  # sye
-        (-0.1, 0.1),  # delta
-        (-0.1, 0.1),  # ve
-        (-0.1, 0.1),  # psi_e
+        (-np.pi / 2, np.pi / 2),  # theta
+        (-1.0, 1.0),  # theta_dot
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=100,
-        trajectory_length=250,
-        fixed_samples=10000,
+        trajectory_length=500,
+        fixed_samples=20000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.4, "unsafe": 0.2, "goal": 0.2},
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
-
-    # Define the scenarios
-    scenarios = []
-    omega_ref_vals = [-1.5, 1.5]
-    for omega_ref in omega_ref_vals:
-        s = copy(nominal_params)
-        s["omega_ref"] = omega_ref
-
-        scenarios.append(s)
 
     # Define the plotting callbacks
     plotting_callbacks = [
         # This plotting function plots V and dV/dt violation on a grid
         clbf_plotting_cb,
-        # Plot some rollouts
-        single_rollout_s_path,
+        # This plotting function simulates rollouts of the controller
+        rollout_plotting_cb,
     ]
 
     # Initialize the controller
@@ -123,29 +117,19 @@ def main(args):
         u_nn_hidden_size=64,
         clbf_lambda=1.0,
         safety_level=1.0,
-        goal_level=0.00,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e2,
-        primal_learning_rate=1e-3,
-        penalty_scheduling_rate=0,
-        num_init_epochs=11,
-        optimizer_alternate_epochs=1,
-        epochs_per_episode=200,
+        clbf_relaxation_penalty=1e5,
+        num_init_epochs=5,
+        epochs_per_episode=100,
     )
 
     # Initialize the logger and trainer
-    current_git_hash = (
-        subprocess.check_output(["git", "rev-parse", "--short", "HEAD"])
-        .decode("ascii")
-        .strip()
-    )
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/kscar/", name=f"commit_{current_git_hash}"
+        "logs/inverted_pendulum",
+        name="full_test",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args,
-        logger=tb_logger,
-        reload_dataloaders_every_epoch=True,
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True
     )
 
     # Train
