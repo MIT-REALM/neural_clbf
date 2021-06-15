@@ -14,7 +14,7 @@ from neural_clbf.systems import STCar
 
 if __name__ == "__main__":
     # Import the plotting callbacks, which seem to be needed to load from the checkpoint
-    from neural_clbf.experiments.training.train_kinematic_car import (  # noqa
+    from neural_clbf.experiments.train_single_track_car import (  # noqa
         rollout_plotting_cb,  # noqa
         clbf_plotting_cb,  # noqa
     )

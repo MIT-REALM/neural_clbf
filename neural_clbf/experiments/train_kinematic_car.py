@@ -16,7 +16,7 @@ from neural_clbf.experiments.common.plotting import (
     plot_CLBF,
     rollout_CLBF,
 )
-from neural_clbf.experiments.simulation.sim_kinematic_car_controller import (
+from neural_clbf.experiments.sim_kinematic_car_controller import (
     single_rollout_s_path,
 )
 from neural_clbf.systems import KSCar

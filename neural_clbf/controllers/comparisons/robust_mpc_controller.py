@@ -6,7 +6,13 @@ import matlab  # type: ignore
 import matlab.engine  # type: ignore
 
 from neural_clbf.controllers import GenericController
-from neural_clbf.systems import ControlAffineSystem
+from neural_clbf.systems import (
+    ControlAffineSystem,
+    KSCar,
+    STCar,
+    Quad3D,
+    NeuralLander,
+)
 from neural_clbf.setup.robust_mpc import robust_mpc_path  # type: ignore
 
 
@@ -56,7 +62,7 @@ class KSCarRobustMPCController(RobustMPCController):
 
     def __init__(
         self,
-        dynamics_model: ControlAffineSystem,
+        dynamics_model: KSCar,
         controller_period: float = 0.01,
     ):
         super(KSCarRobustMPCController, self).__init__(
@@ -72,7 +78,7 @@ class STCarRobustMPCController(RobustMPCController):
 
     def __init__(
         self,
-        dynamics_model: ControlAffineSystem,
+        dynamics_model: STCar,
         controller_period: float = 0.01,
     ):
         super(STCarRobustMPCController, self).__init__(
@@ -83,28 +89,12 @@ class STCarRobustMPCController(RobustMPCController):
         return self.eng.mpc_stcar(A, B, x_current_np)
 
 
-class SegwayRobustMPCController(RobustMPCController):
-    """Interface to the matlab robust MPC solver for a segway"""
-
-    def __init__(
-        self,
-        dynamics_model: ControlAffineSystem,
-        controller_period: float = 0.01,
-    ):
-        super(SegwayRobustMPCController, self).__init__(
-            dynamics_model=dynamics_model, controller_period=controller_period
-        )
-
-    def mpc_function(self, A, B, x_current_np):
-        return self.eng.mpc_segway(A, B, x_current_np)
-
-
 class Quad3DRobustMPCController(RobustMPCController):
     """Interface to the matlab robust MPC solver for a Quad3D"""
 
     def __init__(
         self,
-        dynamics_model: ControlAffineSystem,
+        dynamics_model: Quad3D,
         controller_period: float = 0.01,
     ):
         super(Quad3DRobustMPCController, self).__init__(
@@ -120,7 +110,7 @@ class NeuralLanderRobustMPCController(RobustMPCController):
 
     def __init__(
         self,
-        dynamics_model: ControlAffineSystem,
+        dynamics_model: NeuralLander,
         controller_period: float = 0.01,
     ):
         super(NeuralLanderRobustMPCController, self).__init__(
