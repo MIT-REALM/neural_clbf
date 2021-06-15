@@ -27,6 +27,7 @@ def test_init_neuralrclbfcontroller():
     scenarios = [params]
     controller = NeuralCLBFController(system, scenarios, dm)
     assert controller is not None
+    assert controller.controller_period > 0
 
 
 def test_normalize_x():

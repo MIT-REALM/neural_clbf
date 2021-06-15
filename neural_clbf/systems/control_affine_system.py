@@ -99,18 +99,22 @@ class ControlAffineSystem(ABC):
 
         return B
 
-    def linearized_continuous_time_dynamics_matrices(
+    def linearized_ct_dynamics_matrices(
         self, scenario: Optional[Scenario] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
+        """Compute the continuous time linear dynamics matrices, dx/dt = Ax + Bu"""
         A = self.compute_A_matrix(scenario)
         B = self.compute_B_matrix(scenario)
 
         return A, B
 
-    def linearized_discrete_time_dynamics_matrices(
+    def linearized_dt_dynamics_matrices(
         self, scenario: Optional[Scenario] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        Act, Bct = self.linearized_continuous_time_dynamics_matrices(scenario)
+        """
+        Compute the continuous time linear dynamics matrices, x_{t+1} = Ax_{t} + Bu
+        """
+        Act, Bct = self.linearized_ct_dynamics_matrices(scenario)
         A = np.eye(self.n_dims) + self.controller_dt * Act
         B = self.controller_dt * Bct
 
@@ -129,8 +133,8 @@ class ControlAffineSystem(ABC):
         # For each scenario, get the LQR gain and closed-loop linearization
         for s in scenarios:
             # Compute the LQR gain matrix for the nominal parameters
-            Act, Bct = self.linearized_continuous_time_dynamics_matrices(s)
-            A, B = self.linearized_discrete_time_dynamics_matrices(s)
+            Act, Bct = self.linearized_ct_dynamics_matrices(s)
+            A, B = self.linearized_dt_dynamics_matrices(s)
 
             # Define cost matrices as identity
             Q = np.eye(self.n_dims)

@@ -15,16 +15,14 @@ import matplotlib.pyplot as plt
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
-from neural_clbf.controllers.utils import Controller
+from neural_clbf.controllers.generic_controller import GenericController
 from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
 
 
-class NeuralCLBFController(pl.LightningModule):
+class NeuralCLBFController(pl.LightningModule, GenericController):
     """
     A neural rCLBF controller
     """
-
-    controller_period: float
 
     def __init__(
         self,
@@ -46,7 +44,7 @@ class NeuralCLBFController(pl.LightningModule):
         penalty_scheduling_rate: float = 0.0,
         num_init_epochs: int = 5,
         plotting_callbacks: Optional[
-            List[Callable[[Controller], Tuple[str, figure]]]
+            List[Callable[["NeuralCLBFController"], Tuple[str, figure]]]
         ] = None,
         vary_safe_level: bool = False,
     ):
@@ -79,11 +77,13 @@ class NeuralCLBFController(pl.LightningModule):
                                 name and figure object to log
             vary_safe_level: if True, optimize the safe level as a parameter
         """
-        super().__init__()
+        super(NeuralCLBFController, self).__init__(
+            dynamics_model=dynamics_model, controller_period=controller_period
+        )
         self.save_hyperparameters()
 
         # Save the provided model
-        self.dynamics_model = dynamics_model
+        # self.dynamics_model = dynamics_model
         self.scenarios = scenarios
         self.n_scenarios = len(scenarios)
 
@@ -102,7 +102,6 @@ class NeuralCLBFController(pl.LightningModule):
         self.use_nominal_in_qp = use_nominal_in_qp
         self.unsafe_level = self.safe_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
-        self.controller_period = controller_period
         self.primal_learning_rate = primal_learning_rate
         self.optimizer_alternate_epochs = optimizer_alternate_epochs
         self.epochs_per_episode = epochs_per_episode

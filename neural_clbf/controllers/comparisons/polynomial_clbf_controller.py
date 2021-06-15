@@ -8,8 +8,8 @@ from neural_clbf.systems.utils import Scenario
 from neural_clbf.controllers.neural_clbf_controller import NeuralCLBFController
 from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
 
-from .matlab_export_kscar_d10_bf import kscar_d10_polynomial_clbf
-from .matlab_export_stcar_d7_bf import stcar_d7_polynomial_clbf
+from .sos_polynomials.matlab_export_kscar_d10_bf import kscar_d10_polynomial_clbf
+from .sos_polynomials.matlab_export_stcar_d7_bf import stcar_d7_polynomial_clbf
 
 
 class PolynomialCLBFController(NeuralCLBFController):
