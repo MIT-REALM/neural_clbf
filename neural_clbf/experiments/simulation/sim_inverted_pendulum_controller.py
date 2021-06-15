@@ -13,7 +13,7 @@ from neural_clbf.systems import InvertedPendulum
 
 if __name__ == "__main__":
     # Import the plotting callbacks, which seem to be needed to load from the checkpoint
-    from neural_clbf.experiments.train_inverted_pendulum import (  # type: ignore # noqa
+    from neural_clbf.experiments.training.train_inverted_pendulum import (  # type: ignore # noqa
         rollout_plotting_cb,
         clbf_plotting_cb,
     )
