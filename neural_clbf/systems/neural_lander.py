@@ -90,7 +90,9 @@ class NeuralLander(ControlAffineSystem):
 
         # Load the ground effect model
         dir_name = os.path.dirname(os.path.abspath(__file__))
-        self.Fa_model = read_weight(dir_name + "/data/Fa_net_12_3_full_Lip16.pth")
+        self.Fa_model = read_weight(
+            dir_name + "/controller_data/Fa_net_12_3_full_Lip16.pth"
+        )
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid

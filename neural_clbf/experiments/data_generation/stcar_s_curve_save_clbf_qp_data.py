@@ -6,6 +6,7 @@ from neural_clbf.controllers import NeuralCLBFController
 from neural_clbf.experiments.common.episodic_datamodule import (
     EpisodicDataModule,
 )
+
 # Import the plotting callbacks, which seem to be needed to load from the checkpoint
 from neural_clbf.experiments.train_single_track_car import (  # noqa
     rollout_plotting_cb,  # noqa
@@ -13,7 +14,7 @@ from neural_clbf.experiments.train_single_track_car import (  # noqa
 )
 
 from neural_clbf.experiments.data_generation.stcar_s_curve_rollout import (
-    save_stcar_s_curve_rollout
+    save_stcar_s_curve_rollout,
 )
 
 
