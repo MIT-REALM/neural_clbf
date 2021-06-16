@@ -2,6 +2,7 @@
 from typing import Tuple, Optional, List
 
 import torch
+import numpy as np
 
 from .control_affine_system import ControlAffineSystem
 from neural_clbf.systems.utils import Scenario, ScenarioList
@@ -12,8 +13,8 @@ class TurtleBot(ControlAffineSystem):
     Represents a two wheeled differential drive robot, the TurtleBot3.
     The system has state
         p = [x, y, theta]
-    representing the x and y position and angle of orientation of the robot (pose), and it
-    has control inputs
+    representing the x and y position and angle of orientation of the robot,
+    and it has control inputs
         u = [v theta_dot]
     representing the desired linear velocity and angular velocity.
     The system is parameterized by
@@ -85,8 +86,8 @@ class TurtleBot(ControlAffineSystem):
     def n_controls(self) -> int:
         return TurtleBot.N_CONTROLS
 
-    @property 
-    def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]: # TODO
+    @property
+    def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:  
         """
         Return a tuple (upper, lower) describing the expected range of states for this
         system
@@ -95,14 +96,14 @@ class TurtleBot(ControlAffineSystem):
         upper_limit = torch.ones(self.n_dims)
         upper_limit[TurtleBot.X] = 2.0
         upper_limit[TurtleBot.Y] = 2.0
-        upper_limit[TurtleBot.THETA] = torch.pi
+        upper_limit[TurtleBot.THETA] = np.pi
 
         lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
 
     @property
-    def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]: #TODO
+    def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:  # TODO
         """
         Return a tuple (upper, lower) describing the range of allowable control
         limits for this system
@@ -167,11 +168,11 @@ class TurtleBot(ControlAffineSystem):
 
         # f is a zero vector as nothing should happen when no control input is given
         f[:, TurtleBot.X, 0] = 0
-        
-        f[:, TurtleBot.Y, 0] = 0 
-        
-        f[:, TurtleBot.THETA, 0] = 0 
-        
+
+        f[:, TurtleBot.Y, 0] = 0
+
+        f[:, TurtleBot.THETA, 0] = 0
+
         return f
 
     def _g(self, x: torch.Tensor, params: Scenario):
@@ -193,29 +194,29 @@ class TurtleBot(ControlAffineSystem):
         R, L = params["R"], params["L"]
         # and state variables
         theta = x[:, TurtleBot.THETA]
-        
-        # Tensor for wheel velocities
-        v = torch.zeros((2,2))
-        v = v.type_as(x)
-        
-        # Building tensor v
-        v[0, 0] = 1/R
-        v[1, 0] = 1/R
-        v[0, 1] = L/(2*R)
-        v[1, 1] = -L/(2*R)
-        
-        # Effect on x
-        g[:, TurtleBot.X, TurtleBot.V] = R/2 * torch.cos(theta) 
-        g[:, TurtleBot.X, TurtleBot.THETA_DOT] = R/2 * torch.cos(theta)
-        
-        # Effect on y 
-        g[:, TurtleBot.Y, TurtleBot.V] = R/2 * torch.sin(theta)
-        g[:, TurtleBot.Y, TurtleBot.THETA_DOT] = R/2 * torch.sin(theta)
 
-        # Effect on theta 
-        g[:, TurtleBot.THETA, TurtleBot.V] = -R/(2*L)
-        g[:, TurtleBot.THETA, TurtleBot.THETA_DOT] = R/(2*L)
-        
+        # Tensor for wheel velocities
+        v = torch.zeros((2, 2))
+        v = v.type_as(x)
+
+        # Building tensor v
+        v[0, 0] = 1 / R
+        v[1, 0] = 1 / R
+        v[0, 1] = L / (2 * R)
+        v[1, 1] = -L / (2 * R)
+
+        # Effect on x
+        g[:, TurtleBot.X, TurtleBot.V] = R / 2 * torch.cos(theta)
+        g[:, TurtleBot.X, TurtleBot.THETA_DOT] = R / 2 * torch.cos(theta)
+
+        # Effect on y
+        g[:, TurtleBot.Y, TurtleBot.V] = R / 2 * torch.sin(theta)
+        g[:, TurtleBot.Y, TurtleBot.THETA_DOT] = R / 2 * torch.sin(theta)
+
+        # Effect on theta
+        g[:, TurtleBot.THETA, TurtleBot.V] = -R / (2 * L)
+        g[:, TurtleBot.THETA, TurtleBot.THETA_DOT] = R / (2 * L)
+
         g = g.matmul(v)
 
         return g

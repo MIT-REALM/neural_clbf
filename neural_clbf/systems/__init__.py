@@ -17,5 +17,5 @@ __all__ = [
     "F16",
     "KSCar",
     "STCar",
-    "TurtleBot"
+    "TurtleBot",
 ]
