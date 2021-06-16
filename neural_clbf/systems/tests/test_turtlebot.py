@@ -2,7 +2,7 @@
 import pytest
 import torch
 
-from neural_clbf.systems import TurtleBot
+from neural_clbf.systems.turtlebot import TurtleBot
 
 
 def test_turtlebot_init():
