@@ -4,7 +4,7 @@ from typing import Tuple, Optional, List
 import torch
 
 from .control_affine_system import ControlAffineSystem
-from neural_clbf.systems.utils import grav, Scenario, ScenarioList
+from neural_clbf.systems.utils import Scenario, ScenarioList
 
 
 class TurtleBot(ControlAffineSystem):
