@@ -1,7 +1,6 @@
 """Define a dymamical system for TurtleBot3"""
 from typing import Tuple, Optional, List
 
-import numpy as np
 import torch
 
 from .control_affine_system import ControlAffineSystem
@@ -94,8 +93,9 @@ class TurtleBot(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[TurtleBot.THETA] = 2.0
-        upper_limit[TurtleBot.THETA_DOT] = 2.0
+        upper_limit[TurtleBot.X] = 2.0
+        upper_limit[TurtleBot.Y] = 2.0
+        upper_limit[TurtleBot.THETA] = torch.pi
 
         lower_limit = -1.0 * upper_limit
 
@@ -149,31 +149,6 @@ class TurtleBot(ControlAffineSystem):
         goal_mask = x.norm(dim=-1) <= 0.3
 
         return goal_mask
-    
-    def control_affine_dynamics(
-        self, x: torch.Tensor, params: Optional[Scenario] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Return a tuple (f, g) representing the system dynamics in control-affine form:
-            dx/dt = f(x) + g(x) u
-        args:
-            x: bs x self.n_dims tensor of state
-            params: a dictionary giving the parameter values for the system. If None,
-                    default to the nominal parameters used at initialization
-        returns:
-            f: bs x self.n_dims x 1 tensor representing the control-independent dynamics
-            g: bs x self.n_dims x self.n_controls tensor representing the control-
-               dependent dynamics
-        """
-        # Sanity check on input
-        assert x.ndim == 3
-        assert x.shape[1] == self.n_dims
-
-        # If no params required, use nominal params
-        if params is None:
-            params = self.nominal_params
-
-        return self._f(x, params), self._g(x, params)
 
     def _f(self, x: torch.Tensor, params: Scenario):
         """
@@ -190,21 +165,13 @@ class TurtleBot(ControlAffineSystem):
         f = torch.zeros((batch_size, self.n_dims, 1))
         f = f.type_as(x)
 
-        # Extract the needed parameters
-        R, L = params["R"], params["L"]
-        # and state variables
-        x = x[:, TurtleBot.X]
-        y = x[:, TurtleBot.Y]
-        theta = x[:, TurtleBot.THETA]
-
-        # The derivatives of x is the linear velocity in the x direction
-        f[:, TurtleBot.X, 0] = 0 #TODO
-
-        # The derviatives of y is the linear velocity in the y direction
-        f[:, TurtleBot.Y, 0] = 0 #TODO
+        # f is a zero vector as nothing should happen when no control input is given
+        f[:, TurtleBot.X, 0] = 0
         
-        # The
-        f[:, TurtleBot.THETA, 0] = 0 #TODO
+        f[:, TurtleBot.Y, 0] = 0 
+        
+        f[:, TurtleBot.THETA, 0] = 0 
+        
         return f
 
     def _g(self, x: torch.Tensor, params: Scenario):
@@ -223,14 +190,32 @@ class TurtleBot(ControlAffineSystem):
         g = g.type_as(x)
 
         # Extract the needed parameters
-        m, L = params["m"], params["L"]
+        R, L = params["R"], params["L"]
+        # and state variables
+        theta = x[:, TurtleBot.THETA]
         
-        # Effect on x_dot
-        g[:, TurtleBot.X, TurtleBot.V] = 0 #TODO
+        # Tensor for wheel velocities
+        v = torch.zeros((2,2))
+        v = v.type_as(x)
         
-        # Effect on y_dot #TODO
+        # Building tensor v
+        v[0, 0] = 1/R
+        v[1, 0] = 1/R
+        v[0, 1] = L/(2*R)
+        v[1, 1] = -L/(2*R)
         
-        # Effect on theta dot #TODO
-        g[:, TurtleBot.THETA_DOT, TurtleBot.U] = 1 / (m * L ** 2) 
+        # Effect on x
+        g[:, TurtleBot.X, TurtleBot.V] = R/2 * torch.cos(theta) 
+        g[:, TurtleBot.X, TurtleBot.THETA_DOT] = R/2 * torch.cos(theta)
+        
+        # Effect on y 
+        g[:, TurtleBot.Y, TurtleBot.V] = R/2 * torch.sin(theta)
+        g[:, TurtleBot.Y, TurtleBot.THETA_DOT] = R/2 * torch.sin(theta)
+
+        # Effect on theta 
+        g[:, TurtleBot.THETA, TurtleBot.V] = -R/(2*L)
+        g[:, TurtleBot.THETA, TurtleBot.THETA_DOT] = R/(2*L)
+        
+        g = g.matmul(v)
 
         return g
