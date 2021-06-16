@@ -9,7 +9,7 @@ from neural_clbf.systems import STCar
 
 
 @torch.no_grad()
-def save_stcar_s_path_rollout(
+def save_stcar_s_curve_rollout(
     controller_fn: Callable[[torch.Tensor], torch.Tensor],
     controller_name: str,
     controller_period: float,
@@ -52,7 +52,7 @@ def save_stcar_s_path_rollout(
 
     # If we're randomizing the reference path, set the period at which to randomize
     if randomize_path:
-        path_update_freq = int(t_sim / 10)
+        path_update_freq = int(T / 10.0)
 
     controller_update_freq = int(controller_period / simulation_dt)
     prog_bar_range = tqdm.trange(1, T, desc="S-Curve", leave=True)
@@ -114,7 +114,7 @@ def save_stcar_s_path_rollout(
     filename = "sim_traces/"
     filename += f"stcar_{controller_name}_dt={controller_period_str}"
     if randomize_path:
-        filename += "_omega_ref=1-5-randomized"
+        filename += f"_omega_ref=1-5-randomized-{np.random.randint(10000)}"
     else:
         filename += "_omega_ref=1-5-sine"
 
@@ -124,4 +124,4 @@ def save_stcar_s_path_rollout(
     header = "sxe,sye,delta,ve,psi_e,psi_e_dot,beta,omega_ref,psi_ref,v_ref,a_ref"
     header += ",x_ref,y_ref"
 
-    np.savetxt(filename, data_to_save, delimiter=",", header=header)
+    np.savetxt(filename, data_to_save, delimiter=",", header=header, comments="")
