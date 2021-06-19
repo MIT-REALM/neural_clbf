@@ -47,11 +47,11 @@ class RobustMPCController(GenericController):
         """Compute and return the control input for a tensor of states x"""
         # Convert the given state into a numpy array
         x_current_np = x.cpu().detach().numpy().T
+        x_matlab = matlab.double(x_current_np.tolist())
         # Prepare the dynamics matrices to be sent to MATLAB
         A = matlab.double(self.A.tolist())
-        B = matlab.double(self.A.tolist())
-        u_mpc = self.mpc_function(A, B, x_current_np)
-        u_mpc = (A, B, x_current_np)
+        B = matlab.double(self.B.tolist())
+        u_mpc = self.mpc_function(A, B, x_matlab)
 
         # return the control input as a torch tensor.
         return torch.tensor(u_mpc).type_as(x)
@@ -69,8 +69,8 @@ class KSCarRobustMPCController(RobustMPCController):
             dynamics_model=dynamics_model, controller_period=controller_period
         )
 
-    def mpc_function(self, A, B, x_current_np):
-        return self.eng.mpc_kscar(A, B, x_current_np)
+    def mpc_function(self, A, B, x):
+        return self.eng.mpc_kscar(A, B, x)
 
 
 class STCarRobustMPCController(RobustMPCController):
@@ -85,8 +85,8 @@ class STCarRobustMPCController(RobustMPCController):
             dynamics_model=dynamics_model, controller_period=controller_period
         )
 
-    def mpc_function(self, A, B, x_current_np):
-        return self.eng.mpc_stcar(A, B, x_current_np)
+    def mpc_function(self, A, B, x):
+        return self.eng.mpc_stcar(A, B, x)
 
 
 class Quad3DRobustMPCController(RobustMPCController):
@@ -101,8 +101,8 @@ class Quad3DRobustMPCController(RobustMPCController):
             dynamics_model=dynamics_model, controller_period=controller_period
         )
 
-    def mpc_function(self, A, B, x_current_np):
-        return self.eng.mpc_quad3d(A, B, x_current_np)
+    def mpc_function(self, A, B, x):
+        return self.eng.mpc_quad3d(A, B, x)
 
 
 class NeuralLanderRobustMPCController(RobustMPCController):
@@ -117,5 +117,25 @@ class NeuralLanderRobustMPCController(RobustMPCController):
             dynamics_model=dynamics_model, controller_period=controller_period
         )
 
-    def mpc_function(self, A, B, x_current_np):
-        return self.eng.mpc_lander(A, B, x_current_np)
+    def mpc_function(self, A, B, x):
+        return self.eng.mpc_lander(A, B, x)
+
+
+if __name__ == "__main__":
+    dt = 0.25
+    valid_params = {
+        "psi_ref": 1.0,
+        "v_ref": 1.0,
+        "a_ref": 0.0,
+        "omega_ref": 0.0,
+    }
+    kscar = KSCar(valid_params)
+    kscar.controller_dt = dt
+    A, B = kscar.linearized_dt_dynamics_matrices()
+    import numpy as np
+
+    np.set_printoptions(linewidth=np.inf)
+    print("A = ...")
+    print(A)
+    print("B = ...")
+    print(B)
