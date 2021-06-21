@@ -15,16 +15,14 @@ import matplotlib.pyplot as plt
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
-from neural_clbf.controllers.utils import Controller
+from neural_clbf.controllers.generic_controller import GenericController
 from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
 
 
-class NeuralCLBFController(pl.LightningModule):
+class NeuralCLBFController(pl.LightningModule, GenericController):
     """
     A neural rCLBF controller
     """
-
-    controller_period: float
 
     def __init__(
         self,
@@ -37,7 +35,7 @@ class NeuralCLBFController(pl.LightningModule):
         u_nn_hidden_size: int = 8,
         clbf_lambda: float = 1.0,
         safety_level: float = 1.0,
-        goal_level: float = 0.0,
+        use_nominal_in_qp: bool = False,
         clbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
@@ -46,7 +44,7 @@ class NeuralCLBFController(pl.LightningModule):
         penalty_scheduling_rate: float = 0.0,
         num_init_epochs: int = 5,
         plotting_callbacks: Optional[
-            List[Callable[[Controller], Tuple[str, figure]]]
+            List[Callable[["NeuralCLBFController"], Tuple[str, figure]]]
         ] = None,
         vary_safe_level: bool = False,
     ):
@@ -61,7 +59,8 @@ class NeuralCLBFController(pl.LightningModule):
             u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             clbf_lambda: convergence rate for the CLBF
             safety_level: safety level set value for the CLBF
-            goal_level: goal level set value for the CLBF
+            use_nominal_in_qp: if True, base the QP on the nominal controller; otherwise
+                               use the nn controller.
             clbf_relaxation_penalty: the penalty for relaxing CLBF conditions.
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
@@ -78,11 +77,13 @@ class NeuralCLBFController(pl.LightningModule):
                                 name and figure object to log
             vary_safe_level: if True, optimize the safe level as a parameter
         """
-        super().__init__()
+        super(NeuralCLBFController, self).__init__(
+            dynamics_model=dynamics_model, controller_period=controller_period
+        )
         self.save_hyperparameters()
 
         # Save the provided model
-        self.dynamics_model = dynamics_model
+        # self.dynamics_model = dynamics_model
         self.scenarios = scenarios
         self.n_scenarios = len(scenarios)
 
@@ -98,10 +99,9 @@ class NeuralCLBFController(pl.LightningModule):
             self.safe_level = nn.parameter.Parameter(torch.tensor(safety_level))
         else:
             self.safe_level = safety_level
-        self.goal_level = goal_level
+        self.use_nominal_in_qp = use_nominal_in_qp
         self.unsafe_level = self.safe_level
         self.clbf_relaxation_penalty = clbf_relaxation_penalty
-        self.controller_period = controller_period
         self.primal_learning_rate = primal_learning_rate
         self.optimizer_alternate_epochs = optimizer_alternate_epochs
         self.epochs_per_episode = epochs_per_episode
@@ -254,7 +254,7 @@ class NeuralCLBFController(pl.LightningModule):
 
         # Compute the final activation
         JV = torch.bmm(V.unsqueeze(1), JV)
-        V = 0.5 * (V * V).sum(dim=1) - self.goal_level
+        V = 0.5 * (V * V).sum(dim=1)
 
         # # Add this as a correction to the nominal V
         # # Get the nominal Lyapunov function
@@ -362,7 +362,10 @@ class NeuralCLBFController(pl.LightningModule):
         Lf_V, Lg_V = self.V_lie_derivatives(x)
 
         # Get the nn control input as well
-        u_nn = self.u(x)
+        if self.use_nominal_in_qp:
+            u_ref = self.dynamics_model.u_nominal(x)
+        else:
+            u_ref = self.u(x)
 
         # Apply default penalty if needed
         if relaxation_penalty is None:
@@ -381,11 +384,11 @@ class NeuralCLBFController(pl.LightningModule):
         #
         # We want the objective to be to minimize
         #
-        #           ||u - u_nn||^2 + relaxation_penalty * r^2
+        #           ||u - u_ref||^2 + relaxation_penalty * r^2
         #
         # This reduces to (ignoring constant terms)
         #
-        #           u^T I u - 2 u_nn^T u + relaxation_penalty * r^2
+        #           u^T I u - 2 u_ref^T u + relaxation_penalty * r^2
 
         n_controls = self.dynamics_model.n_controls
         n_scenarios = self.n_scenarios
@@ -420,8 +423,8 @@ class NeuralCLBFController(pl.LightningModule):
 
             # Define the cost
             Q = np.eye(n_controls)
-            u_nn_np = u_nn[batch_idx, :].detach().cpu().numpy()
-            objective = u @ Q @ u - 2 * u_nn_np @ Q @ u + u_nn_np @ Q @ u_nn_np
+            u_ref_np = u_ref[batch_idx, :].detach().cpu().numpy()
+            objective = u @ Q @ u - 2 * u_ref_np @ Q @ u + u_ref_np @ Q @ u_ref_np
             if allow_relaxation:
                 relax_penalties = relaxation_penalty * np.ones(n_scenarios)
                 objective += relax_penalties @ r

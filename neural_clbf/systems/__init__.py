@@ -5,6 +5,7 @@ from .neural_lander import NeuralLander
 from .inverted_pendulum import InvertedPendulum
 from .kinematic_single_track_car import KSCar
 from .single_track_car import STCar
+from .segway import Segway
 from .f16 import F16
 from .turtlebot import TurtleBot
 
@@ -18,4 +19,5 @@ __all__ = [
     "KSCar",
     "STCar",
     "TurtleBot",
+    "Segway",
 ]

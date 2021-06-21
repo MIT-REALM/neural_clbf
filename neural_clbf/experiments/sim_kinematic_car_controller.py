@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 def doMain():
-    checkpoint_file = "saved_models/kscar/e6f766a_v0.ckpt"
+    checkpoint_file = "saved_models/good/kscar/e6f766a_v1.ckpt"
 
     controller_period = 0.01
     simulation_dt = 0.001
@@ -79,7 +79,6 @@ def doMain():
         u_nn_hidden_size=64,
         clbf_lambda=1.0,
         safety_level=1.0,
-        goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e1,
         primal_learning_rate=1e-3,

@@ -1,5 +1,5 @@
 """Functions for plotting experimental results"""
-from typing import Callable, List, Tuple, Optional, TYPE_CHECKING
+from typing import Callable, List, Tuple, Optional
 import random
 
 import numpy as np
@@ -13,8 +13,7 @@ import tqdm
 from neural_clbf.systems.utils import ScenarioList
 
 # We only need these imports if type checking, to avoid circular imports
-if TYPE_CHECKING:
-    from neural_clbf.controllers import Controller
+from neural_clbf.controllers import NeuralCLBFController
 
 
 # Beautify plots
@@ -24,7 +23,7 @@ sim_color = sns.color_palette("pastel")[1]
 
 @torch.no_grad()
 def plot_CLBF(
-    clbf_net: "Controller",
+    clbf_net: NeuralCLBFController,
     domain: Optional[List[Tuple[float, float]]] = None,
     n_grid: int = 50,
     x_axis_index: int = 0,
@@ -278,7 +277,7 @@ def plot_CLBF(
 
 @torch.no_grad()
 def rollout_CLBF(
-    clbf_net: "Controller",
+    clbf_net: NeuralCLBFController,
     scenarios: Optional[ScenarioList] = None,
     start_x: Optional[torch.Tensor] = None,
     plot_x_indices: Optional[List[int]] = None,

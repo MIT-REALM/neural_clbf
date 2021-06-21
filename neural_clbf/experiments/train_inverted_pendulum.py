@@ -117,7 +117,6 @@ def main(args):
         u_nn_hidden_size=64,
         clbf_lambda=1.0,
         safety_level=1.0,
-        goal_level=0.00,
         controller_period=controller_period,
         clbf_relaxation_penalty=1e5,
         num_init_epochs=5,
