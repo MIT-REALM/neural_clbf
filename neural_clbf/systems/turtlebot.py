@@ -103,12 +103,14 @@ class TurtleBot(ControlAffineSystem):
         return (upper_limit, lower_limit)
 
     @property
-    def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:  # TODO
+    def control_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Return a tuple (upper, lower) describing the range of allowable control
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
+        # TODO @bethlow these are relaxed for now, but eventually
+        # these values should be measured on the hardware.
         upper_limit = torch.tensor([100 * 10.0])
         lower_limit = -torch.tensor([100 * 10.0])
 
