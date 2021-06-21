@@ -55,4 +55,4 @@ def test_turtlebot_dynamics():
     params = {"R": 0.07, "L": 0.3}
     turtlebot = TurtleBot(params)
     assert(turtlebot.n_dims == 3)
-    # TODO
+    # TODO @bethlow
