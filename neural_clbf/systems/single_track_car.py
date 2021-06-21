@@ -69,7 +69,8 @@ class STCar(ControlAffineSystem):
         args:
             nominal_params: a dictionary giving the parameter values for the system.
                             Requires keys ["psi_ref", "v_ref", "a_ref",
-                            "omega_ref"] (_c and _s denote cosine and sine)
+                            "omega_ref", "mu_scale"] (_c and _s denote cosine and sine)
+                            "mu_scale" is optional
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
         raises:
@@ -86,7 +87,8 @@ class STCar(ControlAffineSystem):
 
         args:
             params: a dictionary giving the parameter values for the system.
-                    Requires keys ["psi_ref", "v_ref", "a_ref", "omega_ref"]
+                    Requires keys ["psi_ref", "v_ref", "a_ref", "omega_ref", "mu_scale"]
+                    "mu_scale" is optional
         returns:
             True if parameters are valid, False otherwise
         """
@@ -96,6 +98,9 @@ class STCar(ControlAffineSystem):
         valid = valid and "v_ref" in params
         valid = valid and "a_ref" in params
         valid = valid and "omega_ref" in params
+
+        if "mu_scale" in params:
+            valid = valid and params["mu_scale"] > 0
 
         return valid
 
@@ -265,6 +270,10 @@ class STCar(ControlAffineSystem):
         v_ref = torch.tensor(params["v_ref"])
         a_ref = torch.tensor(params["a_ref"])
         omega_ref = torch.tensor(params["omega_ref"])
+        if "mu_scale" in params:
+            mu_scale = torch.tensor(params["mu_scale"])
+        else:
+            mu_scale = torch.tensor(1.0)
 
         # Extract the state variables and adjust for the reference
         v = x[:, STCar.VE] + v_ref
@@ -280,7 +289,7 @@ class STCar(ControlAffineSystem):
         g = 9.81  # [m/s^2]
 
         # create equivalent bicycle parameters
-        mu = self.car_params.tire.p_dy1
+        mu = mu_scale * self.car_params.tire.p_dy1
         C_Sf = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
         C_Sr = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
         lf = self.car_params.a
@@ -354,6 +363,10 @@ class STCar(ControlAffineSystem):
         # Extract the parameters
         v_ref = torch.tensor(params["v_ref"])
         omega_ref = torch.tensor(params["omega_ref"])
+        if "mu_scale" in params:
+            mu_scale = torch.tensor(params["mu_scale"])
+        else:
+            mu_scale = torch.tensor(1.0)
 
         # Extract the state variables and adjust for the reference
         v = x[:, STCar.VE] + v_ref
@@ -363,7 +376,7 @@ class STCar(ControlAffineSystem):
         delta = x[:, STCar.DELTA]
 
         # create equivalent bicycle parameters
-        mu = self.car_params.tire.p_dy1
+        mu = mu_scale * self.car_params.tire.p_dy1
         C_Sf = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
         C_Sr = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
         lf = self.car_params.a

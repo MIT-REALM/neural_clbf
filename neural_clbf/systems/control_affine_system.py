@@ -87,6 +87,39 @@ class ControlAffineSystem(ABC):
 
         return A
 
+    def compute_B_matrix(self, scenario: Optional[Scenario]) -> np.ndarray:
+        """Compute the linearized continuous-time state-state derivative transfer matrix
+        about the goal point"""
+        if scenario is None:
+            scenario = self.nominal_params
+
+        # Linearize the system about the x = 0, u = 0
+        B = self._g(self.goal_point, scenario).squeeze().cpu().numpy()
+        B = np.reshape(B, (self.n_dims, self.n_controls))
+
+        return B
+
+    def linearized_ct_dynamics_matrices(
+        self, scenario: Optional[Scenario] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Compute the continuous time linear dynamics matrices, dx/dt = Ax + Bu"""
+        A = self.compute_A_matrix(scenario)
+        B = self.compute_B_matrix(scenario)
+
+        return A, B
+
+    def linearized_dt_dynamics_matrices(
+        self, scenario: Optional[Scenario] = None
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute the continuous time linear dynamics matrices, x_{t+1} = Ax_{t} + Bu
+        """
+        Act, Bct = self.linearized_ct_dynamics_matrices(scenario)
+        A = np.eye(self.n_dims) + self.controller_dt * Act
+        B = self.controller_dt * Bct
+
+        return A, B
+
     def compute_linearized_controller(self, scenarios: Optional[ScenarioList] = None):
         """
         Computes the linearized controller K and lyapunov matrix P.
@@ -100,12 +133,8 @@ class ControlAffineSystem(ABC):
         # For each scenario, get the LQR gain and closed-loop linearization
         for s in scenarios:
             # Compute the LQR gain matrix for the nominal parameters
-            Act = self.compute_A_matrix(s)
-            A = np.eye(self.n_dims) + self.controller_dt * Act
-
-            Bct = self._g(self.goal_point, s).squeeze().cpu().numpy()
-            Bct = np.reshape(Bct, (self.n_dims, self.n_controls))
-            B = self.controller_dt * Bct
+            Act, Bct = self.linearized_ct_dynamics_matrices(s)
+            A, B = self.linearized_dt_dynamics_matrices(s)
 
             # Define cost matrices as identity
             Q = np.eye(self.n_dims)

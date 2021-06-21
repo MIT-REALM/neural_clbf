@@ -26,11 +26,28 @@ git clone https://github.com/dawsonc/neural_clbf
 
 # install project   
 cd neural_clbf
-conda create --name neural_clbf python=3.8
+conda create --name neural_clbf python=3.9
 conda activate neural_clbf
 pip install -e .   
 pip install -r requirements.txt
 ```
+
+Next, navigate to any file and run it.   
+```bash
+# module folder
+cd neural_clbf
+
+# run module
+python TODO.py  # TODO @dawsonc fix this  
+```
+
+Training:
+To setup port forwarding for TensorBoard:
+`ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
+
+### External dependencies
+
+#### F16 Model
 To install the F16 simulator (which is a GPL-licensed component and thus not distributed along with this code), you should also run
 ```
 cd ..  # or wherever you want to put it
@@ -40,18 +57,18 @@ pwd
 ```
 Then go to `neural_clbf/setup/aerobench.py` and modify it to point to the path to the aerobench package.
 
-Next, navigate to any file and run it.   
-```bash
-# module folder
-cd neural_clbf
+#### Commonroad models
 
-# run module
-python TODO.py    
+TODO @dawsonc
+
+#### MATLAB Bridge for Robust MPC
+
+```
+cd "matlabroot/extern/engines/python"
+python setup.py install
 ```
 
-Training:
-To setup port forwarding for TensorBoard:
-`ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
+
 
 ## Imports
 This project is setup as a package which means you can now easily import any file into any other file like so:
