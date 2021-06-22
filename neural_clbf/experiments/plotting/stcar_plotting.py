@@ -34,8 +34,22 @@ xy_err_mpc25 = np.linalg.norm(xy_mpc25, axis=-1)
 fig, ax = plt.subplots(1, 1)
 t = np.linspace(0, t_sim, num_timesteps)
 ax.plot(t, xy_err_rclbf, c=rclbf_color, label="rCLBF-QP", linewidth=5)
-ax.plot(t, xy_err_mpc1, c=mpc_color, linestyle="dashed", label="rMPC ($dt=0.1$)", linewidth=5)
-ax.plot(t, xy_err_mpc25, c=mpc_color, linestyle="solid", label="rMPC ($dt=0.25$)", linewidth=5)
+ax.plot(
+    t,
+    xy_err_mpc1,
+    c=mpc_color,
+    linestyle="dashed",
+    label="rMPC ($dt=0.1$)",
+    linewidth=5,
+)
+ax.plot(
+    t,
+    xy_err_mpc25,
+    c=mpc_color,
+    linestyle="solid",
+    label="rMPC ($dt=0.25$)",
+    linewidth=5,
+)
 
 # Pretty plot
 ax.set_xlabel("$t$")
