@@ -179,7 +179,7 @@ def doMain():
 
     axs.set_xlabel(x_axis_label)
     axs.set_ylabel(y_axis_label)
-    axs.set_title('$V$')
+    axs.set_title("$V$")
     axs.legend(loc="upper right", fontsize=25)
     fig.tight_layout()
 
