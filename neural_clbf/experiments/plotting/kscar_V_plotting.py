@@ -17,11 +17,10 @@ from neural_clbf.experiments.train_single_track_car import (  # noqa
 )
 
 
-sns.set_theme(context="talk", style="white")
-
-
 @torch.no_grad()
 def doMain():
+    sns.set_theme(context="talk", style="white")
+
     checkpoint_file = "saved_models/good/kscar/e6f766a_v1.ckpt"
 
     controller_period = 0.01
