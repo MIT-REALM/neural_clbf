@@ -9,7 +9,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 
 from neural_clbf.controllers import NeuralCLBFController
-from neural_clbf.experiments.common.episodic_datamodule import (
+from neural_clbf.datamodules.episodic_datamodule import (
     EpisodicDataModule,
 )
 from neural_clbf.experiments.common.plotting import (

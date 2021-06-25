@@ -1,7 +1,7 @@
 from .neural_clbf_controller import NeuralCLBFController
-from .generic_controller import GenericController
+from .controller import Controller
 
 __all__ = [
     "NeuralCLBFController",
-    "GenericController",
+    "Controller",
 ]

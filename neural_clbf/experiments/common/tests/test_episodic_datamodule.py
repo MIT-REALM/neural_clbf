@@ -4,7 +4,7 @@ from typing import Dict
 
 import torch
 
-from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
+from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
 from neural_clbf.systems.tests.mock_system import MockSystem
 
 

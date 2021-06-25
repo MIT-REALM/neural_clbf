@@ -1,0 +1,2 @@
+1.) Make ExperimentSuite class
+2.) Convert existing plotting etc. code to experiments

@@ -8,7 +8,7 @@ from neural_clbf.controllers.neural_clbf_controller import (
     NeuralCLBFController,
 )
 from neural_clbf.systems.tests.mock_system import MockSystem
-from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
+from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
 
 
 def test_init_neuralrclbfcontroller():

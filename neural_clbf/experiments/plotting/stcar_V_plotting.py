@@ -6,7 +6,7 @@ import seaborn as sns
 
 from neural_clbf.systems import STCar
 from neural_clbf.controllers import NeuralCLBFController
-from neural_clbf.experiments.common.episodic_datamodule import (
+from neural_clbf.datamodules.episodic_datamodule import (
     EpisodicDataModule,
 )
 
