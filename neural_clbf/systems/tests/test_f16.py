@@ -1,10 +1,17 @@
 """Test the 2D quadrotor dynamics"""
 import pytest
+from warnings import warn
 
 import torch
 import numpy as np
 
-from neural_clbf.systems import F16
+try:
+    from neural_clbf.systems import F16
+except ImportError:
+    warn("Could not import F16 module")
+    pytest.skip(
+        "Could not import F16 module; is AeroBench installed?", allow_module_level=True
+    )
 
 
 def test_f16_init():

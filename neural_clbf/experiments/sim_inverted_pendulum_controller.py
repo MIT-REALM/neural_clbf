@@ -6,7 +6,7 @@ import torch
 import tqdm
 
 from neural_clbf.controllers import NeuralCLBFController
-from neural_clbf.experiments.common.episodic_datamodule import (
+from neural_clbf.datamodules.episodic_datamodule import (
     EpisodicDataModule,
 )
 from neural_clbf.systems import InvertedPendulum
@@ -155,7 +155,7 @@ def single_rollout_stabilization(
         x_current = x_nn[tstep - 1, :, :]
         # Get the control input at the current state if it's time
         if tstep == 1 or tstep % controller_update_freq == 0:
-            u = clbf_net.u(x_current)
+            u = clbf_net.u_learned(x_current)
         else:
             u = u_nn[tstep - 1, :, :]
         u_nn[tstep, :, :] = u

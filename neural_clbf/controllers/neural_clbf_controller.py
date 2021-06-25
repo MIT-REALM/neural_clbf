@@ -15,11 +15,11 @@ import matplotlib.pyplot as plt
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
-from neural_clbf.controllers.generic_controller import GenericController
-from neural_clbf.experiments.common.episodic_datamodule import EpisodicDataModule
+from neural_clbf.controllers.controller import Controller
+from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
 
 
-class NeuralCLBFController(pl.LightningModule, GenericController):
+class NeuralCLBFController(pl.LightningModule, Controller):
     """
     A neural rCLBF controller
     """
@@ -257,7 +257,7 @@ class NeuralCLBFController(pl.LightningModule, GenericController):
         V, _ = self.V_with_jacobian(x)
         return V
 
-    def u(self, x: torch.Tensor) -> torch.Tensor:
+    def u_learned(self, x: torch.Tensor) -> torch.Tensor:
         """Computes the learned controller input from the state x
 
         args:
@@ -346,7 +346,7 @@ class NeuralCLBFController(pl.LightningModule, GenericController):
         if self.use_nominal_in_qp:
             u_ref = self.dynamics_model.u_nominal(x)
         else:
-            u_ref = self.u(x)
+            u_ref = self.u_learned(x)
 
         # Apply default penalty if needed
         if relaxation_penalty is None:
@@ -443,6 +443,11 @@ class NeuralCLBFController(pl.LightningModule, GenericController):
 
         return u_result.type_as(x), r_result.type_as(x), objective_result.type_as(x)
 
+    def u(self, x):
+        """Get the control input for a given state"""
+        u, _, _ = self.solve_CLBF_QP(x)
+        return u
+
     def forward(self, x):
         """Determine the control input for a given state using a QP
 
@@ -451,8 +456,7 @@ class NeuralCLBFController(pl.LightningModule, GenericController):
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control inputs
         """
-        u, _, _ = self.solve_CLBF_QP(x)
-        return u
+        return self.u(x)
 
     def boundary_loss(
         self,
@@ -550,7 +554,7 @@ class NeuralCLBFController(pl.LightningModule, GenericController):
         # TODO @dawsonc do we need dynamics learning here?
         Lf_V, Lg_V = self.V_lie_derivatives(x)
         # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u(x)
+        u_nn = self.u_learned(x)
         eps = 0.0
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
@@ -625,7 +629,7 @@ class NeuralCLBFController(pl.LightningModule, GenericController):
         loss.append(("CLBF MSE", clbf_mse_loss))
 
         #   2.) Provide a very small training signal for the controller
-        u_nn = self.u(x)
+        u_nn = self.u_learned(x)
         u_nominal = self.dynamics_model.u_nominal(x)
         u_mse_loss = ((u_nn - u_nominal) ** 2).sum(dim=-1)
         u_mse_loss = 1e-3 * decrease_factor * u_mse_loss.mean()
@@ -803,15 +807,9 @@ class NeuralCLBFController(pl.LightningModule, GenericController):
         relaxation_penalty: Optional[float] = None,
     ):
         if use_qp:
-
-            def controller_fn(x):
-                u, _, _ = self.solve_CLBF_QP(x, relaxation_penalty)
-                return u
-
+            controller_fn = self.u
         else:
-
-            def controller_fn(x):
-                return self.u(x)
+            controller_fn = self.u_learned
 
         # Choose parameters randomly
         random_scenario = {}
