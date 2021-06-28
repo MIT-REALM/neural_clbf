@@ -36,11 +36,11 @@ def rollout_plotting_cb(clbf_net):
         clbf_net,
         start_x=start_x,
         plot_x_indices=[TurtleBot.X, TurtleBot.Y, TurtleBot.THETA],
-        plot_x_labels=["$x$", "$y$", "$\\theta$"],
+        plot_x_labels=["$x$", "$y$"],
         plot_u_indices=[TurtleBot.V, TurtleBot.THETA_DOT],
         plot_u_labels=["$v$", "$\\dot{\\theta}$"],
         t_sim=6.0,
-        n_sims_per_start=5,
+        n_sims_per_start=2,
         controller_period=controller_period,
         goal_check_fn=clbf_net.dynamics_model.goal_mask,
         out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
@@ -64,8 +64,8 @@ def main(args):
     nominal_params = {"R": 3.25, "L": 14.0}
     scenarios = [
         nominal_params,
-        {"R": 3.25, "L": 13.9},
-        {"R": 3.25, "L": 14.1},
+        # {"R": 3.25, "L": 13.9},
+        # {"R": 3.25, "L": 14.1},
     ]
 
     # Define the dynamics model
