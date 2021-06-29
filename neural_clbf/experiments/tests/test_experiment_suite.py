@@ -8,6 +8,13 @@ from neural_clbf.systems.tests.mock_system import MockSystem
 
 
 def test_experiment_suite():
+    # Define a mock experiment to use in the suite
+    experiment_1 = MockExperiment("mock_experiment_1")
+    experiment_2 = MockExperiment("mock_experiment_2")
+
+    # Create the suite
+    experiment_suite = ExperimentSuite([experiment_1, experiment_2])
+
     # Define the model system
     params = {}
     system = MockSystem(params)
@@ -20,14 +27,7 @@ def test_experiment_suite():
 
     # Instantiate with a list of only one scenarios
     scenarios = [params]
-    controller = NeuralCLBFController(system, scenarios, dm)
-
-    # Define a mock experiment to use in the suite
-    experiment_1 = MockExperiment("mock_experiment_1")
-    experiment_2 = MockExperiment("mock_experiment_2")
-
-    # Create the suite
-    experiment_suite = ExperimentSuite([experiment_1, experiment_2])
+    controller = NeuralCLBFController(system, scenarios, dm, experiment_suite)
 
     # Test running the experiments
     results = experiment_suite.run_all(controller)

@@ -11,7 +11,7 @@ import pandas as pd
 from pytorch_lightning.loggers import LightningLoggerBase
 
 from .experiment import Experiment
-from neural_clbf.controllers import Controller
+from neural_clbf.controllers.controller import Controller
 
 
 class ExperimentSuite(object):
@@ -116,4 +116,4 @@ class ExperimentSuite(object):
 
         # Clean up by closing each plot
         for _, figure_handle in fig_handles:
-            plt.close(figure)
+            plt.close(figure_handle)

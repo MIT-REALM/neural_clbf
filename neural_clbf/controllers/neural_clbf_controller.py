@@ -1,5 +1,5 @@
 import itertools
-from typing import Tuple, List, Optional, Callable, Union
+from typing import Tuple, List, Optional, Union
 from collections import OrderedDict
 import random
 
@@ -10,13 +10,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
-from matplotlib.pyplot import figure
-import matplotlib.pyplot as plt
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
 from neural_clbf.controllers.controller import Controller
 from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
+from neural_clbf.experiments import ExperimentSuite
 
 
 class NeuralCLBFController(pl.LightningModule, Controller):
@@ -29,6 +28,7 @@ class NeuralCLBFController(pl.LightningModule, Controller):
         dynamics_model: ControlAffineSystem,
         scenarios: ScenarioList,
         datamodule: EpisodicDataModule,
+        experiment_suite: ExperimentSuite,
         clbf_hidden_layers: int = 2,
         clbf_hidden_size: int = 48,
         u_nn_hidden_layers: int = 1,
@@ -43,15 +43,13 @@ class NeuralCLBFController(pl.LightningModule, Controller):
         epochs_per_episode: int = 5,
         penalty_scheduling_rate: float = 0.0,
         num_init_epochs: int = 5,
-        plotting_callbacks: Optional[
-            List[Callable[["NeuralCLBFController"], Tuple[str, figure]]]
-        ] = None,
     ):
         """Initialize the controller.
 
         args:
             dynamics_model: the control-affine dynamics of the underlying system
             scenarios: a list of parameter scenarios to train on
+            experiment_suite: defines the experiments to run during training
             clbf_hidden_layers: number of hidden layers to use for the CLBF network
             clbf_hidden_size: number of neurons per hidden layer in the CLBF network
             u_nn_hidden_layers: number of hidden layers to use for the proof controller
@@ -71,9 +69,6 @@ class NeuralCLBFController(pl.LightningModule, Controller):
                                      disable penalty scheduling (use constant penalty)
             num_init_epochs: the number of epochs to pretrain the controller on the
                              linear controller
-            plotting_callbacks: a list of plotting functions that each take a
-                                NeuralCLBFController and return a tuple of a string
-                                name and figure object to log
         """
         super(NeuralCLBFController, self).__init__(
             dynamics_model=dynamics_model, controller_period=controller_period
@@ -87,6 +82,9 @@ class NeuralCLBFController(pl.LightningModule, Controller):
 
         # Save the datamodule
         self.datamodule = datamodule
+
+        # Save the experiments suits
+        self.experiment_suite = experiment_suite
 
         # Save the other parameters
         self.clbf_lambda = clbf_lambda
@@ -112,11 +110,6 @@ class NeuralCLBFController(pl.LightningModule, Controller):
         # We shouldn't scale or offset any angle dimensions
         self.x_center[self.dynamics_model.angle_dims] = 0.0
         self.x_range[self.dynamics_model.angle_dims] = 1.0
-
-        # Get plotting callbacks
-        if plotting_callbacks is None:
-            plotting_callbacks = []
-        self.plotting_callbacks = plotting_callbacks
 
         # Some of the dimensions might represent angles. We want to replace these
         # dimensions with two dimensions: sin and cos of the angle. To do this, we need
@@ -764,39 +757,15 @@ class NeuralCLBFController(pl.LightningModule, Controller):
             self.log(loss_key + " / val", avg_losses[loss_key], sync_dist=True)
 
         # **Now entering spicetacular automation zone**
-        # We automatically plot and save the CLBF and some simulated rollouts
-        # at the end of the validation epoch, using arbitrary plotting callbacks!
+        # We automatically run experiments every few epochs
 
         # Only plot every 5 epochs
         if self.current_epoch % 5 != 0:
             return
 
-        # Figure out the relaxation penalty for this rollout
-        if self.penalty_scheduling_rate > 0:
-            relaxation_penalty = (
-                self.clbf_relaxation_penalty
-                * self.current_epoch
-                / self.penalty_scheduling_rate
-            )
-        else:
-            relaxation_penalty = self.clbf_relaxation_penalty
-        old_relaxation_penalty = self.clbf_relaxation_penalty
-        self.clbf_relaxation_penalty = relaxation_penalty
-
-        plots = []
-        for plot_fn in self.plotting_callbacks:
-            plot_name, plot = plot_fn(self)
-            self.logger.experiment.add_figure(
-                plot_name, plot, global_step=self.current_epoch
-            )
-            plots.append(plot)
-        self.logger.experiment.close()
-        self.logger.experiment.flush()
-        [plt.close(plot) for plot in plots]
-
-        # Restore the nominal relaxation penalty in case any plotting callbacks
-        # do parameter sweeps
-        self.clbf_relaxation_penalty = old_relaxation_penalty
+        self.experiment_suite.run_all_and_log_plots(
+            self, self.logger, self.current_epoch
+        )
 
     @pl.core.decorators.auto_move_data
     def simulator_fn(

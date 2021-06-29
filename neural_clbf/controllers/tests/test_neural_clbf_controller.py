@@ -7,6 +7,7 @@ from torch.autograd.functional import jacobian
 from neural_clbf.controllers.neural_clbf_controller import (
     NeuralCLBFController,
 )
+from neural_clbf.experiments import ExperimentSuite
 from neural_clbf.systems.tests.mock_system import MockSystem
 from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
 
@@ -23,9 +24,11 @@ def test_init_neuralrclbfcontroller():
     ]
     dm = EpisodicDataModule(system, initial_domain)
 
+    experiment_suite = ExperimentSuite([])
+
     # Instantiate with a list of only one scenarios
     scenarios = [params]
-    controller = NeuralCLBFController(system, scenarios, dm)
+    controller = NeuralCLBFController(system, scenarios, dm, experiment_suite)
     assert controller is not None
     assert controller.controller_period > 0
 
@@ -42,9 +45,11 @@ def test_normalize_x():
     ]
     dm = EpisodicDataModule(system, initial_domain)
 
+    experiment_suite = ExperimentSuite([])
+
     # Instantiate with a list of only one scenarios
     scenarios = [params]
-    controller = NeuralCLBFController(system, scenarios, dm)
+    controller = NeuralCLBFController(system, scenarios, dm, experiment_suite)
 
     # Define states on which to test.
     # Start with the upper and lower state limits
@@ -93,10 +98,12 @@ def test_V_jacobian():
         (-1.0, 1.0),
     ]
     dm = EpisodicDataModule(system, initial_domain)
+    experiment_suite = ExperimentSuite([])
     controller = NeuralCLBFController(
         system,
         scenarios,
         dm,
+        experiment_suite,
         clbf_hidden_layers=2,
         clbf_hidden_size=64,
     )
@@ -145,7 +152,8 @@ def test_V_lie_derivatives():
         (-1.0, 1.0),
     ]
     dm = EpisodicDataModule(system, initial_domain)
-    controller = NeuralCLBFController(system, scenarios, dm)
+    experiment_suite = ExperimentSuite([])
+    controller = NeuralCLBFController(system, scenarios, dm, experiment_suite)
 
     # Create the points (state and control) at which to test the Lie derivatives
     N_test = 2
