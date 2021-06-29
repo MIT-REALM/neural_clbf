@@ -87,7 +87,7 @@ def doMain():
     )
 
     domain = [(-2.0, 2.0), (-2.0, 2.0)]
-    n_grid = 100
+    n_grid = 10
     x_axis_index = KSCar.SXE
     y_axis_index = KSCar.SYE
     x_axis_label = "$x - x_{ref}$"

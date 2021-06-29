@@ -15,12 +15,13 @@ from abc import (
     abstractmethod,
 )
 import os
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 from matplotlib.pyplot import figure
 import pandas as pd
 
-from neural_clbf.controllers import Controller
+if TYPE_CHECKING:
+    from neural_clbf.controllers import Controller
 
 
 class Experiment(ABC):
@@ -36,7 +37,7 @@ class Experiment(ABC):
         self.name = name
 
     @abstractmethod
-    def run(self, controller_under_test: Controller) -> pd.DataFrame:
+    def run(self, controller_under_test: "Controller") -> pd.DataFrame:
         """
         Run the experiment, likely by evaluating the controller, but the experiment
         has freedom to call other functions of the controller as necessary (if these
@@ -54,7 +55,7 @@ class Experiment(ABC):
 
     @abstractmethod
     def run_and_plot(
-        self, controller_under_test: Controller, display_plots: bool = False
+        self, controller_under_test: "Controller", display_plots: bool = False
     ) -> List[Tuple[str, figure]]:
         """
         Run the experiment, plot the results, and return the plot handles. Optionally
@@ -69,7 +70,7 @@ class Experiment(ABC):
         """
         pass
 
-    def run_and_save_to_csv(self, controller_under_test: Controller, save_dir: str):
+    def run_and_save_to_csv(self, controller_under_test: "Controller", save_dir: str):
         """
         Run the experiment and save the results to a file.
 

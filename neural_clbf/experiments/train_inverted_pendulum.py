@@ -10,11 +10,8 @@ from neural_clbf.controllers import NeuralCLBFController
 from neural_clbf.datamodules.episodic_datamodule import (
     EpisodicDataModule,
 )
-from neural_clbf.experiments.common.plotting import (
-    plot_CLBF,
-    rollout_CLBF,
-)
 from neural_clbf.systems import InvertedPendulum
+from neural_clbf.experiments import ExperimentSuite, CLBFContourExperiment
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -31,35 +28,6 @@ start_x = torch.tensor(
     ]
 )
 simulation_dt = 0.001
-
-
-def rollout_plotting_cb(clbf_net):
-    return rollout_CLBF(
-        clbf_net,
-        start_x=start_x,
-        # plot_x_indices=[InvertedPendulum.THETA, InvertedPendulum.THETA_DOT],
-        plot_x_indices=[InvertedPendulum.THETA],
-        plot_x_labels=["$\\theta$"],
-        plot_u_indices=[InvertedPendulum.U],
-        plot_u_labels=["$u$"],
-        t_sim=6.0,
-        n_sims_per_start=5,
-        controller_period=controller_period,
-        goal_check_fn=clbf_net.dynamics_model.goal_mask,
-        out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
-    )
-
-
-def clbf_plotting_cb(clbf_net):
-    return plot_CLBF(
-        clbf_net,
-        domain=[(-2.0, 2.0), (-2.0, 2.0)],  # plot for theta, theta_dot
-        n_grid=50,
-        x_axis_index=InvertedPendulum.THETA,
-        y_axis_index=InvertedPendulum.THETA_DOT,
-        x_axis_label="$\\theta$",
-        y_axis_label="$\\dot{\\theta}$",
-    )
 
 
 def main(args):
@@ -88,29 +56,33 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
-        trajectory_length=500,
-        fixed_samples=20000,
+        trajectories_per_episode=0,
+        trajectory_length=50,
+        fixed_samples=2000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
         quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
 
-    # Define the plotting callbacks
-    plotting_callbacks = [
-        # This plotting function plots V and dV/dt violation on a grid
-        clbf_plotting_cb,
-        # This plotting function simulates rollouts of the controller
-        rollout_plotting_cb,
-    ]
+    # Define the experiment suite
+    V_contour_experiment = CLBFContourExperiment(
+        "V Contour",
+        domain=[(-2.0, 2.0), (-2.0, 2.0)],
+        n_grid=20,
+        x_axis_index=InvertedPendulum.THETA,
+        y_axis_index=InvertedPendulum.THETA_DOT,
+        x_axis_label="$\\theta$",
+        y_axis_label="$\\dot{\\theta}$",
+    )
+    experiment_suite = ExperimentSuite([V_contour_experiment])
 
     # Initialize the controller
     clbf_controller = NeuralCLBFController(
         dynamics_model,
         scenarios,
         data_module,
-        plotting_callbacks=plotting_callbacks,
+        experiment_suite=experiment_suite,
         clbf_hidden_layers=2,
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
@@ -126,7 +98,6 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/inverted_pendulum",
-        name="full_test",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
