@@ -29,7 +29,8 @@ class CLBFContourExperiment(Experiment):
         default_state: Optional[torch.Tensor] = None,
         plot_unsafe_region: bool = True,
     ):
-        """Plot the value of the CLBF over selected state dimensions.
+        """Initialize an experiment for plotting the value of the CLBF over selected
+        state dimensions.
 
         args:
             name: the name of this experiment
@@ -129,7 +130,7 @@ class CLBFContourExperiment(Experiment):
                 is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
 
                 # Get the QP relaxation
-                _, r, _ = controller_under_test.solve_CLBF_QP(x)  # type: ignore
+                _, r, _ = controller_under_test.solve_CLBF_QP(x)
                 relaxation = r.max()
 
                 # Store the results
