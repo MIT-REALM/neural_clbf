@@ -7,16 +7,15 @@ from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
 from neural_clbf.controllers import NeuralCLBFController
-from neural_clbf.datamodules.episodic_datamodule import (
+from neural_clbf.datamodules import (
     EpisodicDataModule,
 )
-from neural_clbf.systems import InvertedPendulum
 from neural_clbf.experiments import (
     ExperimentSuite,
     CLBFContourExperiment,
     RolloutTimeSeriesExperiment,
 )
-from neural_clbf.training.utils import current_git_hash
+from neural_clbf.systems import TurtleBot
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -26,10 +25,8 @@ controller_period = 0.01
 
 start_x = torch.tensor(
     [
-        [0.5, 0.5],
-        # [-0.2, 1.0],
-        # [0.2, -1.0],
-        # [-0.2, -1.0],
+        [0, 0, 0],
+        # [1.0, 1.0, 0],
     ]
 )
 simulation_dt = 0.001
@@ -37,16 +34,15 @@ simulation_dt = 0.001
 
 def main(args):
     # Define the scenarios
-    nominal_params = {"m": 1.0, "L": 1.0, "b": 0.01}
+    nominal_params = {"R": 3.25, "L": 14.0}
     scenarios = [
         nominal_params,
-        {"m": 1.25, "L": 1.0, "b": 0.01},
-        {"m": 1.0, "L": 1.25, "b": 0.01},
-        {"m": 1.25, "L": 1.25, "b": 0.01},
+        # {"R": 3.25, "L": 13.9},
+        # {"R": 3.25, "L": 14.1},
     ]
 
     # Define the dynamics model
-    dynamics_model = InvertedPendulum(
+    dynamics_model = TurtleBot(
         nominal_params,
         dt=simulation_dt,
         controller_dt=controller_period,
@@ -55,15 +51,16 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
+        (-2.0, 2.0),  # x
+        (-2.0, 2.0),  # y
         (-np.pi / 2, np.pi / 2),  # theta
-        (-1.0, 1.0),  # theta_dot
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=0,
-        trajectory_length=0,
-        fixed_samples=10000,
+        trajectories_per_episode=100,
+        trajectory_length=500,
+        fixed_samples=20000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
@@ -74,22 +71,21 @@ def main(args):
     V_contour_experiment = CLBFContourExperiment(
         "V Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
-        n_grid=20,
-        x_axis_index=InvertedPendulum.THETA,
-        y_axis_index=InvertedPendulum.THETA_DOT,
-        x_axis_label="$\\theta$",
-        y_axis_label="$\\dot{\\theta}$",
+        n_grid=50,
+        x_axis_index=TurtleBot.X,
+        y_axis_index=TurtleBot.Y,
+        x_axis_label="$x$",
+        y_axis_label="$y$",
     )
     rollout_experiment = RolloutTimeSeriesExperiment(
         "Rollout",
         start_x,
-        plot_x_indices=[InvertedPendulum.THETA, InvertedPendulum.THETA_DOT],
-        plot_x_labels=["$\\theta$", "$\\dot{\\theta}$"],
-        plot_u_indices=[],
-        plot_u_labels=[],
-        scenarios=scenarios,
+        plot_x_indices=[TurtleBot.X, TurtleBot.Y, TurtleBot.THETA],
+        plot_x_labels=["$x$", "$y$"],
+        plot_u_indices=[TurtleBot.V, TurtleBot.THETA_DOT],
+        plot_u_labels=["$v$", "$\\dot{\\theta}$"],
+        t_sim=6.0,
         n_sims_per_start=2,
-        t_sim=5.0,
     )
     experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
 
@@ -98,7 +94,7 @@ def main(args):
         dynamics_model,
         scenarios,
         data_module,
-        experiment_suite=experiment_suite,
+        experiment_suite,
         clbf_hidden_layers=2,
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
@@ -113,8 +109,8 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/inverted_pendulum",
-        name=f"commit_{current_git_hash()}",
+        "logs/turtlebot",
+        name="full_test",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
