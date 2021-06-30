@@ -12,14 +12,12 @@ from neural_clbf.controllers import NeuralCLBFController
 from neural_clbf.datamodules.episodic_datamodule import (
     EpisodicDataModule,
 )
-from neural_clbf.experiments.common.plotting import (
-    plot_CLBF,
-    rollout_CLBF,
+from neural_clbf.experiments import (
+    ExperimentSuite,
+    CLBFContourExperiment,
+    CarSCurveExperiment,
 )
-from neural_clbf.experiments.sim_kinematic_car_controller import (
-    single_rollout_s_path,
-)
-from neural_clbf.systems import KSCar
+from neural_clbf.systems import STCar
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -34,34 +32,6 @@ controller_period = 0.01
 simulation_dt = 0.001
 
 
-def rollout_plotting_cb(clbf_net):
-    return rollout_CLBF(
-        clbf_net,
-        start_x=start_x,
-        plot_x_indices=[KSCar.SXE, KSCar.SYE],
-        plot_x_labels=["$x - x_{ref}$", "$y - y_{ref}$"],
-        plot_u_indices=[KSCar.VDELTA, KSCar.ALONG],
-        plot_u_labels=["$v_\\delta$", "$a_{long}$"],
-        t_sim=6.0,
-        n_sims_per_start=1,
-        controller_period=controller_period,
-        goal_check_fn=clbf_net.dynamics_model.goal_mask,
-        out_of_bounds_check_fn=clbf_net.dynamics_model.out_of_bounds_mask,
-    )
-
-
-def clbf_plotting_cb(clbf_net):
-    return plot_CLBF(
-        clbf_net,
-        domain=[(-2.0, 2.0), (-2.0, 2.0)],
-        n_grid=50,
-        x_axis_index=KSCar.SXE,
-        y_axis_index=KSCar.SYE,
-        x_axis_label="$x - x_{ref}$",
-        y_axis_label="$y - y_{ref}$",
-    )
-
-
 def main(args):
     # Define the dynamics model
     nominal_params = {
@@ -70,7 +40,7 @@ def main(args):
         "a_ref": 0.0,
         "omega_ref": 0.0,
     }
-    dynamics_model = KSCar(
+    dynamics_model = STCar(
         nominal_params, dt=simulation_dt, controller_dt=controller_period
     )
 
@@ -81,6 +51,8 @@ def main(args):
         (-0.1, 0.1),  # delta
         (-0.1, 0.1),  # ve
         (-0.1, 0.1),  # psi_e
+        (-0.1, 0.1),  # psi_dot
+        (-0.1, 0.1),  # beta
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
@@ -97,26 +69,34 @@ def main(args):
     # Define the scenarios
     scenarios = []
     omega_ref_vals = [-1.5, 1.5]
+    # omega_ref_vals = [0.0]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
 
         scenarios.append(s)
 
-    # Define the plotting callbacks
-    plotting_callbacks = [
-        # This plotting function plots V and dV/dt violation on a grid
-        clbf_plotting_cb,
-        # Plot some rollouts
-        single_rollout_s_path,
-    ]
+    V_contour_experiment = CLBFContourExperiment(
+        "V Contour",
+        domain=[(-1.0, 1.0), (-1.0, 1.0)],
+        n_grid=50,
+        x_axis_index=STCar.SXE,
+        y_axis_index=STCar.SYE,
+        x_axis_label="$x - x_{ref}$",
+        y_axis_label="$y - y_{ref}$",
+    )
+    s_curve_experiment = CarSCurveExperiment(
+        "S-Curve Tracking",
+        t_sim=5.0,
+    )
+    experiment_suite = ExperimentSuite([V_contour_experiment, s_curve_experiment])
 
     # Initialize the controller
     clbf_controller = NeuralCLBFController(
         dynamics_model,
         scenarios,
         data_module,
-        plotting_callbacks=plotting_callbacks,
+        experiment_suite,
         clbf_hidden_layers=2,
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
@@ -139,12 +119,10 @@ def main(args):
         .strip()
     )
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/kscar/", name=f"commit_{current_git_hash}"
+        "logs/stcar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
-        args,
-        logger=tb_logger,
-        reload_dataloaders_every_epoch=True,
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True
     )
 
     # Train

@@ -11,7 +11,12 @@ from neural_clbf.datamodules.episodic_datamodule import (
     EpisodicDataModule,
 )
 from neural_clbf.systems import InvertedPendulum
-from neural_clbf.experiments import ExperimentSuite, CLBFContourExperiment
+from neural_clbf.experiments import (
+    ExperimentSuite,
+    CLBFContourExperiment,
+    RolloutTimeSeriesExperiment,
+)
+from neural_clbf.training.utils import current_git_hash
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -57,8 +62,8 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=0,
-        trajectory_length=50,
-        fixed_samples=2000,
+        trajectory_length=0,
+        fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
@@ -75,7 +80,18 @@ def main(args):
         x_axis_label="$\\theta$",
         y_axis_label="$\\dot{\\theta}$",
     )
-    experiment_suite = ExperimentSuite([V_contour_experiment])
+    rollout_experiment = RolloutTimeSeriesExperiment(
+        "Rollout",
+        start_x,
+        plot_x_indices=[InvertedPendulum.THETA, InvertedPendulum.THETA_DOT],
+        plot_x_labels=["$\\theta$", "$\\dot{\\theta}$"],
+        plot_u_indices=[],
+        plot_u_labels=[],
+        scenarios=scenarios,
+        n_sims_per_start=2,
+        t_sim=0.1,
+    )
+    experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
 
     # Initialize the controller
     clbf_controller = NeuralCLBFController(
@@ -98,6 +114,7 @@ def main(args):
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/inverted_pendulum",
+        name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
         args, logger=tb_logger, reload_dataloaders_every_epoch=True
