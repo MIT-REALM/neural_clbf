@@ -9,6 +9,7 @@ from .kinematic_single_track_car import KSCar
 from .single_track_car import STCar
 from .segway import Segway
 from .turtlebot import TurtleBot
+from .linear_satellite import LinearSatellite
 
 __all__ = [
     "ControlAffineSystem",
@@ -20,6 +21,7 @@ __all__ = [
     "STCar",
     "TurtleBot",
     "Segway",
+    "LinearSatellite",
 ]
 
 try:
