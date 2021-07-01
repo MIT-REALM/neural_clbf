@@ -12,7 +12,7 @@ from neural_clbf.datamodules.episodic_datamodule import (
 )
 from neural_clbf.experiments import (
     ExperimentSuite,
-    CLBFContourExperiment,
+    CLFContourExperiment,
     RolloutTimeSeriesExperiment,
     RolloutStateSpaceExperiment,
 )
@@ -64,7 +64,7 @@ def main(args):
     ]
 
     # Define the experiment suite
-    V_contour_experiment = CLBFContourExperiment(
+    V_contour_experiment = CLFContourExperiment(
         "V Contour",
         domain=[(-1.0, 1.0), (-0.5, 1.0)],
         n_grid=15,
@@ -108,7 +108,7 @@ def main(args):
         u_nn_hidden_layers=3,
         u_nn_hidden_size=32,
         controller_period=controller_period,
-        clbf_relaxation_penalty=50.0,
+        clf_relaxation_penalty=50.0,
         epochs_per_episode=1000,
     )
 

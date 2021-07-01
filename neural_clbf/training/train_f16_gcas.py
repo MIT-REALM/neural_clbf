@@ -12,7 +12,7 @@ from neural_clbf.datamodules.episodic_datamodule import (
 )
 from neural_clbf.experiments import (
     ExperimentSuite,
-    CLBFContourExperiment,
+    CLFContourExperiment,
     RolloutTimeSeriesExperiment,
 )
 from neural_clbf.systems import F16
@@ -84,7 +84,7 @@ def main(args):
     ]
 
     # Define the experiment suite
-    V_contour_experiment = CLBFContourExperiment(
+    V_contour_experiment = CLFContourExperiment(
         "V Contour",
         domain=[(400.0, 600.0), (0.0, 1500)],
         default_state=torch.tensor(

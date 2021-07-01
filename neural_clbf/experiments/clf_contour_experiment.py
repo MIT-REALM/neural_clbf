@@ -11,11 +11,11 @@ import tqdm
 from neural_clbf.experiments import Experiment
 
 if TYPE_CHECKING:
-    from neural_clbf.controllers import Controller, NeuralCLBFController  # noqa
+    from neural_clbf.controllers import Controller, CLFController  # noqa
 
 
-class CLBFContourExperiment(Experiment):
-    """An experiment for plotting the contours of learned CLBFs"""
+class CLFContourExperiment(Experiment):
+    """An experiment for plotting the contours of learned CLFs"""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class CLBFContourExperiment(Experiment):
         default_state: Optional[torch.Tensor] = None,
         plot_unsafe_region: bool = True,
     ):
-        """Initialize an experiment for plotting the value of the CLBF over selected
+        """Initialize an experiment for plotting the value of the CLF over selected
         state dimensions.
 
         args:
@@ -41,12 +41,12 @@ class CLBFContourExperiment(Experiment):
             y_axis_index: the index of the state variable to plot on the y axis
             x_axis_label: the label for the x axis
             y_axis_label: the label for the y axis
-            default_state: 1 x clbf_net.dynamics_model.n_dims tensor of default state
+            default_state: 1 x dynamics_model.n_dims tensor of default state
                            values. The values at x_axis_index and y_axis_index will be
                            overwritten by the grid values.
             plot_unsafe_region: True to plot the safe/unsafe region boundaries.
         """
-        super(CLBFContourExperiment, self).__init__(name)
+        super(CLFContourExperiment, self).__init__(name)
 
         # Default to plotting over [-1, 1] in all directions
         if domain is None:
@@ -76,21 +76,23 @@ class CLBFContourExperiment(Experiment):
             format (i.e. each row should correspond to a single observation from the
             experiment).
         """
-        # Sanity check: can only be called on a NeuralCLBFController
+        # Sanity check: can only be called on a NeuralCLFController
         if not (
             hasattr(controller_under_test, "V")
-            and hasattr(controller_under_test, "solve_CLBF_QP")
-            and hasattr(controller_under_test, "device")
+            and hasattr(controller_under_test, "solve_CLF_QP")
         ):
-            raise ValueError("Controller under test must be a NeuralCLBFController")
+            raise ValueError("Controller under test must be a CLFController")
 
-        controller_under_test = cast("NeuralCLBFController", controller_under_test)
+        controller_under_test = cast("CLFController", controller_under_test)
 
         # Set up a dataframe to store the results
         results_df = pd.DataFrame()
 
         # Set up the plotting grid
-        device = controller_under_test.device
+        device = "cpu"
+        if hasattr(controller_under_test, "device"):
+            device = controller_under_test.device  # type: ignore
+
         x_vals = torch.linspace(
             self.domain[0][0], self.domain[0][1], self.n_grid, device=device
         )
@@ -114,14 +116,14 @@ class CLBFContourExperiment(Experiment):
         )
 
         # Loop through the grid
-        prog_bar_range = tqdm.trange(self.n_grid, desc="Plotting CLBF", leave=True)
+        prog_bar_range = tqdm.trange(self.n_grid, desc="Plotting CLF", leave=True)
         for i in prog_bar_range:
             for j in range(self.n_grid):
                 # Adjust x to be at the current grid point
                 x[0, self.x_axis_index] = x_vals[i]
                 x[0, self.y_axis_index] = y_vals[j]
 
-                # Get the value of the CLBF
+                # Get the value of the CLF
                 V = controller_under_test.V(x)
 
                 # Get the goal, safe, or unsafe classification
@@ -130,7 +132,7 @@ class CLBFContourExperiment(Experiment):
                 is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
 
                 # Get the QP relaxation
-                _, r, _ = controller_under_test.solve_CLBF_QP(x)
+                _, r, _ = controller_under_test.solve_CLF_QP(x)
                 relaxation = r.max()
 
                 # Store the results

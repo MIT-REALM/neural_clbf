@@ -1,11 +1,8 @@
 import itertools
-from typing import Tuple, List, Optional, Union
+from typing import Tuple, List, Optional
 from collections import OrderedDict
 import random
 
-import gurobipy as gp
-from gurobipy import GRB
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,14 +10,16 @@ import pytorch_lightning as pl
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
-from neural_clbf.controllers.controller import Controller
+from neural_clbf.controllers.clf_controller import CLFController
 from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
 from neural_clbf.experiments import ExperimentSuite
 
 
-class NeuralCLBFController(pl.LightningModule, Controller):
+class NeuralCLBFController(pl.LightningModule, CLFController):
     """
-    A neural rCLBF controller
+    A neural rCLBF controller. Differs from the CLFController in that it uses a
+    neural network to learn the CLF, and it turns it from a CLF to a CLBF by making sure
+    that a level set separates the safe and unsafe regions.
     """
 
     def __init__(
@@ -33,10 +32,10 @@ class NeuralCLBFController(pl.LightningModule, Controller):
         clbf_hidden_size: int = 48,
         u_nn_hidden_layers: int = 1,
         u_nn_hidden_size: int = 8,
-        clbf_lambda: float = 1.0,
-        safety_level: float = 1.0,
+        clf_lambda: float = 1.0,
+        safe_level: float = 1.0,
         use_nominal_in_qp: bool = False,
-        clbf_relaxation_penalty: float = 50.0,
+        clf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
         optimizer_alternate_epochs: int = 1,
@@ -54,24 +53,30 @@ class NeuralCLBFController(pl.LightningModule, Controller):
             clbf_hidden_size: number of neurons per hidden layer in the CLBF network
             u_nn_hidden_layers: number of hidden layers to use for the proof controller
             u_nn_hidden_size: number of neurons per hidden layer in the proof controller
-            clbf_lambda: convergence rate for the CLBF
-            safety_level: safety level set value for the CLBF
+            clf_lambda: convergence rate for the CLBF
+            safe_level: safety level set value for the CLBF
             use_nominal_in_qp: if True, base the QP on the nominal controller; otherwise
                                use the nn controller.
-            clbf_relaxation_penalty: the penalty for relaxing CLBF conditions.
+            clf_relaxation_penalty: the penalty for relaxing CLBF conditions.
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
             optimizer_alternate_epochs: how frequently to switch between optimizers
             epochs_per_episode: the number of epochs to include in each episode
             penalty_scheduling_rate: the rate at which to ramp the rollout relaxation
-                                     penalty up to clbf_relaxation_penalty. Set to 0 to
+                                     penalty up to clf_relaxation_penalty. Set to 0 to
                                      disable penalty scheduling (use constant penalty)
             num_init_epochs: the number of epochs to pretrain the controller on the
                              linear controller
         """
         super(NeuralCLBFController, self).__init__(
-            dynamics_model=dynamics_model, controller_period=controller_period
+            dynamics_model=dynamics_model,
+            scenarios=scenarios,
+            experiment_suite=experiment_suite,
+            clf_lambda=clf_lambda,
+            use_nominal_in_qp=use_nominal_in_qp,
+            clf_relaxation_penalty=clf_relaxation_penalty,
+            controller_period=controller_period,
         )
         self.save_hyperparameters()
 
@@ -87,13 +92,8 @@ class NeuralCLBFController(pl.LightningModule, Controller):
         self.experiment_suite = experiment_suite
 
         # Save the other parameters
-        self.clbf_lambda = clbf_lambda
-        self.safe_level: Union[torch.Tensor, float]
-        self.unsafe_level: Union[torch.Tensor, float]
-        self.safe_level = safety_level
-        self.use_nominal_in_qp = use_nominal_in_qp
-        self.unsafe_level = self.safe_level
-        self.clbf_relaxation_penalty = clbf_relaxation_penalty
+        self.safe_level = safe_level
+        self.unsafe_level = safe_level
         self.primal_learning_rate = primal_learning_rate
         self.optimizer_alternate_epochs = optimizer_alternate_epochs
         self.epochs_per_episode = epochs_per_episode
@@ -245,11 +245,6 @@ class NeuralCLBFController(pl.LightningModule, Controller):
 
         return V, JV
 
-    def V(self, x: torch.Tensor) -> torch.Tensor:
-        """Compute the value of the CLBF"""
-        V, _ = self.V_with_jacobian(x)
-        return V
-
     def u_learned(self, x: torch.Tensor) -> torch.Tensor:
         """Computes the learned controller input from the state x
 
@@ -275,171 +270,6 @@ class NeuralCLBFController(pl.LightningModule, Controller):
         # u_scaled = self.dynamics_model.u_nominal(x) + 0.00001 * u_scaled
 
         return u_scaled
-
-    def V_lie_derivatives(
-        self, x: torch.Tensor, scenarios: Optional[ScenarioList] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute the Lie derivatives of the CLBF V along the control-affine dynamics
-
-        args:
-            x: bs x self.dynamics_model.n_dims tensor of state
-            scenarios: optional list of scenarios. Defaults to self.scenarios
-        returns:
-            Lf_V: bs x len(scenarios) x 1 tensor of Lie derivatives of V
-                  along f
-            Lg_V: bs x len(scenarios) x self.dynamics_model.n_controls tensor
-                  of Lie derivatives of V along g
-        """
-        if scenarios is None:
-            scenarios = self.scenarios
-        n_scenarios = len(scenarios)
-
-        # Get the Jacobian of V for each entry in the batch
-        _, gradV = self.V_with_jacobian(x)
-
-        # We need to compute Lie derivatives for each scenario
-        batch_size = x.shape[0]
-        Lf_V = torch.zeros(batch_size, n_scenarios, 1)
-        Lg_V = torch.zeros(batch_size, n_scenarios, self.dynamics_model.n_controls)
-        Lf_V = Lf_V.type_as(x)
-        Lg_V = Lg_V.type_as(x)
-
-        for i in range(n_scenarios):
-            # Get the dynamics f and g for this scenario
-            s = scenarios[i]
-            f, g = self.dynamics_model.control_affine_dynamics(x, params=s)
-
-            # Multiply these with the Jacobian to get the Lie derivatives
-            Lf_V[:, i, :] = torch.bmm(gradV, f).squeeze(1)
-            Lg_V[:, i, :] = torch.bmm(gradV, g).squeeze(1)
-
-        # return the Lie derivatives
-        return Lf_V, Lg_V
-
-    def solve_CLBF_QP(
-        self, x, relaxation_penalty: Optional[float] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Determine the control input for a given state using a QP
-
-        args:
-            x: bs x self.dynamics_model.n_dims tensor of state
-            relaxation_penalty: the penalty to use for CLBF relaxation, defaults to
-                                self.clbf_relaxation_penalty
-        returns:
-            u: bs x self.dynamics_model.n_controls tensor of control inputs
-            relaxation: bs x 1 tensor of how much the CLBF had to be relaxed in each
-                        case
-            objectives: bs x 1 tensor of the QP objective.
-        """
-        # Get the value of the CLBF and its Lie derivatives
-        V = self.V(x)
-        Lf_V, Lg_V = self.V_lie_derivatives(x)
-
-        # Get the nn control input as well
-        if self.use_nominal_in_qp:
-            u_ref = self.dynamics_model.u_nominal(x)
-        else:
-            u_ref = self.u_learned(x)
-
-        # Apply default penalty if needed
-        if relaxation_penalty is None:
-            relaxation_penalty = self.clbf_relaxation_penalty
-
-        # To find the control input, we want to solve a QP constrained by
-        #
-        # L_f V + L_g V u + lambda V <= 0
-        #
-        # To ensure that this QP is always feasible, we relax the constraint
-        #
-        # L_f V + L_g V u + lambda V - r <= 0
-        #                              r >= 0
-        #
-        # and add the cost term relaxation_penalty * r.
-        #
-        # We want the objective to be to minimize
-        #
-        #           ||u - u_ref||^2 + relaxation_penalty * r^2
-        #
-        # This reduces to (ignoring constant terms)
-        #
-        #           u^T I u - 2 u_ref^T u + relaxation_penalty * r^2
-
-        n_controls = self.dynamics_model.n_controls
-        n_scenarios = self.n_scenarios
-        allow_relaxation = relaxation_penalty < 1e6
-
-        # Solve a QP for each row in x
-        bs = x.shape[0]
-        u_result = torch.zeros(bs, n_controls)
-        r_result = torch.zeros(bs, n_scenarios)
-        objective_result = torch.zeros(bs, 1)
-        for batch_idx in range(bs):
-            # Skip any bad points
-            if (
-                torch.isnan(x[batch_idx]).any()
-                or torch.isinf(x[batch_idx]).any()
-                or torch.isnan(Lg_V[batch_idx]).any()
-                or torch.isinf(Lg_V[batch_idx]).any()
-                or torch.isnan(Lf_V[batch_idx]).any()
-                or torch.isinf(Lf_V[batch_idx]).any()
-            ):
-                continue
-
-            # Instantiate the model
-            model = gp.Model("clbf_qp")
-            # Create variables for control input and (optionally) the relaxations
-            upper_lim, lower_lim = self.dynamics_model.control_limits
-            upper_lim = upper_lim.cpu().numpy()
-            lower_lim = lower_lim.cpu().numpy()
-            u = model.addMVar(n_controls, lb=lower_lim, ub=upper_lim)
-            if allow_relaxation:
-                r = model.addMVar(n_scenarios, lb=0, ub=GRB.INFINITY)
-
-            # Define the cost
-            Q = np.eye(n_controls)
-            u_ref_np = u_ref[batch_idx, :].detach().cpu().numpy()
-            objective = u @ Q @ u - 2 * u_ref_np @ Q @ u + u_ref_np @ Q @ u_ref_np
-            if allow_relaxation:
-                relax_penalties = relaxation_penalty * np.ones(n_scenarios)
-                objective += relax_penalties @ r
-
-            # Now build the CLBF constraints
-            for i in range(n_scenarios):
-                Lg_V_np = Lg_V[batch_idx, i, :].detach().cpu().numpy()
-                Lf_V_np = Lf_V[batch_idx, i, :].detach().cpu().numpy()
-                V_np = V[batch_idx].detach().cpu().numpy()
-                clbf_constraint = Lf_V_np + Lg_V_np @ u + self.clbf_lambda * V_np
-                if allow_relaxation:
-                    clbf_constraint -= r[i]
-                model.addConstr(clbf_constraint <= 0.0, name=f"Scenario {i} Decrease")
-
-            # Optimize!
-            model.setParam("DualReductions", 0)
-            model.setObjective(objective, GRB.MINIMIZE)
-            model.optimize()
-
-            if model.status != GRB.OPTIMAL:
-                # Make the relaxations nan if the problem was infeasible, as a signal
-                # that something has gone wrong
-                if allow_relaxation:
-                    for i in range(n_scenarios):
-                        r_result[batch_idx, i] = torch.tensor(float("nan"))
-                continue
-
-            # Extract the results
-            for i in range(n_controls):
-                u_result[batch_idx, i] = torch.tensor(u[i].x)
-            if allow_relaxation:
-                for i in range(n_scenarios):
-                    r_result[batch_idx, i] = torch.tensor(r[i].x)
-            objective_result[batch_idx, 0] = torch.tensor(model.objVal)
-
-        return u_result.type_as(x), r_result.type_as(x), objective_result.type_as(x)
-
-    def u(self, x):
-        """Get the control input for a given state"""
-        u, _, _ = self.solve_CLBF_QP(x)
-        return u
 
     def forward(self, x):
         """Determine the control input for a given state using a QP
@@ -535,7 +365,7 @@ class NeuralCLBFController(pl.LightningModule, Controller):
 
         # First figure out where this condition needs to hold
         condition_active = V < self.safe_level
-        _, qp_relaxation, _ = self.solve_CLBF_QP(x)
+        _, qp_relaxation, _ = self.solve_CLF_QP(x)
         qp_relaxation, _ = torch.max(qp_relaxation, dim=-1)
         relaxation_scaling = F.relu(qp_relaxation - 0.001)
 
@@ -556,7 +386,7 @@ class NeuralCLBFController(pl.LightningModule, Controller):
                 u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
             )
             Vdot = Vdot.reshape(V.shape)
-            violation = F.relu(eps + Vdot + self.clbf_lambda * V)
+            violation = F.relu(eps + Vdot + self.clf_lambda * V)
             violation *= relaxation_scaling
             violation = violation[condition_active]
             clbf_descent_term_lin += violation.mean()
@@ -580,7 +410,7 @@ class NeuralCLBFController(pl.LightningModule, Controller):
             x_next = x + self.dynamics_model.dt * xdot
             V_next = self.V(x_next)
             violation = F.relu(
-                eps + (V_next - V) / self.controller_period + self.clbf_lambda * V
+                eps + (V_next - V) / self.controller_period + self.clf_lambda * V
             )
             violation *= relaxation_scaling
             violation = violation[condition_active]
@@ -802,12 +632,12 @@ class NeuralCLBFController(pl.LightningModule, Controller):
         if self.current_epoch > 0 and self.current_epoch % self.epochs_per_episode == 0:
             if self.penalty_scheduling_rate > 0:
                 relaxation_penalty = (
-                    self.clbf_relaxation_penalty
+                    self.clf_relaxation_penalty
                     * self.current_epoch
                     / self.penalty_scheduling_rate
                 )
             else:
-                relaxation_penalty = self.clbf_relaxation_penalty
+                relaxation_penalty = self.clf_relaxation_penalty
 
             # Use the models simulation function with this controller
             def simulator_fn_wrapper(x_init: torch.Tensor, num_steps: int):
