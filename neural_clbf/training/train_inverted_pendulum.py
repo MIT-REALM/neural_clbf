@@ -13,7 +13,7 @@ from neural_clbf.datamodules.episodic_datamodule import (
 from neural_clbf.systems import InvertedPendulum
 from neural_clbf.experiments import (
     ExperimentSuite,
-    CLBFContourExperiment,
+    CLFContourExperiment,
     RolloutTimeSeriesExperiment,
 )
 from neural_clbf.training.utils import current_git_hash
@@ -62,7 +62,7 @@ def main(args):
         dynamics_model,
         initial_conditions,
         trajectories_per_episode=0,
-        trajectory_length=0,
+        trajectory_length=1,
         fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
@@ -71,7 +71,7 @@ def main(args):
     )
 
     # Define the experiment suite
-    V_contour_experiment = CLBFContourExperiment(
+    V_contour_experiment = CLFContourExperiment(
         "V Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
         n_grid=20,
@@ -103,10 +103,10 @@ def main(args):
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=64,
-        clbf_lambda=1.0,
-        safety_level=1.0,
+        clf_lambda=1.0,
+        safe_level=1.0,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e5,
+        clf_relaxation_penalty=1e5,
         num_init_epochs=5,
         epochs_per_episode=100,
     )

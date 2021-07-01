@@ -13,7 +13,7 @@ from neural_clbf.datamodules.episodic_datamodule import (
 )
 from neural_clbf.experiments import (
     ExperimentSuite,
-    CLBFContourExperiment,
+    CLFContourExperiment,
     CarSCurveExperiment,
 )
 from neural_clbf.systems import KSCar
@@ -74,7 +74,7 @@ def main(args):
         scenarios.append(s)
 
     # Define the experiments
-    V_contour_experiment = CLBFContourExperiment(
+    V_contour_experiment = CLFContourExperiment(
         "V Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
         n_grid=50,
@@ -99,10 +99,10 @@ def main(args):
         clbf_hidden_size=64,
         u_nn_hidden_layers=2,
         u_nn_hidden_size=64,
-        clbf_lambda=1.0,
-        safety_level=1.0,
+        clf_lambda=1.0,
+        safe_level=1.0,
         controller_period=controller_period,
-        clbf_relaxation_penalty=1e2,
+        clf_relaxation_penalty=1e2,
         primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
         num_init_epochs=11,

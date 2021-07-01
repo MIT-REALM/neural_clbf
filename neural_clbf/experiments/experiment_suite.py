@@ -3,7 +3,7 @@ run each experiment.
 """
 from datetime import datetime
 import os
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 from matplotlib.pyplot import figure
 import matplotlib.pyplot as plt
@@ -11,7 +11,9 @@ import pandas as pd
 from pytorch_lightning.loggers import LightningLoggerBase
 
 from .experiment import Experiment
-from neural_clbf.controllers.controller import Controller
+
+if TYPE_CHECKING:
+    from neural_clbf.controllers import Controller  # noqa
 
 
 class ExperimentSuite(object):
@@ -27,7 +29,7 @@ class ExperimentSuite(object):
         super(ExperimentSuite, self).__init__()
         self.experiments = experiments
 
-    def run_all(self, controller_under_test: Controller) -> List[pd.DataFrame]:
+    def run_all(self, controller_under_test: "Controller") -> List[pd.DataFrame]:
         """Run all experiments in the suite and return the data from each
 
         args:
@@ -41,7 +43,9 @@ class ExperimentSuite(object):
 
         return results
 
-    def run_all_and_save_to_csv(self, controller_under_test: Controller, save_dir: str):
+    def run_all_and_save_to_csv(
+        self, controller_under_test: "Controller", save_dir: str
+    ):
         """Run all experiments in the suite and save the results in one directory.
 
         Results will be saved in a subdirectory save_dir/{timestamp}/...
@@ -67,7 +71,7 @@ class ExperimentSuite(object):
             experiment.run_and_save_to_csv(controller_under_test, subdirectory_path)
 
     def run_all_and_plot(
-        self, controller_under_test: Controller, display_plots: bool = False
+        self, controller_under_test: "Controller", display_plots: bool = False
     ) -> List[Tuple[str, figure]]:
         """
         Run all experiments, plot the results, and return the plot handles. Optionally
@@ -91,7 +95,7 @@ class ExperimentSuite(object):
 
     def run_all_and_log_plots(
         self,
-        controller_under_test: Controller,
+        controller_under_test: "Controller",
         logger: LightningLoggerBase,
         log_epoch: int,
     ):
