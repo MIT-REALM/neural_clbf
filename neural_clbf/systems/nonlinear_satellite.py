@@ -1,6 +1,5 @@
 """Define a dymamical system for an inverted pendulum"""
 from typing import Tuple, Optional, List
-from math import sqrt
 
 import torch
 
@@ -8,9 +7,10 @@ from .control_affine_system import ControlAffineSystem
 from neural_clbf.systems.utils import Scenario, ScenarioList
 
 
-class LinearSatellite(ControlAffineSystem):
+class NonlinearSatellite(ControlAffineSystem):
     """
-    Represents a satellite through the linearized Clohessy-Wiltshire equations
+    Represents a satellite using linearized Clohessy Wiltshire equations plus nonlinear
+    drag terms (but neglecting J2 dynamics), assuming a circular orbit.
 
     The system has state
 
@@ -22,14 +22,18 @@ class LinearSatellite(ControlAffineSystem):
         u = [ux, uy, uz]
 
     representing the thrust applied in each axis. Distances are in km, and control
-    inputs are measured in km/s.
+    inputs are measured in km/s^2
 
-    The task here is to get to the origin without leaving the bounding box [-5, 5] on
-    all positions and [-1, 1] on velocities.
+    The task is to remain within the state limits and stay at least 0.2 km from the
+    origin (where there is another satellite).
 
     The system is parameterized by
         mu: Earth's gravitational parameter (known constant)
-        a: the length of the semi-major axis of the target's orbit (e.g. 6871)
+        A: the surface area of the spacecraft (e.g. 2e-6)
+        Cd: the atmospheric drag coefficient (e.g. 2)
+        rho: the atmospheric density (e.g. 9.1515e-5)
+        m: the mass of the satellite (e.g. 500)
+        r the radius of the circular orbit (e.g. 500 + NonlinearSatellite.RE)
     """
 
     # Number of states and controls
@@ -50,6 +54,7 @@ class LinearSatellite(ControlAffineSystem):
 
     # Constant parameters
     MU = 398600.0  # Earth's gravitational parameter
+    RE = 6371.0  # Earth's radius
 
     def __init__(
         self,
@@ -63,7 +68,7 @@ class LinearSatellite(ControlAffineSystem):
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
-                            Requires keys ["a"]
+                            Requires keys ["A", "Cd", "rho", "m", "r"]
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
         raises:
@@ -78,22 +83,30 @@ class LinearSatellite(ControlAffineSystem):
 
         args:
             params: a dictionary giving the parameter values for the system.
-                    Requires keys ["a"]
+                    Requires keys ["A", "Cd", "rho", "m", "r"]
         returns:
             True if parameters are valid, False otherwise
         """
         valid = True
         # Make sure all needed parameters were provided
-        valid = valid and "a" in params
+        valid = valid and "A" in params
+        valid = valid and "Cd" in params
+        valid = valid and "rho" in params
+        valid = valid and "m" in params
+        valid = valid and "r" in params
 
         # Make sure all parameters are physically valid
-        valid = valid and params["a"] > 0
+        valid = valid and params["A"] > 0
+        valid = valid and params["Cd"] > 0
+        valid = valid and params["rho"] > 0
+        valid = valid and params["m"] > 0
+        valid = valid and params["r"] > 0
 
         return valid
 
     @property
     def n_dims(self) -> int:
-        return LinearSatellite.N_DIMS
+        return NonlinearSatellite.N_DIMS
 
     @property
     def angle_dims(self) -> List[int]:
@@ -101,7 +114,7 @@ class LinearSatellite(ControlAffineSystem):
 
     @property
     def n_controls(self) -> int:
-        return LinearSatellite.N_CONTROLS
+        return NonlinearSatellite.N_CONTROLS
 
     @property
     def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -111,12 +124,12 @@ class LinearSatellite(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[LinearSatellite.X] = 5
-        upper_limit[LinearSatellite.Y] = 5
-        upper_limit[LinearSatellite.Z] = 5
-        upper_limit[LinearSatellite.XDOT] = 1
-        upper_limit[LinearSatellite.YDOT] = 1
-        upper_limit[LinearSatellite.ZDOT] = 1
+        upper_limit[NonlinearSatellite.X] = 5
+        upper_limit[NonlinearSatellite.Y] = 5
+        upper_limit[NonlinearSatellite.Z] = 5
+        upper_limit[NonlinearSatellite.XDOT] = 1
+        upper_limit[NonlinearSatellite.YDOT] = 1
+        upper_limit[NonlinearSatellite.ZDOT] = 1
 
         lower_limit = -1.0 * upper_limit
 
@@ -140,7 +153,13 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        safe_mask = x.norm(dim=-1) <= 1.0
+        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        state_limit_mask = x.norm(dim=-1) <= 1.0
+        safe_mask.logical_and_(state_limit_mask)
+
+        obstacle_avoidance = x.norm(dim=-1) >= 0.4
+        safe_mask.logical_and_(obstacle_avoidance)
 
         return safe_mask
 
@@ -150,7 +169,13 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        unsafe_mask = x.norm(dim=-1) >= 4.0
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        state_limit_mask = x.norm(dim=-1) >= 4.0
+        unsafe_mask.logical_or_(state_limit_mask)
+
+        obstacle = x.norm(dim=-1) <= 0.2
+        unsafe_mask.logical_or_(obstacle)
 
         return unsafe_mask
 
@@ -160,7 +185,7 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = x.norm(dim=-1) <= 0.2
+        goal_mask = x.norm(dim=-1) <= 0.3
 
         return goal_mask
 
@@ -181,25 +206,31 @@ class LinearSatellite(ControlAffineSystem):
         f = f.type_as(x)
 
         # Extract the needed parameters
-        a = params["a"]
-        # Compute mean-motion
-        n = sqrt(LinearSatellite.MU / a ** 3)
+        A, Cd, rho, m = params["A"], params["Cd"], params["rho"], params["m"]
+        r = params["r"]
         # and state variables
-        x_ = x[:, LinearSatellite.X]
-        z_ = x[:, LinearSatellite.Z]
-        xdot_ = x[:, LinearSatellite.XDOT]
-        ydot_ = x[:, LinearSatellite.YDOT]
-        zdot_ = x[:, LinearSatellite.ZDOT]
+        x_ = x[:, NonlinearSatellite.X]
+        y_ = x[:, NonlinearSatellite.Y]
+        z_ = x[:, NonlinearSatellite.Z]
+        xdot_ = x[:, NonlinearSatellite.XDOT]
+        ydot_ = x[:, NonlinearSatellite.YDOT]
+        zdot_ = x[:, NonlinearSatellite.ZDOT]
 
         # The first three dimensions just integrate the velocity
-        f[:, LinearSatellite.X, 0] = xdot_
-        f[:, LinearSatellite.Y, 0] = ydot_
-        f[:, LinearSatellite.Z, 0] = zdot_
+        f[:, NonlinearSatellite.X, 0] = xdot_
+        f[:, NonlinearSatellite.Y, 0] = ydot_
+        f[:, NonlinearSatellite.Z, 0] = zdot_
 
-        # The last three use the CHW equations
-        f[:, LinearSatellite.XDOT, 0] = 3 * n ** 2 * x_ + 2 * n * ydot_
-        f[:, LinearSatellite.YDOT, 0] = -2 * n * xdot_
-        f[:, LinearSatellite.ZDOT, 0] = -(n ** 2) * z_
+        # The last three use equation 7 from Axel's paper
+        f[:, NonlinearSatellite.XDOT, 0] = (
+            -NonlinearSatellite.MU * x_ / r ** 3 - 0.5 * Cd * A * rho / m * xdot_ ** 2
+        )
+        f[:, NonlinearSatellite.YDOT, 0] = (
+            -NonlinearSatellite.MU * y_ / r ** 3 - 0.5 * Cd * A * rho / m * ydot_ ** 2
+        )
+        f[:, NonlinearSatellite.ZDOT, 0] = (
+            -NonlinearSatellite.MU * z_ / r ** 3 - 0.5 * Cd * A * rho / m * zdot_ ** 2
+        )
 
         return f
 
@@ -220,8 +251,8 @@ class LinearSatellite(ControlAffineSystem):
         g = g.type_as(x)
 
         # The control inputs are accelerations
-        g[:, LinearSatellite.XDOT, LinearSatellite.UX] = 1.0
-        g[:, LinearSatellite.YDOT, LinearSatellite.UY] = 1.0
-        g[:, LinearSatellite.ZDOT, LinearSatellite.UZ] = 1.0
+        g[:, NonlinearSatellite.XDOT, NonlinearSatellite.UX] = 1.0
+        g[:, NonlinearSatellite.YDOT, NonlinearSatellite.UY] = 1.0
+        g[:, NonlinearSatellite.ZDOT, NonlinearSatellite.UZ] = 1.0
 
         return g

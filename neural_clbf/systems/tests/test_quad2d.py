@@ -210,38 +210,3 @@ def test_quad2d_obstacles_goal_mask():
         ]
     )
     assert torch.all(torch.logical_not(quad2d.goal_mask(out_of_goal_mask)))
-
-
-def test_quad2d_distance_to_goal():
-    """Test the goal mask for the 2D quadrotor with obstacles"""
-    valid_params = {
-        "m": 1.0,
-        "I": 0.001,
-        "r": 0.25,
-    }
-    quad2d = Quad2D(valid_params)
-    # These points should all be in the goal
-    in_goal = torch.tensor(
-        [
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # origin
-            [0.2, 0.0, 0.0, 0.0, 0.0, 0.0],  # near origin in x
-            [0.0, 0.2, 0.0, 0.0, 0.0, 0.0],  # near origin in z
-            [0.0, 0.0, 0.2, 0.0, 0.0, 0.0],  # near origin in theta
-            [0.0, 0.0, 0.0, 0.2, 0.0, 0.0],  # slow enough in x
-            [0.0, 0.0, 0.0, 0.0, 0.2, 0.0],  # slow enough in z
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.2],  # slow enough in theta dot
-        ]
-    )
-    assert torch.all(quad2d.distance_to_goal(in_goal) <= 0)
-
-    # These points should all be outside the goal
-    out_of_goal = torch.tensor(
-        [
-            [0.3, 0.1, 0.0, 0.0, 0.0, 0.0],  # too far in xz
-            [0.1, 0.3, 0.0, 0.0, 0.0, 0.0],  # too far in xz
-            [0.0, 0.0, 0.0, 1.0, 0.1, 0.0],  # too fast in xz
-            [0.0, 0.0, 0.0, 0.1, 1.0, 0.0],  # too fast in xz
-            [0.0, 0.0, 0.0, 0.0, 0.0, 1.1],  # too fast in theta dot
-        ]
-    )
-    assert torch.all(quad2d.distance_to_goal(out_of_goal) >= 0)

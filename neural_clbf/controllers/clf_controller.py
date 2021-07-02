@@ -1,5 +1,7 @@
 from typing import Tuple, Optional, Union
 
+import cvxpy as cp
+from cvxpylayers.torch import CvxpyLayer
 import gurobipy as gp
 from gurobipy import GRB
 import numpy as np
@@ -16,6 +18,8 @@ class CLFController(Controller):
     """
     A generic CLF-based controller, using the quadratic Lyapunov function found for
     the linearized system.
+
+    This controller and all subclasses assumes continuous-time dynamics.
     """
 
     def __init__(
@@ -24,7 +28,6 @@ class CLFController(Controller):
         scenarios: ScenarioList,
         experiment_suite: ExperimentSuite,
         clf_lambda: float = 1.0,
-        use_nominal_in_qp: bool = False,
         clf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
     ):
@@ -35,8 +38,6 @@ class CLFController(Controller):
             scenarios: a list of parameter scenarios to train on
             experiment_suite: defines the experiments to run during training
             clf_lambda: convergence rate for the CLF
-            use_nominal_in_qp: if True, base the QP on the nominal controller; otherwise
-                               use the nn controller.
             clf_relaxation_penalty: the penalty for relaxing CLF conditions.
             controller_period: the timestep to use in simulating forward Vdot
         """
@@ -58,8 +59,62 @@ class CLFController(Controller):
         self.clf_lambda = clf_lambda
         self.safe_level: Union[torch.Tensor, float]
         self.unsafe_level: Union[torch.Tensor, float]
-        self.use_nominal_in_qp = use_nominal_in_qp
         self.clf_relaxation_penalty = clf_relaxation_penalty
+
+        # Since we want to be able to solve the CLF-QP differentiably, we need to set
+        # up the CVXPyLayers optimization. First, we define variables for each control
+        # input and the relaxation in each scenario
+        u = cp.Variable(self.dynamics_model.n_controls)
+        clf_relaxations = []
+        for scenario in self.scenarios:
+            clf_relaxations.append(cp.Variable(1, nonneg=True))
+
+        # Next, we define the parameters that will be supplied at solve-time: the value
+        # of the Lyapunov function, its Lie derivatives, the relaxation penalty, and
+        # the reference control input
+        V_param = cp.Parameter(1, nonneg=True)
+        Lf_V_params = []
+        Lg_V_params = []
+        for scenario in self.scenarios:
+            Lf_V_params.append(cp.Parameter(1))
+            Lg_V_params.append(cp.Parameter(self.dynamics_model.n_controls))
+
+        clf_relaxation_penalty_param = cp.Parameter(1, nonneg=True)
+        u_ref_param = cp.Parameter(self.dynamics_model.n_controls)
+
+        # These allow us to define the constraints
+        constraints = []
+        for i in range(len(self.scenarios)):
+            # CLF decrease constraint (with relaxation)
+            constraints.append(
+                Lf_V_params[i]
+                + Lg_V_params[i] @ u
+                + self.clf_lambda * V_param
+                - clf_relaxations[i]
+                <= 0
+            )
+
+        # Control limit constraints
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        for control_idx in range(self.dynamics_model.n_controls):
+            constraints.append(u[control_idx] >= lower_lim[control_idx])
+            constraints.append(u[control_idx] <= upper_lim[control_idx])
+
+        # And define the objective
+        objective_expression = cp.sum_squares(u - u_ref_param)
+        for r in clf_relaxations:
+            objective_expression += cp.multiply(clf_relaxation_penalty_param, r)
+        objective = cp.Minimize(objective_expression)
+
+        # Finally, create the optimization problem
+        problem = cp.Problem(objective, constraints)
+        assert problem.is_dpp()
+        variables = [u] + clf_relaxations
+        parameters = Lf_V_params + Lg_V_params
+        parameters += [V_param, u_ref_param, clf_relaxation_penalty_param]
+        self.differentiable_qp_solver = CvxpyLayer(
+            problem, variables=variables, parameters=parameters
+        )
 
     def V_with_jacobian(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Computes the CLF value and its Jacobian
@@ -128,35 +183,36 @@ class CLFController(Controller):
         # return the Lie derivatives
         return Lf_V, Lg_V
 
-    def solve_CLF_QP(
-        self, x, relaxation_penalty: Optional[float] = None
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Determine the control input for a given state using a QP
+    def u_reference(self, x: torch.Tensor) -> torch.Tensor:
+        """Determine the reference control input."""
+        # Here we use the nominal controller as the reference, but subclasses can
+        # override this
+        return self.dynamics_model.u_nominal(x)
+
+    def _solve_CLF_QP_gurobi(
+        self,
+        x: torch.Tensor,
+        u_ref: torch.Tensor,
+        V: torch.Tensor,
+        Lf_V: torch.Tensor,
+        Lg_V: torch.Tensor,
+        relaxation_penalty: float,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Determine the control input for a given state using a QP. Solves the QP using
+        Gurobi, which does not allow for backpropagation.
 
         args:
             x: bs x self.dynamics_model.n_dims tensor of state
-            relaxation_penalty: the penalty to use for CLF relaxation, defaults to
-                                self.clf_relaxation_penalty
+            u_ref: bs x self.dynamics_model.n_controls tensor of reference controls
+            V: bs x 1 tensor of CLF values,
+            Lf_V: bs x 1 tensor of CLF Lie derivatives,
+            Lg_V: bs x self.dynamics_model.n_controls tensor of CLF Lie derivatives,
+            relaxation_penalty: the penalty to use for CLF relaxation.
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control inputs
             relaxation: bs x 1 tensor of how much the CLF had to be relaxed in each
                         case
-            objectives: bs x 1 tensor of the QP objective.
         """
-        # Get the value of the CLF and its Lie derivatives
-        V = self.V(x)
-        Lf_V, Lg_V = self.V_lie_derivatives(x)
-
-        # Get the reference control input as well
-        if self.use_nominal_in_qp:
-            u_ref = self.dynamics_model.u_nominal(x)
-        else:
-            u_ref = torch.tile(self.dynamics_model.u_eq, (x.shape[0], 1))
-
-        # Apply default penalty if needed
-        if relaxation_penalty is None:
-            relaxation_penalty = self.clf_relaxation_penalty
-
         # To find the control input, we want to solve a QP constrained by
         #
         # L_f V + L_g V u + lambda V <= 0
@@ -178,13 +234,12 @@ class CLFController(Controller):
 
         n_controls = self.dynamics_model.n_controls
         n_scenarios = self.n_scenarios
-        allow_relaxation = relaxation_penalty < 1e6
+        allow_relaxation = relaxation_penalty == float("inf")
 
         # Solve a QP for each row in x
         bs = x.shape[0]
         u_result = torch.zeros(bs, n_controls)
         r_result = torch.zeros(bs, n_scenarios)
-        objective_result = torch.zeros(bs, 1)
         for batch_idx in range(bs):
             # Skip any bad points
             if (
@@ -244,11 +299,90 @@ class CLFController(Controller):
             if allow_relaxation:
                 for i in range(n_scenarios):
                     r_result[batch_idx, i] = torch.tensor(r[i].x)
-            objective_result[batch_idx, 0] = torch.tensor(model.objVal)
 
-        return u_result.type_as(x), r_result.type_as(x), objective_result.type_as(x)
+        return u_result.type_as(x), r_result.type_as(x)
+
+    def _solve_CLF_QP_cvxpylayers(
+        self,
+        x: torch.Tensor,
+        u_ref: torch.Tensor,
+        V: torch.Tensor,
+        Lf_V: torch.Tensor,
+        Lg_V: torch.Tensor,
+        relaxation_penalty: float,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Determine the control input for a given state using a QP. Solves the QP using
+        CVXPyLayers, which does allow for backpropagation, but is slower and less
+        accurate than Gurobi.
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of state
+            u_ref: bs x self.dynamics_model.n_controls tensor of reference controls
+            V: bs x 1 tensor of CLF values,
+            Lf_V: bs x 1 tensor of CLF Lie derivatives,
+            Lg_V: bs x self.dynamics_model.n_controls tensor of CLF Lie derivatives,
+            relaxation_penalty: the penalty to use for CLF relaxation.
+        returns:
+            u: bs x self.dynamics_model.n_controls tensor of control inputs
+            relaxation: bs x 1 tensor of how much the CLF had to be relaxed in each
+                        case
+        """
+        # The differentiable solver must allow relaxation
+        relaxation_penalty = min(relaxation_penalty, 1e6)
+
+        # We've already created a parameterized QP solver, so we can use that
+        result = self.differentiable_qp_solver(
+            *Lf_V,
+            *Lg_V,
+            V,
+            u_ref,
+            torch.tensor([relaxation_penalty]),
+            solver_args={"max_iters": 50000000},
+        )
+
+        # Extract the results
+        u_result = result[0]
+        r_result = torch.hstack(result[1:])
+
+        return u_result.type_as(x), r_result.type_as(x)
+
+    def solve_CLF_QP(
+        self, x, relaxation_penalty: Optional[float] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Determine the control input for a given state using a QP
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of state
+            relaxation_penalty: the penalty to use for CLF relaxation, defaults to
+                                self.clf_relaxation_penalty
+        returns:
+            u: bs x self.dynamics_model.n_controls tensor of control inputs
+            relaxation: bs x 1 tensor of how much the CLF had to be relaxed in each
+                        case
+        """
+        # Get the value of the CLF and its Lie derivatives
+        V = self.V(x)
+        Lf_V, Lg_V = self.V_lie_derivatives(x)
+
+        # Get the reference control input as well
+        u_ref = self.u_reference(x)
+
+        # Apply default penalty if needed
+        if relaxation_penalty is None:
+            relaxation_penalty = self.clf_relaxation_penalty
+
+        # Figure out if we need to use a differentiable solver (determined by whether
+        # the input x requires a gradient or not)
+        if x.requires_grad:
+            return self._solve_CLF_QP_cvxpylayers(
+                x, u_ref, V, Lf_V, Lg_V, relaxation_penalty
+            )
+        else:
+            return self._solve_CLF_QP_gurobi(
+                x, u_ref, V, Lf_V, Lg_V, relaxation_penalty
+            )
 
     def u(self, x):
         """Get the control input for a given state"""
-        u, _, _ = self.solve_CLF_QP(x)
+        u, _ = self.solve_CLF_QP(x)
         return u

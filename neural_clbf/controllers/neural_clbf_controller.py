@@ -19,7 +19,19 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
     """
     A neural rCLBF controller. Differs from the CLFController in that it uses a
     neural network to learn the CLF, and it turns it from a CLF to a CLBF by making sure
-    that a level set separates the safe and unsafe regions.
+    that a level set of the CLF separates the safe and unsafe regions.
+
+    More specifically, the CLBF controller looks for a V such that
+
+    V(goal) = 0
+    V >= 0
+    V(safe) < c
+    V(unsafe) > c
+    dV/dt <= -lambda V
+
+    This proves forward invariance of the c-sublevel set of V, and since the safe set is
+    a subset of this sublevel set, we prove that the unsafe region is not reachable from
+    the safe region. We also prove convergence to a point.
     """
 
     def __init__(
@@ -34,11 +46,9 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         u_nn_hidden_size: int = 8,
         clf_lambda: float = 1.0,
         safe_level: float = 1.0,
-        use_nominal_in_qp: bool = False,
         clf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
-        optimizer_alternate_epochs: int = 1,
         epochs_per_episode: int = 5,
         penalty_scheduling_rate: float = 0.0,
         num_init_epochs: int = 5,
@@ -55,13 +65,10 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             clf_lambda: convergence rate for the CLBF
             safe_level: safety level set value for the CLBF
-            use_nominal_in_qp: if True, base the QP on the nominal controller; otherwise
-                               use the nn controller.
             clf_relaxation_penalty: the penalty for relaxing CLBF conditions.
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
-            optimizer_alternate_epochs: how frequently to switch between optimizers
             epochs_per_episode: the number of epochs to include in each episode
             penalty_scheduling_rate: the rate at which to ramp the rollout relaxation
                                      penalty up to clf_relaxation_penalty. Set to 0 to
@@ -74,7 +81,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             scenarios=scenarios,
             experiment_suite=experiment_suite,
             clf_lambda=clf_lambda,
-            use_nominal_in_qp=use_nominal_in_qp,
             clf_relaxation_penalty=clf_relaxation_penalty,
             controller_period=controller_period,
         )
@@ -95,7 +101,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         self.safe_level = safe_level
         self.unsafe_level = safe_level
         self.primal_learning_rate = primal_learning_rate
-        self.optimizer_alternate_epochs = optimizer_alternate_epochs
         self.epochs_per_episode = epochs_per_episode
         self.penalty_scheduling_rate = penalty_scheduling_rate
         self.num_init_epochs = num_init_epochs
@@ -134,27 +139,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
                 self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
         # self.V_layers["output_linear"] = nn.Linear(self.clbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
-
-        # Also define the proof controller network, denoted u_nn
-        self.u_nn_hidden_layers = u_nn_hidden_layers
-        self.u_nn_hidden_size = u_nn_hidden_size
-        # Likewise, build the network up layer by layer, starting with the input
-        self.u_nn_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.u_nn_layers["input_linear"] = nn.Linear(
-            self.n_dims_extended, self.u_nn_hidden_size
-        )
-        self.u_nn_layers["input_activation"] = nn.Tanh()
-        for i in range(self.u_nn_hidden_layers):
-            self.u_nn_layers[f"layer_{i}_linear"] = nn.Linear(
-                self.u_nn_hidden_size, self.u_nn_hidden_size
-            )
-            self.u_nn_layers[f"layer_{i}_activation"] = nn.Tanh()
-        # Tanh output activation, so the control saturates at [-1, 1]
-        self.u_nn_layers["output_linear"] = nn.Linear(
-            self.u_nn_hidden_size, self.dynamics_model.n_controls
-        )
-        self.u_nn_layers["output_activation"] = nn.Tanh()
-        self.u_nn = nn.Sequential(self.u_nn_layers)
 
     def prepare_data(self):
         return self.datamodule.prepare_data()
@@ -245,32 +229,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
 
         return V, JV
 
-    def u_learned(self, x: torch.Tensor) -> torch.Tensor:
-        """Computes the learned controller input from the state x
-
-        args:
-            x: bs x self.dynamics_model.n_dims the points at which to evaluate the
-               controller
-        """
-        # Apply the offset and range to normalize about zero
-        x_norm = self.normalize_with_angles(x)
-
-        # Compute the control effort using the neural network
-        u = self.u_nn(x_norm)
-
-        # Scale to reflect plant actuator limits
-        upper_lim, lower_lim = self.dynamics_model.control_limits
-        u_center = (upper_lim + lower_lim).type_as(x_norm) / 2.0
-        u_semi_range = (upper_lim - lower_lim).type_as(x_norm) / 2.0
-
-        u_scaled = u * u_semi_range + u_center
-
-        # # For now, set u to u_nominal to test V learning
-        # # TODO @dawsonc, not permanent
-        # u_scaled = self.dynamics_model.u_nominal(x) + 0.00001 * u_scaled
-
-        return u_scaled
-
     def forward(self, x):
         """Determine the control input for a given state using a QP
 
@@ -287,7 +245,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         goal_mask: torch.Tensor,
         safe_mask: torch.Tensor,
         unsafe_mask: torch.Tensor,
-        dist_to_goal: torch.Tensor,
         accuracy: bool = False,
     ) -> List[Tuple[str, torch.Tensor]]:
         """
@@ -298,7 +255,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             goal_mask: the points in x marked as part of the goal
             safe_mask: the points in x marked safe
             unsafe_mask: the points in x marked unsafe
-            dist_to_goal: the distance from x to the goal region
             accuracy: if True, return the accuracy (from 0 to 1) as well as the losses
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
@@ -340,7 +296,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         goal_mask: torch.Tensor,
         safe_mask: torch.Tensor,
         unsafe_mask: torch.Tensor,
-        dist_to_goal: torch.Tensor,
         accuracy: bool = False,
     ) -> List[Tuple[str, torch.Tensor]]:
         """
@@ -351,7 +306,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             goal_mask: the points in x marked as part of the goal
             safe_mask: the points in x marked safe
             unsafe_mask: the points in x marked unsafe
-            dist_to_goal: the distance from x to the goal region
             accuracy: if True, return the accuracy (from 0 to 1) as well as the losses
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
@@ -359,36 +313,42 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
 
-        #   1.) A term to encourage satisfaction of the CLBF decrease condition,
-        # which requires that V is decreasing everywhere where V <= safe_level
-        V = self.V(x)
+        # The CLBF decrease condition requires that V is decreasing everywhere where
+        # V <= safe_level. We'll encourage this in three ways:
+        #
+        #   1) Minimize the relaxation needed to make the QP feasible.
+        #   2) Compute the CLBF decrease at each point by linearizing
+        #   3) Compute the CLBF decrease at each point by simulating
 
         # First figure out where this condition needs to hold
-        condition_active = V < self.safe_level
-        _, qp_relaxation, _ = self.solve_CLF_QP(x)
-        qp_relaxation, _ = torch.max(qp_relaxation, dim=-1)
-        relaxation_scaling = F.relu(qp_relaxation - 0.001)
+        eps = 0.1
+        V = self.V(x)
+        condition_active = torch.sigmoid(10 * (self.safe_level + eps - V))
 
-        # Now compute the decrease in that region, using the proof controller
+        # Get the control input and relaxation from solving the QP, and aggregate
+        # the relaxation across scenarios
+        u_qp, qp_relaxation = self.solve_CLF_QP(x)
+        qp_relaxation = torch.mean(qp_relaxation, dim=-1)
+
+        # Minimize the qp relaxation to encourage satisfying the decrease condition
+        qp_relaxation_loss = (qp_relaxation * condition_active).mean()
+        loss.append(("QP relaxation", qp_relaxation_loss))
+
+        # Now compute the decrease using linearization
+        eps = 1.0
         clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_lin = torch.tensor(0.0).type_as(x)
         # Get the current value of the CLBF and its Lie derivatives
-        # (Lie derivatives are computed using a linear fit of the dynamics)
-        # TODO @dawsonc do we need dynamics learning here?
         Lf_V, Lg_V = self.V_lie_derivatives(x)
-        # Get the control and reshape it to bs x n_controls x 1
-        u_nn = self.u_learned(x)
-        eps = 0.0
         for i, s in enumerate(self.scenarios):
             # Use the dynamics to compute the derivative of V
             Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
                 Lg_V[:, i, :].unsqueeze(1),
-                u_nn.reshape(-1, self.dynamics_model.n_controls, 1),
+                u_qp.reshape(-1, self.dynamics_model.n_controls, 1),
             )
             Vdot = Vdot.reshape(V.shape)
             violation = F.relu(eps + Vdot + self.clf_lambda * V)
-            violation *= relaxation_scaling
-            violation = violation[condition_active]
+            violation *= condition_active
             clbf_descent_term_lin += violation.mean()
             clbf_descent_acc_lin += (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
@@ -398,22 +358,18 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         if accuracy:
             loss.append(("CLBF descent accuracy (linearized)", clbf_descent_acc_lin))
 
-        #   2.) A term to encourage satisfaction of CLF condition, using the method from
-        # the RSS paper.
-        # We compute the change in V in two ways: simulating x forward in time and check
-        # if V decreases in each scenario
-        eps = 0.0
+        # Now compute the decrease using simulation
+        eps = 1.0
         clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
         clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
         for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_nn, params=s)
+            xdot = self.dynamics_model.closed_loop_dynamics(x, u_qp, params=s)
             x_next = x + self.dynamics_model.dt * xdot
             V_next = self.V(x_next)
             violation = F.relu(
                 eps + (V_next - V) / self.controller_period + self.clf_lambda * V
             )
-            violation *= relaxation_scaling
-            violation = violation[condition_active]
+            violation *= condition_active
 
             clbf_descent_term_sim += violation.mean()
             clbf_descent_acc_sim += (violation <= eps).sum() / (
@@ -451,29 +407,20 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         clbf_mse_loss = decrease_factor * clbf_mse_loss.mean()
         loss.append(("CLBF MSE", clbf_mse_loss))
 
-        #   2.) Provide a very small training signal for the controller
-        u_nn = self.u_learned(x)
-        u_nominal = self.dynamics_model.u_nominal(x)
-        u_mse_loss = ((u_nn - u_nominal) ** 2).sum(dim=-1)
-        u_mse_loss = 1e-3 * decrease_factor * u_mse_loss.mean()
-        loss.append(("U/NOM MSE", u_mse_loss))
-
         return loss
 
-    def training_step(self, batch, batch_idx, optimizer_idx):
+    def training_step(self, batch, batch_idx):
         """Conduct the training step for the given batch"""
         # Extract the input and masks from the batch
-        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
+        x, goal_mask, safe_mask, unsafe_mask = batch
 
         # Compute the losses
         component_losses = {}
         component_losses.update(self.initial_loss(x))
         component_losses.update(
-            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask)
         )
-        component_losses.update(
-            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        )
+        component_losses.update(self.descent_loss(x, goal_mask, safe_mask, unsafe_mask))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -523,16 +470,14 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
     def validation_step(self, batch, batch_idx):
         """Conduct the validation step for the given batch"""
         # Extract the input and masks from the batch
-        x, goal_mask, safe_mask, unsafe_mask, dist_to_goal = batch
+        x, goal_mask, safe_mask, unsafe_mask = batch
 
         # Get the various losses
         component_losses = {}
         component_losses.update(
-            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
+            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask)
         )
-        component_losses.update(
-            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, dist_to_goal)
-        )
+        component_losses.update(self.descent_loss(x, goal_mask, safe_mask, unsafe_mask))
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -543,14 +488,10 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
 
         # Also compute the accuracy associated with each loss
         component_losses.update(
-            self.boundary_loss(
-                x, goal_mask, safe_mask, unsafe_mask, dist_to_goal, accuracy=True
-            )
+            self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, accuracy=True)
         )
         component_losses.update(
-            self.descent_loss(
-                x, goal_mask, safe_mask, unsafe_mask, dist_to_goal, accuracy=True
-            )
+            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, accuracy=True)
         )
 
         batch_dict = {"val_loss": total_loss, **component_losses}
@@ -602,14 +543,8 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         self,
         x_init: torch.Tensor,
         num_steps: int,
-        use_qp: bool = True,
         relaxation_penalty: Optional[float] = None,
     ):
-        if use_qp:
-            controller_fn = self.u
-        else:
-            controller_fn = self.u_learned
-
         # Choose parameters randomly
         random_scenario = {}
         for param_name in self.scenarios[0].keys():
@@ -620,7 +555,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         return self.dynamics_model.simulate(
             x_init,
             num_steps,
-            controller_fn,
+            self.u,
             guard=self.dynamics_model.out_of_bounds_mask,
             controller_period=self.controller_period,
             params=random_scenario,
@@ -644,7 +579,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
                 return self.simulator_fn(
                     x_init,
                     num_steps,
-                    use_qp=True,
                     relaxation_penalty=relaxation_penalty,
                 )
 
@@ -658,41 +592,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             lr=self.primal_learning_rate,
             weight_decay=1e-6,
         )
-        u_opt = torch.optim.SGD(
-            self.u_nn.parameters(),
-            lr=self.primal_learning_rate,
-            weight_decay=1e-6,
-        )
 
-        self.opt_idx_dict = {0: "clbf", 1: "controller"}
+        self.opt_idx_dict = {0: "clbf"}
 
-        return [clbf_opt, u_opt]
-
-    def optimizer_zero_grad(self, current_epoch, batch_idx, optimizer, opt_idx):
-        optimizer.zero_grad()
-
-    def optimizer_step(
-        self,
-        epoch,
-        batch_idx,
-        optimizer,
-        optimizer_idx,
-        optimizer_closure,
-        on_tpu=False,
-        using_native_amp=False,
-        using_lbfgs=False,
-    ):
-        # During initialization epochs, step both
-        if epoch <= self.num_init_epochs:
-            optimizer.step(closure=optimizer_closure)
-            return
-
-        # Otherwise, switch between the controller and CLBF every few epochs
-        switch_every = self.optimizer_alternate_epochs
-        if self.opt_idx_dict[optimizer_idx] == "clbf":
-            if (epoch - self.num_init_epochs) % (2 * switch_every) < switch_every:
-                optimizer.step(closure=optimizer_closure)
-
-        if self.opt_idx_dict[optimizer_idx] == "controller":
-            if (epoch - self.num_init_epochs) % (2 * switch_every) >= switch_every:
-                optimizer.step(closure=optimizer_closure)
+        return [clbf_opt]

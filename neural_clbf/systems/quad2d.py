@@ -198,21 +198,6 @@ class Quad2D(ControlAffineSystem):
 
         return unsafe_mask
 
-    def distance_to_goal(self, x: torch.Tensor) -> torch.Tensor:
-        """Return the distance from each point in x to the goal (positive for points
-        outside the goal, negative for points inside the goal), normalized by the state
-        limits.
-
-        args:
-            x: the points from which we calculate distance
-        """
-        # It's convenient for us to think in terms of the L2 norm here
-        # This doesn't have to exactly line up with the goal region, but it should be
-        # close for tuning the Lyapunov function
-        # Normalize the distance by the norm of the maximum allowed state vector
-        upper_limit, _ = self.state_limits
-        return (x.norm(p=1, dim=-1) - 0.3) / upper_limit.norm()
-
     def goal_mask(self, x):
         """Return the mask of x indicating points in the goal set (within 0.2 m of the
         goal).
