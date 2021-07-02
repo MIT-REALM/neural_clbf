@@ -106,7 +106,6 @@ def main(args):
         primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
         num_init_epochs=11,
-        optimizer_alternate_epochs=1,
         epochs_per_episode=200,
     )
 

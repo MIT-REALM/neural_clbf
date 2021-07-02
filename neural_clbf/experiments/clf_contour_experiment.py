@@ -132,7 +132,7 @@ class CLFContourExperiment(Experiment):
                 is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
 
                 # Get the QP relaxation
-                _, r, _ = controller_under_test.solve_CLF_QP(x)
+                _, r = controller_under_test.solve_CLF_QP(x)
                 relaxation = r.max()
 
                 # Store the results
