@@ -130,6 +130,7 @@ class CLFController(Controller):
         # Reshape to use pytorch's bilinear function
         P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
         V = 0.5 * F.bilinear(x, x, P).squeeze()
+        V = V.reshape(x.shape[0])
 
         # Reshape again for the gradient calculation
         P = P.reshape(self.dynamics_model.n_dims, self.dynamics_model.n_dims)
