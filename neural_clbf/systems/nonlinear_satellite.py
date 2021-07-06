@@ -155,8 +155,8 @@ class NonlinearSatellite(ControlAffineSystem):
         """
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
-        state_limit_mask = x.norm(dim=-1) <= 1.0
-        safe_mask.logical_and_(state_limit_mask)
+        # state_limit_mask = x.norm(dim=-1) <= 1.0
+        # safe_mask.logical_and_(state_limit_mask)
 
         obstacle_avoidance = x.norm(dim=-1) >= 0.4
         safe_mask.logical_and_(obstacle_avoidance)
@@ -171,8 +171,8 @@ class NonlinearSatellite(ControlAffineSystem):
         """
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
 
-        state_limit_mask = x.norm(dim=-1) >= 4.0
-        unsafe_mask.logical_or_(state_limit_mask)
+        # state_limit_mask = x.norm(dim=-1) >= 4.0
+        # unsafe_mask.logical_or_(state_limit_mask)
 
         obstacle = x.norm(dim=-1) <= 0.2
         unsafe_mask.logical_or_(obstacle)

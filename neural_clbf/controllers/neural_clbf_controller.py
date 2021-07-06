@@ -42,7 +42,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         experiment_suite: ExperimentSuite,
         clbf_hidden_layers: int = 2,
         clbf_hidden_size: int = 48,
-        u_nn_hidden_layers: int = 1,
+        u_nn_hidden_layers: int = 1,  # todo @dawsonc delete unused parameters
         u_nn_hidden_size: int = 8,
         clf_lambda: float = 1.0,
         safe_level: float = 1.0,

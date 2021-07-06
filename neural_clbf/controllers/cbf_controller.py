@@ -25,7 +25,7 @@ class CBFController(CLFController):
         dynamics_model: ControlAffineSystem,
         scenarios: ScenarioList,
         experiment_suite: ExperimentSuite,
-        cbf_alpha: float = 1.0,
+        cbf_lambda: float = 1.0,
         cbf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
     ):
@@ -35,7 +35,7 @@ class CBFController(CLFController):
             dynamics_model: the control-affine dynamics of the underlying system
             scenarios: a list of parameter scenarios to train on
             experiment_suite: defines the experiments to run during training
-            cbf_alpha: scaling factor for the CBF
+            cbf_lambda: scaling factor for the CBF
             cbf_relaxation_penalty: the penalty for relaxing CLF conditions.
             controller_period: the timestep to use in simulating forward Vdot
         """
@@ -43,7 +43,7 @@ class CBFController(CLFController):
             dynamics_model=dynamics_model,
             scenarios=scenarios,
             experiment_suite=experiment_suite,
-            clf_lambda=cbf_alpha,
+            clf_lambda=cbf_lambda,
             clf_relaxation_penalty=cbf_relaxation_penalty,
             controller_period=controller_period,
         )
