@@ -220,6 +220,14 @@ class CLFContourExperiment(Experiment):
                     colors=["blue"],
                     levels=[controller_under_test.safe_level],  # type: ignore
                 )
+            else:
+                ax.tricontour(
+                    results_df[self.x_axis_label],
+                    results_df[self.y_axis_label],
+                    results_df["V"],
+                    colors=["blue"],
+                    levels=[0.0],
+                )
 
         # Make the legend
         ax.legend(
@@ -229,6 +237,8 @@ class CLFContourExperiment(Experiment):
             borderaxespad=0,
             ncol=3,
         )
+        ax.set_xlabel(self.x_axis_label)
+        ax.set_ylabel(self.y_axis_label)
 
         fig_handle = ("V Contour", fig)
 
