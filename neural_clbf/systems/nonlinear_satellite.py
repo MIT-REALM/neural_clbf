@@ -124,9 +124,9 @@ class NonlinearSatellite(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[NonlinearSatellite.X] = 5
-        upper_limit[NonlinearSatellite.Y] = 5
-        upper_limit[NonlinearSatellite.Z] = 5
+        upper_limit[NonlinearSatellite.X] = 1
+        upper_limit[NonlinearSatellite.Y] = 1
+        upper_limit[NonlinearSatellite.Z] = 1
         upper_limit[NonlinearSatellite.XDOT] = 1
         upper_limit[NonlinearSatellite.YDOT] = 1
         upper_limit[NonlinearSatellite.ZDOT] = 1
