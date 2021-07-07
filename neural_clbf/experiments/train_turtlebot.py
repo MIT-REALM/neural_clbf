@@ -35,8 +35,8 @@ def rollout_plotting_cb(clbf_net):
     return rollout_CLBF(
         clbf_net,
         start_x=start_x,
-        plot_x_indices=[TurtleBot.X, TurtleBot.Y, TurtleBot.THETA],
-        plot_x_labels=["$x$", "$y$", "$\\theta$"],
+        plot_x_indices=[TurtleBot.X, TurtleBot.Y],
+        plot_x_labels=["$x$", "$y$"],
         plot_u_indices=[TurtleBot.V, TurtleBot.THETA_DOT],
         plot_u_labels=["$v$", "$\\dot{\\theta}$"],
         t_sim=6.0,
@@ -64,8 +64,8 @@ def main(args):
     nominal_params = {"R": 3.25, "L": 14.0}
     scenarios = [
         nominal_params,
-        {"R": 3.25, "L": 13.9},
-        {"R": 3.25, "L": 14.1},
+        # {"R": 3.25, "L": 13.9},
+        # {"R": 3.25, "L": 14.1},
     ]
 
     # Define the dynamics model
@@ -78,8 +78,8 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-2.0, 2.0) # x
-        (-2.0, 2.0) # y
+        (-2.0, 2.0), # x
+        (-2.0, 2.0), # y
         (-np.pi / 2, np.pi / 2),  # theta
     ]
     data_module = EpisodicDataModule(
