@@ -75,7 +75,7 @@ def main(args):
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
         "V Contour",
-        domain=[(-5.0, 5.0), (-5.0, 5.0)],
+        domain=[(-1.0, 1.0), (-1.0, 1.0)],
         n_grid=20,
         x_axis_index=NonlinearSatellite.X,
         y_axis_index=NonlinearSatellite.Y,
