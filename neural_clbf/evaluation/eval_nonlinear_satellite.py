@@ -1,13 +1,21 @@
 import pandas as pd
+import torch
 
 from neural_clbf.controllers import NeuralCBFController
 
 
-def eval_nonlinear_satellite():
-    # Load the checkpoint file. This should include the experiment suite used during
-    # training.
-    log_dir = "saved_models/aas/nonlinear_satellite/commit_bb05c2c/"
+def load_and_tweak_cbf():
+    """Load the CBF from a checkpoint file and tweak its output bias manually"""
+    log_dir = "saved_models/aas/nonlinear_satellite/commit_ba1914d/"
     neural_controller = NeuralCBFController.load_from_checkpoint(log_dir + "v0.ckpt")
+    neural_controller.V_nn.output_linear.bias.sub_(0.2)
+
+    return neural_controller, log_dir
+
+
+@torch.no_grad()
+def eval_nonlinear_satellite():
+    neural_controller, log_dir = load_and_tweak_cbf()
 
     # Increase the resolution of the grid
     neural_controller.experiment_suite.experiments[0].n_grid = 500
@@ -18,17 +26,15 @@ def eval_nonlinear_satellite():
     )
 
 
+@torch.no_grad()
 def plot_nonlinear_satellite():
-    # Load the checkpoint file. This should include the experiment suite used during
-    # training.
-    log_dir = "saved_models/aas/nonlinear_satellite/commit_bb05c2c/"
-    neural_controller = NeuralCBFController.load_from_checkpoint(log_dir + "v0.ckpt")
+    neural_controller, log_dir = load_and_tweak_cbf()
 
     # Increase the resolution of the grid
     neural_controller.experiment_suite.experiments[0].n_grid = 500
 
     # Load the saved data
-    data_path = "saved_models/aas/nonlinear_satellite/commit_bb05c2c/experiments/"
+    data_path = "saved_models/aas/nonlinear_satellite/commit_ba1914d/experiments/"
     data_path += "2021-07-07_10:47:30/V Contour.csv"
     results_df = pd.read_csv(data_path)
 
@@ -39,4 +45,4 @@ def plot_nonlinear_satellite():
 
 
 if __name__ == "__main__":
-    plot_nonlinear_satellite()
+    eval_nonlinear_satellite()
