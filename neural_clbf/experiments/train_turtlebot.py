@@ -24,7 +24,7 @@ controller_period = 0.01
 
 start_x = torch.tensor(
     [
-        [0, 0, 0],
+        [0.0, 0.0, 0.0],
         # [1.0, 1.0, 0],
     ]
 )
