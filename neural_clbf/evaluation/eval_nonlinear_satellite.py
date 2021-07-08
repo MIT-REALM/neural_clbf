@@ -35,7 +35,7 @@ def plot_nonlinear_satellite():
 
     # Load the saved data
     data_path = "saved_models/aas/nonlinear_satellite/commit_ba1914d/experiments/"
-    data_path += "2021-07-07_10:47:30/V Contour.csv"
+    data_path += "2021-07-07_17:03:55/V Contour.csv"
     results_df = pd.read_csv(data_path)
 
     # Plot
@@ -45,4 +45,4 @@ def plot_nonlinear_satellite():
 
 
 if __name__ == "__main__":
-    eval_nonlinear_satellite()
+    plot_nonlinear_satellite()
