@@ -32,10 +32,26 @@ simulation_dt = 0.001
 
 def main(args):
     # Define the scenarios
-    nominal_params = {"a": 6871}
+    nominal_params = {
+        "a": 6871,
+        "ux_target": 0.0,
+        "uy_target": 0.0,
+        "uz_target": 0.0,
+    }
     scenarios = [
         nominal_params,
     ]
+    for ux in [-0.01, 0.01]:
+        for uy in [-0.01, 0.01]:
+            for uz in [-0.01, 0.01]:
+                scenarios.append(
+                    {
+                        "a": 6871,
+                        "ux_target": ux,
+                        "uy_target": uy,
+                        "uz_target": uz,
+                    }
+                )
 
     # Define the dynamics model
     dynamics_model = LinearSatellite(
@@ -59,7 +75,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=0,
         trajectory_length=1,
-        fixed_samples=100000,
+        fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
