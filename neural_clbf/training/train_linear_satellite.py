@@ -5,7 +5,7 @@ import torch.multiprocessing
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 
-from neural_clbf.controllers import NeuralCLBFController
+from neural_clbf.controllers import NeuralCBFController
 from neural_clbf.datamodules.episodic_datamodule import (
     EpisodicDataModule,
 )
@@ -13,7 +13,6 @@ from neural_clbf.systems import LinearSatellite
 from neural_clbf.experiments import (
     ExperimentSuite,
     CLFContourExperiment,
-    RolloutTimeSeriesExperiment,
 )
 from neural_clbf.training.utils import current_git_hash
 
@@ -60,11 +59,11 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=0,
         trajectory_length=1,
-        fixed_samples=10000,
+        fixed_samples=100000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
+        quotas={"safe": 0.3, "unsafe": 0.3},
     )
 
     # Define the experiment suite
@@ -77,40 +76,24 @@ def main(args):
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
-    rollout_experiment = RolloutTimeSeriesExperiment(
-        "Rollout",
-        start_x,
-        plot_x_indices=[LinearSatellite.X, LinearSatellite.Y],
-        plot_x_labels=["$x$", "$y$"],
-        plot_u_indices=[],
-        plot_u_labels=[],
-        scenarios=scenarios,
-        n_sims_per_start=1,
-        t_sim=5.0,
-    )
-    experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
+    experiment_suite = ExperimentSuite([V_contour_experiment])
 
     # Initialize the controller
-    clbf_controller = NeuralCLBFController(
+    clbf_controller = NeuralCBFController(
         dynamics_model,
         scenarios,
         data_module,
         experiment_suite=experiment_suite,
-        clbf_hidden_layers=2,
-        clbf_hidden_size=64,
-        u_nn_hidden_layers=2,
-        u_nn_hidden_size=64,
-        clf_lambda=1.0,
-        safe_level=1.0,
+        cbf_hidden_layers=2,
+        cbf_hidden_size=64,
+        cbf_lambda=1.0,
         controller_period=controller_period,
-        clf_relaxation_penalty=1e2,
-        num_init_epochs=5,
-        epochs_per_episode=100,
+        cbf_relaxation_penalty=1e2,
     )
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/linear_satellite",
+        "logs/linear_satellite_cbf",
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
