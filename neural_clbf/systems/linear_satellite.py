@@ -22,14 +22,15 @@ class LinearSatellite(ControlAffineSystem):
         u = [ux, uy, uz]
 
     representing the thrust applied in each axis. Distances are in km, and control
-    inputs are measured in km/s.
+    inputs are measured in km/s^2.
 
     The task here is to get to the origin without leaving the bounding box [-5, 5] on
     all positions and [-1, 1] on velocities.
 
     The system is parameterized by
-        mu: Earth's gravitational parameter (known constant)
         a: the length of the semi-major axis of the target's orbit (e.g. 6871)
+        ux_target, uy_target, uz_target: accelerations due to unmodelled effects and
+                                         target control.
     """
 
     # Number of states and controls
@@ -63,7 +64,6 @@ class LinearSatellite(ControlAffineSystem):
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
-                            Requires keys ["a"]
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
         raises:
@@ -78,13 +78,15 @@ class LinearSatellite(ControlAffineSystem):
 
         args:
             params: a dictionary giving the parameter values for the system.
-                    Requires keys ["a"]
         returns:
             True if parameters are valid, False otherwise
         """
         valid = True
         # Make sure all needed parameters were provided
         valid = valid and "a" in params
+        valid = valid and "ux_target" in params
+        valid = valid and "uy_target" in params
+        valid = valid and "uz_target" in params
 
         # Make sure all parameters are physically valid
         valid = valid and params["a"] > 0
@@ -140,7 +142,13 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        safe_mask = x.norm(dim=-1) <= 1.0
+        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+        
+        # Stay within some maximum distance from the target
+        safe_mask.logical_and_(x.norm(dim=-1) <= 2.0)
+
+        # Stay at least some minimum distance from the target
+        safe_mask.logical_and_(x.norm(dim=-1) >= 0.5)
 
         return safe_mask
 
@@ -150,7 +158,13 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        unsafe_mask = x.norm(dim=-1) >= 4.0
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        # Maximum distance
+        unsafe_mask.logical_or_(x.norm(dim=-1) >= 4.0)
+
+        # Minimum distance
+        unsafe_mask.logical_or_(x.norm(dim=-1) <= 0.2)
 
         return unsafe_mask
 
@@ -182,6 +196,9 @@ class LinearSatellite(ControlAffineSystem):
 
         # Extract the needed parameters
         a = params["a"]
+        ux_target = params["ux_target"]
+        uy_target = params["uy_target"]
+        uz_target = params["uz_target"]
         # Compute mean-motion
         n = sqrt(LinearSatellite.MU / a ** 3)
         # and state variables
@@ -200,6 +217,11 @@ class LinearSatellite(ControlAffineSystem):
         f[:, LinearSatellite.XDOT, 0] = 3 * n ** 2 * x_ + 2 * n * ydot_
         f[:, LinearSatellite.YDOT, 0] = -2 * n * xdot_
         f[:, LinearSatellite.ZDOT, 0] = -(n ** 2) * z_
+
+        # Add perturbations
+        f[:, LinearSatellite.XDOT, 0] += ux_target
+        f[:, LinearSatellite.YDOT, 0] += uy_target
+        f[:, LinearSatellite.ZDOT, 0] += uz_target
 
         return f
 
