@@ -148,7 +148,7 @@ class LinearSatellite(ControlAffineSystem):
         safe_mask.logical_and_(x.norm(dim=-1) <= 2.0)
 
         # Stay at least some minimum distance from the target
-        safe_mask.logical_and_(x.norm(dim=-1) >= 0.5)
+        safe_mask.logical_and_(x.norm(dim=-1) >= 1.0)
 
         return safe_mask
 
@@ -164,7 +164,7 @@ class LinearSatellite(ControlAffineSystem):
         unsafe_mask.logical_or_(x.norm(dim=-1) >= 4.0)
 
         # Minimum distance
-        unsafe_mask.logical_or_(x.norm(dim=-1) <= 0.2)
+        unsafe_mask.logical_or_(x.norm(dim=-1) <= 0.5)
 
         return unsafe_mask
 

@@ -304,48 +304,48 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         qp_relaxation_loss = qp_relaxation.mean()
         loss.append(("QP relaxation", qp_relaxation_loss))
 
-        # Now compute the decrease using linearization
-        eps = 1.0
-        clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
-        clbf_descent_acc_lin = torch.tensor(0.0).type_as(x)
-        # Get the current value of the CLBF and its Lie derivatives
-        Lf_V, Lg_V = self.V_lie_derivatives(x)
-        for i, s in enumerate(self.scenarios):
-            # Use the dynamics to compute the derivative of V
-            Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
-                Lg_V[:, i, :].unsqueeze(1),
-                u_qp.reshape(-1, self.dynamics_model.n_controls, 1),
-            )
-            Vdot = Vdot.reshape(V.shape)
-            violation = F.relu(eps + Vdot + self.cbf_lambda * V)
-            clbf_descent_term_lin += violation.mean()
-            clbf_descent_acc_lin += (violation <= eps).sum() / (
-                violation.nelement() * self.n_scenarios
-            )
+        # # Now compute the decrease using linearization
+        # eps = 1.0
+        # clbf_descent_term_lin = torch.tensor(0.0).type_as(x)
+        # clbf_descent_acc_lin = torch.tensor(0.0).type_as(x)
+        # # Get the current value of the CLBF and its Lie derivatives
+        # Lf_V, Lg_V = self.V_lie_derivatives(x)
+        # for i, s in enumerate(self.scenarios):
+        #     # Use the dynamics to compute the derivative of V
+        #     Vdot = Lf_V[:, i, :].unsqueeze(1) + torch.bmm(
+        #         Lg_V[:, i, :].unsqueeze(1),
+        #         u_qp.reshape(-1, self.dynamics_model.n_controls, 1),
+        #     )
+        #     Vdot = Vdot.reshape(V.shape)
+        #     violation = F.relu(eps + Vdot + self.cbf_lambda * V)
+        #     clbf_descent_term_lin += violation.mean()
+        #     clbf_descent_acc_lin += (violation <= eps).sum() / (
+        #         violation.nelement() * self.n_scenarios
+        #     )
 
-        loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
-        if accuracy:
-            loss.append(("CLBF descent accuracy (linearized)", clbf_descent_acc_lin))
+        # loss.append(("CLBF descent term (linearized)", clbf_descent_term_lin))
+        # if accuracy:
+        #     loss.append(("CLBF descent accuracy (linearized)", clbf_descent_acc_lin))
 
-        # Now compute the decrease using simulation
-        eps = 1.0
-        clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
-        clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
-        for s in self.scenarios:
-            xdot = self.dynamics_model.closed_loop_dynamics(x, u_qp, params=s)
-            x_next = x + self.dynamics_model.dt * xdot
-            V_next = self.V(x_next)
-            violation = F.relu(
-                eps + (V_next - V) / self.controller_period + self.cbf_lambda * V
-            )
+        # # Now compute the decrease using simulation
+        # eps = 1.0
+        # clbf_descent_term_sim = torch.tensor(0.0).type_as(x)
+        # clbf_descent_acc_sim = torch.tensor(0.0).type_as(x)
+        # for s in self.scenarios:
+        #     xdot = self.dynamics_model.closed_loop_dynamics(x, u_qp, params=s)
+        #     x_next = x + self.dynamics_model.dt * xdot
+        #     V_next = self.V(x_next)
+        #     violation = F.relu(
+        #         eps + (V_next - V) / self.controller_period + self.cbf_lambda * V
+        #     )
 
-            clbf_descent_term_sim += violation.mean()
-            clbf_descent_acc_sim += (violation <= eps).sum() / (
-                violation.nelement() * self.n_scenarios
-            )
-        loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
-        if accuracy:
-            loss.append(("CLBF descent accuracy (simulated)", clbf_descent_acc_sim))
+        #     clbf_descent_term_sim += violation.mean()
+        #     clbf_descent_acc_sim += (violation <= eps).sum() / (
+        #         violation.nelement() * self.n_scenarios
+        #     )
+        # loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
+        # if accuracy:
+        #     loss.append(("CLBF descent accuracy (simulated)", clbf_descent_acc_sim))
 
         return loss
 
