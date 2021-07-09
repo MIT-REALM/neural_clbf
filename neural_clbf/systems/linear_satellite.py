@@ -143,7 +143,7 @@ class LinearSatellite(ControlAffineSystem):
             x: a tensor of points in the state space
         """
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
-        
+
         # Stay within some maximum distance from the target
         safe_mask.logical_and_(x.norm(dim=-1) <= 2.0)
 
