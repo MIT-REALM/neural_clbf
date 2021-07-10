@@ -85,7 +85,7 @@ def main(args):
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
         "V Contour",
-        domain=[(-4.1, 4.1), (-4.1, 4.1)],
+        domain=[(-2.5, 2.5), (-2.5, 2.5)],
         n_grid=50,
         x_axis_index=LinearSatellite.X,
         y_axis_index=LinearSatellite.Y,
@@ -100,8 +100,8 @@ def main(args):
         scenarios,
         data_module,
         experiment_suite=experiment_suite,
-        cbf_hidden_layers=2,
-        cbf_hidden_size=64,
+        cbf_hidden_layers=4,
+        cbf_hidden_size=128,
         cbf_lambda=1.0,
         controller_period=controller_period,
         cbf_relaxation_penalty=1e2,
