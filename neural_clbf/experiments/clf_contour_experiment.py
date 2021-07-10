@@ -195,7 +195,7 @@ class CLFContourExperiment(Experiment):
 
         # And the safe/unsafe regions (if specified)
         if self.plot_unsafe_region:
-            ax.plot([], [], c="green", label="Safe/Unsafe Region")
+            ax.plot([], [], c="green", label="Safe Region")
             ax.tricontour(
                 results_df[self.x_axis_label],
                 results_df[self.y_axis_label],
@@ -207,7 +207,7 @@ class CLFContourExperiment(Experiment):
                 results_df[self.x_axis_label],
                 results_df[self.y_axis_label],
                 results_df["Unsafe region"],
-                colors=["green"],
+                colors=["magenta"],
                 levels=[0.5],
             )
 

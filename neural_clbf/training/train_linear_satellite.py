@@ -24,7 +24,7 @@ controller_period = 0.01
 
 start_x = torch.tensor(
     [
-        [1.0, 1.0, 1.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
     ]
 )
 simulation_dt = 0.001
@@ -79,7 +79,7 @@ def main(args):
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
 
     # Define the experiment suite

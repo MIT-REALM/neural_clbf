@@ -113,9 +113,9 @@ class LinearSatellite(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[LinearSatellite.X] = 5
-        upper_limit[LinearSatellite.Y] = 5
-        upper_limit[LinearSatellite.Z] = 5
+        upper_limit[LinearSatellite.X] = 2.5
+        upper_limit[LinearSatellite.Y] = 2.5
+        upper_limit[LinearSatellite.Z] = 2.5
         upper_limit[LinearSatellite.XDOT] = 1
         upper_limit[LinearSatellite.YDOT] = 1
         upper_limit[LinearSatellite.ZDOT] = 1
@@ -145,10 +145,10 @@ class LinearSatellite(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Stay within some maximum distance from the target
-        safe_mask.logical_and_(x.norm(dim=-1) <= 2.0)
+        safe_mask.logical_and_(x.norm(dim=-1) <= 1.5)
 
         # Stay at least some minimum distance from the target
-        safe_mask.logical_and_(x.norm(dim=-1) >= 1.0)
+        safe_mask.logical_and_(x.norm(dim=-1) >= 0.5)
 
         return safe_mask
 
@@ -161,10 +161,10 @@ class LinearSatellite(ControlAffineSystem):
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
 
         # Maximum distance
-        unsafe_mask.logical_or_(x.norm(dim=-1) >= 4.0)
+        unsafe_mask.logical_or_(x.norm(dim=-1) >= 2.0)
 
         # Minimum distance
-        unsafe_mask.logical_or_(x.norm(dim=-1) <= 0.5)
+        unsafe_mask.logical_or_(x.norm(dim=-1) <= 0.3)
 
         return unsafe_mask
 
@@ -174,7 +174,7 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = x.norm(dim=-1) <= 1.0
+        goal_mask = x.norm(dim=-1) <= 0.5
 
         return goal_mask
 
