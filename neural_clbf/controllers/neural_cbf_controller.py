@@ -87,7 +87,7 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         self.x_center = (x_max + x_min) / 2.0
         self.x_range = (x_max - x_min) / 2.0
         # Scale to get the input between (-k, k), centered at 0
-        k = 1.0
+        k = 10.0
         self.x_range = self.x_range / k
         # We shouldn't scale or offset any angle dimensions
         self.x_center[self.dynamics_model.angle_dims] = 0.0
