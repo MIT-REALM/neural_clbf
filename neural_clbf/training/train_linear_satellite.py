@@ -75,18 +75,18 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=0,
         trajectory_length=1,
-        fixed_samples=10000,
+        fixed_samples=100000,
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.3, "unsafe": 0.3},
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.2},
     )
 
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
         "V Contour",
-        domain=[(-5.0, 5.0), (-5.0, 5.0)],
-        n_grid=20,
+        domain=[(-4.1, 4.1), (-4.1, 4.1)],
+        n_grid=50,
         x_axis_index=LinearSatellite.X,
         y_axis_index=LinearSatellite.Y,
         x_axis_label="$x$",
