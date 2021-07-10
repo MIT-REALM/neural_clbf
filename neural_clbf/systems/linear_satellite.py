@@ -174,7 +174,7 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = x.norm(dim=-1) <= 0.2
+        goal_mask = x.norm(dim=-1) <= 1.0
 
         return goal_mask
 
