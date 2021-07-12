@@ -75,7 +75,7 @@ def main(args):
 
     # Define the experiments
     V_contour_experiment = CLFContourExperiment(
-        "V Contour",
+        "V_Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
         n_grid=50,
         x_axis_index=KSCar.SXE,
