@@ -8,6 +8,7 @@ from .inverted_pendulum import InvertedPendulum
 # from .segway import Segway
 # from .f16 import F16
 from .turtlebot import TurtleBot
+from .crazyflie import CrazyFlie
 
 __all__ = [
     "ControlAffineSystem",
@@ -20,4 +21,5 @@ __all__ = [
     "STCar",
     "TurtleBot",
     "Segway",
+    "CrazyFlie"
 ]
