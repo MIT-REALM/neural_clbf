@@ -1,14 +1,15 @@
-from neural_clbf.controllers import NeuralCLBFController
+import pandas as pd
+
+from neural_clbf.controllers import NeuralCBFController
 
 
 def eval_linear_satellite():
     # Load the checkpoint file. This should include the experiment suite used during
     # training.
-    log_dir = "saved_models/aas/linear_satellite/commit_30aef5d/"
-    neural_controller = NeuralCLBFController.load_from_checkpoint(log_dir + "v0.ckpt")
+    log_dir = "saved_models/aas/linear_satellite_cbf/commit_318eb38/"
+    neural_controller = NeuralCBFController.load_from_checkpoint(log_dir + "v0.ckpt")
 
-    # Increase the simulation time and the resolution of the grid.
-    neural_controller.experiment_suite.experiments[1].t_sim = 200.0
+    # Increase the resolution of the grid.
     neural_controller.experiment_suite.experiments[0].n_grid = 500
 
     # Run the experiments and save the results
@@ -17,5 +18,21 @@ def eval_linear_satellite():
     )
 
 
+def plot_linear_satellite():
+    # Load the checkpoint file. This should include the experiment suite used during
+    # training.
+    log_dir = "saved_models/aas/linear_satellite_cbf/commit_318eb38/"
+    neural_controller = NeuralCBFController.load_from_checkpoint(log_dir + "v0.ckpt")
+
+    # Load the saved data
+    results_df = pd.read_csv(log_dir + "experiments/2021-07-11_17_26_05/V_Contour.csv")
+
+    # Run the experiments and save the results
+    neural_controller.experiment_suite.experiments[0].plot(
+        neural_controller, results_df, display_plots=True
+    )
+
+
 if __name__ == "__main__":
-    eval_linear_satellite()
+    # eval_linear_satellite()
+    plot_linear_satellite()

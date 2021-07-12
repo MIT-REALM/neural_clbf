@@ -49,7 +49,9 @@ def test_normalize_x():
 
     # Instantiate with a list of only one scenarios
     scenarios = [params]
-    controller = NeuralCBFController(system, scenarios, dm, experiment_suite)
+    controller = NeuralCBFController(
+        system, scenarios, dm, experiment_suite, scale_parameter=1.0
+    )
 
     # Define states on which to test.
     # Start with the upper and lower state limits

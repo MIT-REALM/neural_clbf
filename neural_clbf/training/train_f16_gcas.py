@@ -85,7 +85,7 @@ def main(args):
 
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
-        "V Contour",
+        "V_Contour",
         domain=[(400.0, 600.0), (0.0, 1500)],
         default_state=torch.tensor(
             [[500.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 500, 5, 0, 0, 0]]

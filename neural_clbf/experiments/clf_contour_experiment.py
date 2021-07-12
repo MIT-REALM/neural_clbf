@@ -184,14 +184,15 @@ class CLFContourExperiment(Experiment):
         plt.colorbar(contours, ax=ax, orientation="vertical")
 
         # Also overlay the relaxation region
-        ax.plot([], [], c="silver", label="QP relaxation")
-        contours = ax.tricontour(
-            results_df[self.x_axis_label],
-            results_df[self.y_axis_label],
-            results_df["QP relaxation"],
-            colors=["silver"],
-            levels=[1e-5],
-        )
+        if results_df["QP relaxation"].max() > 1e-5:
+            ax.plot([], [], c="silver", label="QP relaxation")
+            contours = ax.tricontour(
+                results_df[self.x_axis_label],
+                results_df[self.y_axis_label],
+                results_df["QP relaxation"],
+                colors=["silver"],
+                levels=[1e-5],
+            )
 
         # And the safe/unsafe regions (if specified)
         if self.plot_unsafe_region:
@@ -203,6 +204,7 @@ class CLFContourExperiment(Experiment):
                 colors=["green"],
                 levels=[0.5],
             )
+            ax.plot([], [], c="magenta", label="Unsafe Region")
             ax.tricontour(
                 results_df[self.x_axis_label],
                 results_df[self.y_axis_label],
@@ -235,7 +237,7 @@ class CLFContourExperiment(Experiment):
             loc="lower left",
             mode="expand",
             borderaxespad=0,
-            ncol=3,
+            ncol=4,
         )
         ax.set_xlabel(self.x_axis_label)
         ax.set_ylabel(self.y_axis_label)

@@ -62,7 +62,7 @@ class ExperimentSuite(object):
 
         # Get the subdirectory name
         current_datetime = datetime.now()
-        timestamp = current_datetime.strftime("%Y-%m-%d_%H:%M:%S")
+        timestamp = current_datetime.strftime("%Y-%m-%d_%H_%M_%S")
         subdirectory_path = f"{save_dir}/{timestamp}"
 
         # Run and save all experiments (these will create subdirectory if it does not

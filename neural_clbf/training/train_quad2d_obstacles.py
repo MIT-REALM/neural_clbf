@@ -65,7 +65,7 @@ def main(args):
 
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
-        "V Contour",
+        "V_Contour",
         domain=[(-1.0, 1.0), (-0.5, 1.0)],
         n_grid=15,
         x_axis_index=Quad2D.PX,
