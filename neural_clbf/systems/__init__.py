@@ -1,6 +1,7 @@
 from warnings import warn
 
 from .control_affine_system import ControlAffineSystem
+from .planar_lidar_system import PlanarLidarSystem
 from .quad2d import Quad2D
 from .quad3d import Quad3D
 from .neural_lander import NeuralLander
@@ -13,6 +14,7 @@ from .linear_satellite import LinearSatellite
 
 __all__ = [
     "ControlAffineSystem",
+    "PlanarLidarSystem",
     "InvertedPendulum",
     "Quad2D",
     "Quad3D",

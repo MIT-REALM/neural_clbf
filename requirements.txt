@@ -19,3 +19,6 @@ pytorch-lightning == 1.3.4
 cvxpy
 cvxpylayers
 gurobipy
+
+# Geometry
+shapely
