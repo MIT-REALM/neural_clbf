@@ -23,7 +23,7 @@ class ControlAffineSystem(ABC):
     """
     Represents an abstract control-affine dynamical system.
 
-    A control-affine dynamcial system is one where the state derivatives are affine in
+    A control-affine dynamical system is one where the state derivatives are affine in
     the control input, e.g.:
 
         dx/dt = f(x) + g(x) u
