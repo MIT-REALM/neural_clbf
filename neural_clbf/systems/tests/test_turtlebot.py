@@ -101,3 +101,5 @@ def test_turtlebot_dynamics():
     assert xdot[0, TurtleBot.X] > 0.0
     assert xdot[0, TurtleBot.Y] > 0.0
     assert xdot[0, TurtleBot.THETA] > 0.0
+    assert turtlebot.n_dims == 3
+    

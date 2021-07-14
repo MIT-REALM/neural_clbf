@@ -1,42 +1,55 @@
 """Define a dymamical system for an inverted pendulum"""
 from typing import Tuple, Optional, List
+from math import sqrt
 
 import torch
 
 from .control_affine_system import ControlAffineSystem
-from neural_clbf.systems.utils import grav, Scenario, ScenarioList
+from neural_clbf.systems.utils import Scenario, ScenarioList
 
 
-class InvertedPendulum(ControlAffineSystem):
+class LinearSatellite(ControlAffineSystem):
     """
-    Represents a damped inverted pendulum.
+    Represents a satellite through the linearized Clohessy-Wiltshire equations
 
     The system has state
 
-        x = [theta, theta_dot]
+        x = [x, y, z, xdot, ydot, zdot]
 
-    representing the angle and velocity of the pendulum, and it
+    representing the position and velocity of the chaser satellite, and it
     has control inputs
 
-        u = [u]
+        u = [ux, uy, uz]
 
-    representing the torque applied.
+    representing the thrust applied in each axis. Distances are in km, and control
+    inputs are measured in km/s.
+
+    The task here is to get to the origin without leaving the bounding box [-5, 5] on
+    all positions and [-1, 1] on velocities.
 
     The system is parameterized by
-        m: mass
-        L: length of the pole
-        b: damping
+        mu: Earth's gravitational parameter (known constant)
+        a: the length of the semi-major axis of the target's orbit (e.g. 6871)
     """
 
     # Number of states and controls
-    N_DIMS = 2
-    N_CONTROLS = 1
+    N_DIMS = 6
+    N_CONTROLS = 3
 
     # State indices
-    THETA = 0
-    THETA_DOT = 1
+    X = 0
+    Y = 1
+    Z = 2
+    XDOT = 3
+    YDOT = 4
+    ZDOT = 5
     # Control indices
-    U = 0
+    UX = 0
+    UY = 1
+    UZ = 2
+
+    # Constant parameters
+    MU = 398600.0  # Earth's gravitational parameter
 
     def __init__(
         self,
@@ -50,7 +63,7 @@ class InvertedPendulum(ControlAffineSystem):
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
-                            Requires keys ["m", "L", "b"]
+                            Requires keys ["a"]
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
         raises:
@@ -65,34 +78,30 @@ class InvertedPendulum(ControlAffineSystem):
 
         args:
             params: a dictionary giving the parameter values for the system.
-                    Requires keys ["m", "L", "b"]
+                    Requires keys ["a"]
         returns:
             True if parameters are valid, False otherwise
         """
         valid = True
         # Make sure all needed parameters were provided
-        valid = valid and "m" in params
-        valid = valid and "L" in params
-        valid = valid and "b" in params
+        valid = valid and "a" in params
 
         # Make sure all parameters are physically valid
-        valid = valid and params["m"] > 0
-        valid = valid and params["L"] > 0
-        valid = valid and params["b"] > 0
+        valid = valid and params["a"] > 0
 
         return valid
 
     @property
     def n_dims(self) -> int:
-        return InvertedPendulum.N_DIMS
+        return LinearSatellite.N_DIMS
 
     @property
     def angle_dims(self) -> List[int]:
-        return [InvertedPendulum.THETA]
+        return []
 
     @property
     def n_controls(self) -> int:
-        return InvertedPendulum.N_CONTROLS
+        return LinearSatellite.N_CONTROLS
 
     @property
     def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -102,8 +111,12 @@ class InvertedPendulum(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[InvertedPendulum.THETA] = 2.0
-        upper_limit[InvertedPendulum.THETA_DOT] = 2.0
+        upper_limit[LinearSatellite.X] = 5
+        upper_limit[LinearSatellite.Y] = 5
+        upper_limit[LinearSatellite.Z] = 5
+        upper_limit[LinearSatellite.XDOT] = 1
+        upper_limit[LinearSatellite.YDOT] = 1
+        upper_limit[LinearSatellite.ZDOT] = 1
 
         lower_limit = -1.0 * upper_limit
 
@@ -116,8 +129,8 @@ class InvertedPendulum(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = torch.tensor([100 * 10.0])
-        lower_limit = -torch.tensor([100 * 10.0])
+        upper_limit = torch.tensor([0.03, 0.03, 0.03])
+        lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
 
@@ -127,7 +140,7 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        safe_mask = x.norm(dim=-1) <= 0.8
+        safe_mask = x.norm(dim=-1) <= 1.0
 
         return safe_mask
 
@@ -137,7 +150,7 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        unsafe_mask = x.norm(dim=-1) >= 1.5
+        unsafe_mask = x.norm(dim=-1) >= 4.0
 
         return unsafe_mask
 
@@ -147,7 +160,7 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = x.norm(dim=-1) <= 0.3
+        goal_mask = x.norm(dim=-1) <= 0.2
 
         return goal_mask
 
@@ -168,18 +181,25 @@ class InvertedPendulum(ControlAffineSystem):
         f = f.type_as(x)
 
         # Extract the needed parameters
-        m, L, b = params["m"], params["L"], params["b"]
+        a = params["a"]
+        # Compute mean-motion
+        n = sqrt(LinearSatellite.MU / a ** 3)
         # and state variables
-        theta = x[:, InvertedPendulum.THETA]
-        theta_dot = x[:, InvertedPendulum.THETA_DOT]
+        x_ = x[:, LinearSatellite.X]
+        z_ = x[:, LinearSatellite.Z]
+        xdot_ = x[:, LinearSatellite.XDOT]
+        ydot_ = x[:, LinearSatellite.YDOT]
+        zdot_ = x[:, LinearSatellite.ZDOT]
 
-        # The derivatives of theta is just its velocity
-        f[:, InvertedPendulum.THETA, 0] = theta_dot
+        # The first three dimensions just integrate the velocity
+        f[:, LinearSatellite.X, 0] = xdot_
+        f[:, LinearSatellite.Y, 0] = ydot_
+        f[:, LinearSatellite.Z, 0] = zdot_
 
-        # Acceleration in theta depends on theta via gravity and theta_dot via damping
-        f[:, InvertedPendulum.THETA_DOT, 0] = (
-            grav / L * (theta) - b / (m * L ** 2) * theta_dot
-        )
+        # The last three use the CHW equations
+        f[:, LinearSatellite.XDOT, 0] = 3 * n ** 2 * x_ + 2 * n * ydot_
+        f[:, LinearSatellite.YDOT, 0] = -2 * n * xdot_
+        f[:, LinearSatellite.ZDOT, 0] = -(n ** 2) * z_
 
         return f
 
@@ -199,10 +219,9 @@ class InvertedPendulum(ControlAffineSystem):
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
         g = g.type_as(x)
 
-        # Extract the needed parameters
-        m, L = params["m"], params["L"]
-
-        # Effect on theta dot
-        g[:, InvertedPendulum.THETA_DOT, InvertedPendulum.U] = 1 / (m * L ** 2)
+        # The control inputs are accelerations
+        g[:, LinearSatellite.XDOT, LinearSatellite.UX] = 1.0
+        g[:, LinearSatellite.YDOT, LinearSatellite.UY] = 1.0
+        g[:, LinearSatellite.ZDOT, LinearSatellite.UZ] = 1.0
 
         return g

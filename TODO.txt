@@ -1,0 +1,6 @@
+
++ Rename package to something more general.
+    + Neural Control Toolkit.
+    + COntrol VERification Toolkit (covert? cover?).
+    + VErification Controls Toolkit (vecto? vector?)
+    + ConCerT (Control Certification Toolkit)!

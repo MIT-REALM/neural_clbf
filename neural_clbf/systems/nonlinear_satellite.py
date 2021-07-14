@@ -4,39 +4,57 @@ from typing import Tuple, Optional, List
 import torch
 
 from .control_affine_system import ControlAffineSystem
-from neural_clbf.systems.utils import grav, Scenario, ScenarioList
+from neural_clbf.systems.utils import Scenario, ScenarioList
 
 
-class InvertedPendulum(ControlAffineSystem):
+class NonlinearSatellite(ControlAffineSystem):
     """
-    Represents a damped inverted pendulum.
+    Represents a satellite using linearized Clohessy Wiltshire equations plus nonlinear
+    drag terms (but neglecting J2 dynamics), assuming a circular orbit.
 
     The system has state
 
-        x = [theta, theta_dot]
+        x = [x, y, z, xdot, ydot, zdot]
 
-    representing the angle and velocity of the pendulum, and it
+    representing the position and velocity of the chaser satellite, and it
     has control inputs
 
-        u = [u]
+        u = [ux, uy, uz]
 
-    representing the torque applied.
+    representing the thrust applied in each axis. Distances are in km, and control
+    inputs are measured in km/s^2
+
+    The task is to remain within the state limits and stay at least 0.2 km from the
+    origin (where there is another satellite).
 
     The system is parameterized by
-        m: mass
-        L: length of the pole
-        b: damping
+        mu: Earth's gravitational parameter (known constant)
+        A: the surface area of the spacecraft (e.g. 2e-6)
+        Cd: the atmospheric drag coefficient (e.g. 2)
+        rho: the atmospheric density (e.g. 9.1515e-5)
+        m: the mass of the satellite (e.g. 500)
+        r the radius of the circular orbit (e.g. 500 + NonlinearSatellite.RE)
     """
 
     # Number of states and controls
-    N_DIMS = 2
-    N_CONTROLS = 1
+    N_DIMS = 6
+    N_CONTROLS = 3
 
     # State indices
-    THETA = 0
-    THETA_DOT = 1
+    X = 0
+    Y = 1
+    Z = 2
+    XDOT = 3
+    YDOT = 4
+    ZDOT = 5
     # Control indices
-    U = 0
+    UX = 0
+    UY = 1
+    UZ = 2
+
+    # Constant parameters
+    MU = 398600.0  # Earth's gravitational parameter
+    RE = 6371.0  # Earth's radius
 
     def __init__(
         self,
@@ -50,7 +68,7 @@ class InvertedPendulum(ControlAffineSystem):
 
         args:
             nominal_params: a dictionary giving the parameter values for the system.
-                            Requires keys ["m", "L", "b"]
+                            Requires keys ["A", "Cd", "rho", "m", "r"]
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
         raises:
@@ -65,34 +83,38 @@ class InvertedPendulum(ControlAffineSystem):
 
         args:
             params: a dictionary giving the parameter values for the system.
-                    Requires keys ["m", "L", "b"]
+                    Requires keys ["A", "Cd", "rho", "m", "r"]
         returns:
             True if parameters are valid, False otherwise
         """
         valid = True
         # Make sure all needed parameters were provided
+        valid = valid and "A" in params
+        valid = valid and "Cd" in params
+        valid = valid and "rho" in params
         valid = valid and "m" in params
-        valid = valid and "L" in params
-        valid = valid and "b" in params
+        valid = valid and "r" in params
 
         # Make sure all parameters are physically valid
+        valid = valid and params["A"] > 0
+        valid = valid and params["Cd"] > 0
+        valid = valid and params["rho"] > 0
         valid = valid and params["m"] > 0
-        valid = valid and params["L"] > 0
-        valid = valid and params["b"] > 0
+        valid = valid and params["r"] > 0
 
         return valid
 
     @property
     def n_dims(self) -> int:
-        return InvertedPendulum.N_DIMS
+        return NonlinearSatellite.N_DIMS
 
     @property
     def angle_dims(self) -> List[int]:
-        return [InvertedPendulum.THETA]
+        return []
 
     @property
     def n_controls(self) -> int:
-        return InvertedPendulum.N_CONTROLS
+        return NonlinearSatellite.N_CONTROLS
 
     @property
     def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -102,8 +124,12 @@ class InvertedPendulum(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[InvertedPendulum.THETA] = 2.0
-        upper_limit[InvertedPendulum.THETA_DOT] = 2.0
+        upper_limit[NonlinearSatellite.X] = 5
+        upper_limit[NonlinearSatellite.Y] = 5
+        upper_limit[NonlinearSatellite.Z] = 5
+        upper_limit[NonlinearSatellite.XDOT] = 1
+        upper_limit[NonlinearSatellite.YDOT] = 1
+        upper_limit[NonlinearSatellite.ZDOT] = 1
 
         lower_limit = -1.0 * upper_limit
 
@@ -116,8 +142,8 @@ class InvertedPendulum(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = torch.tensor([100 * 10.0])
-        lower_limit = -torch.tensor([100 * 10.0])
+        upper_limit = torch.tensor([0.03, 0.03, 0.03])
+        lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
 
@@ -127,7 +153,13 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        safe_mask = x.norm(dim=-1) <= 0.8
+        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        state_limit_mask = x.norm(dim=-1) <= 1.0
+        safe_mask.logical_and_(state_limit_mask)
+
+        obstacle_avoidance = x.norm(dim=-1) >= 0.4
+        safe_mask.logical_and_(obstacle_avoidance)
 
         return safe_mask
 
@@ -137,7 +169,13 @@ class InvertedPendulum(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        unsafe_mask = x.norm(dim=-1) >= 1.5
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        state_limit_mask = x.norm(dim=-1) >= 4.0
+        unsafe_mask.logical_or_(state_limit_mask)
+
+        obstacle = x.norm(dim=-1) <= 0.2
+        unsafe_mask.logical_or_(obstacle)
 
         return unsafe_mask
 
@@ -168,17 +206,30 @@ class InvertedPendulum(ControlAffineSystem):
         f = f.type_as(x)
 
         # Extract the needed parameters
-        m, L, b = params["m"], params["L"], params["b"]
+        A, Cd, rho, m = params["A"], params["Cd"], params["rho"], params["m"]
+        r = params["r"]
         # and state variables
-        theta = x[:, InvertedPendulum.THETA]
-        theta_dot = x[:, InvertedPendulum.THETA_DOT]
+        x_ = x[:, NonlinearSatellite.X]
+        y_ = x[:, NonlinearSatellite.Y]
+        z_ = x[:, NonlinearSatellite.Z]
+        xdot_ = x[:, NonlinearSatellite.XDOT]
+        ydot_ = x[:, NonlinearSatellite.YDOT]
+        zdot_ = x[:, NonlinearSatellite.ZDOT]
 
-        # The derivatives of theta is just its velocity
-        f[:, InvertedPendulum.THETA, 0] = theta_dot
+        # The first three dimensions just integrate the velocity
+        f[:, NonlinearSatellite.X, 0] = xdot_
+        f[:, NonlinearSatellite.Y, 0] = ydot_
+        f[:, NonlinearSatellite.Z, 0] = zdot_
 
-        # Acceleration in theta depends on theta via gravity and theta_dot via damping
-        f[:, InvertedPendulum.THETA_DOT, 0] = (
-            grav / L * (theta) - b / (m * L ** 2) * theta_dot
+        # The last three use equation 7 from Axel's paper
+        f[:, NonlinearSatellite.XDOT, 0] = (
+            -NonlinearSatellite.MU * x_ / r ** 3 - 0.5 * Cd * A * rho / m * xdot_ ** 2
+        )
+        f[:, NonlinearSatellite.YDOT, 0] = (
+            -NonlinearSatellite.MU * y_ / r ** 3 - 0.5 * Cd * A * rho / m * ydot_ ** 2
+        )
+        f[:, NonlinearSatellite.ZDOT, 0] = (
+            -NonlinearSatellite.MU * z_ / r ** 3 - 0.5 * Cd * A * rho / m * zdot_ ** 2
         )
 
         return f
@@ -199,10 +250,9 @@ class InvertedPendulum(ControlAffineSystem):
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
         g = g.type_as(x)
 
-        # Extract the needed parameters
-        m, L = params["m"], params["L"]
-
-        # Effect on theta dot
-        g[:, InvertedPendulum.THETA_DOT, InvertedPendulum.U] = 1 / (m * L ** 2)
+        # The control inputs are accelerations
+        g[:, NonlinearSatellite.XDOT, NonlinearSatellite.UX] = 1.0
+        g[:, NonlinearSatellite.YDOT, NonlinearSatellite.UY] = 1.0
+        g[:, NonlinearSatellite.ZDOT, NonlinearSatellite.UZ] = 1.0
 
         return g

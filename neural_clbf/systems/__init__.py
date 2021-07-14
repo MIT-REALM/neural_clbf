@@ -1,14 +1,16 @@
+from warnings import warn
+
 from .control_affine_system import ControlAffineSystem
 from .quad2d import Quad2D
 from .quad3d import Quad3D
-# from .neural_lander import NeuralLander
+from .neural_lander import NeuralLander
 from .inverted_pendulum import InvertedPendulum
-# from .kinematic_single_track_car import KSCar
-# from .single_track_car import STCar
-# from .segway import Segway
-# from .f16 import F16
+from .kinematic_single_track_car import KSCar
+from .single_track_car import STCar
+from .segway import Segway
 from .turtlebot import TurtleBot
-# from .crazyflie import CrazyFlie
+from .linear_satellite import LinearSatellite
+from .nonlinear_satellite import NonlinearSatellite
 
 __all__ = [
     "ControlAffineSystem",
@@ -16,10 +18,18 @@ __all__ = [
     "Quad2D",
     "Quad3D",
     "NeuralLander",
-    "F16",
     "KSCar",
     "STCar",
     "TurtleBot",
     "Segway",
     "CrazyFlie"
+    "LinearSatellite",
+    "NonlinearSatellite",
 ]
+
+try:
+    from .f16 import F16  # noqa
+
+    __all__.append("F16")
+except ImportError:
+    warn("Could not import F16 module; is AeroBench installed")
