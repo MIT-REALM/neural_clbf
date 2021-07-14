@@ -14,7 +14,7 @@ from neural_clbf.experiments.common.plotting import (
     plot_CLBF,
     rollout_CLBF,
 )
-from neural_clbf.systems import TurtleBot 
+from neural_clbf.systems import TurtleBot
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -73,13 +73,13 @@ def main(args):
         nominal_params,
         dt=simulation_dt,
         controller_dt=controller_period,
-        scenarios=scenarios
+        scenarios=scenarios,
     )
 
     # Initialize the DataModule
     initial_conditions = [
-        (-2.0, 2.0), # x
-        (-2.0, 2.0), # y
+        (-2.0, 2.0),  # x
+        (-2.0, 2.0),  # y
         (-np.pi / 2, np.pi / 2),  # theta
     ]
     data_module = EpisodicDataModule(
