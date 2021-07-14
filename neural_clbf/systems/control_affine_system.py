@@ -75,6 +75,7 @@ class ControlAffineSystem(ABC):
         if use_linearized_controller:
             self.compute_linearized_controller(scenarios)
 
+    @torch.enable_grad()
     def compute_A_matrix(self, scenario: Optional[Scenario]) -> np.ndarray:
         """Compute the linearized continuous-time state-state derivative transfer matrix
         about the goal point"""
@@ -238,17 +239,6 @@ class ControlAffineSystem(ABC):
                 self.unsafe_mask(x),
             )
         )
-
-    @abstractmethod
-    def distance_to_goal(self, x: torch.Tensor) -> torch.Tensor:
-        """Return the distance from each point in x to the goal (positive for points
-        outside the goal, negative for points inside the goal), normalized by the state
-        limits.
-
-        args:
-            x: the points from which we calculate distance
-        """
-        pass
 
     @abstractmethod
     def goal_mask(self, x: torch.Tensor) -> torch.Tensor:

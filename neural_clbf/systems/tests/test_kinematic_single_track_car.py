@@ -14,14 +14,16 @@ def test_kscar_init():
     # Test instantiation with valid parameters
     valid_params = {
         "psi_ref": 1.0,
-        "v_ref": 1.0,
+        "v_ref": 10.0,
         "a_ref": 0.0,
         "omega_ref": 0.0,
     }
-    kscar = KSCar(valid_params)
+    kscar = KSCar(valid_params, controller_dt=0.01, dt=0.001)
     assert kscar is not None
     assert kscar.n_dims == 5
     assert kscar.n_controls == 2
+
+    print(kscar.K)
 
 
 def plot_kscar_straight_path():
