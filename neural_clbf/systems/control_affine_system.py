@@ -240,14 +240,15 @@ class ControlAffineSystem(ABC):
             )
         )
 
-    @abstractmethod
     def goal_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating goal regions for this system
 
         args:
             x: a tensor of points in the state space
         """
-        pass
+        # Include a sensible default
+        goal_tolerance = 0.1
+        return (x - self.goal_point).norm(dim=-1) <= goal_tolerance
 
     @property
     def goal_point(self):

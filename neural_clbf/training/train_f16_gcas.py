@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
 
-from neural_clbf.controllers import NeuralCLBFController
+from neural_clbf.controllers import NeuralCBFController
 from neural_clbf.datamodules.episodic_datamodule import (
     EpisodicDataModule,
 )
@@ -72,10 +72,12 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
-        trajectory_length=5000,
+        trajectories_per_episode=0,
+        trajectory_length=1,
+        fixed_samples=100000,
+        max_points=100000,
         val_split=0.1,
-        batch_size=256,
+        batch_size=64,
     )
 
     # Define the scenarios
@@ -104,27 +106,21 @@ def main(args):
         plot_u_indices=[F16.U_NZ, F16.U_SR],
         plot_u_labels=["$N_z$", "$SR$"],
         t_sim=10.0,
-        controller_period=controller_period,
         n_sims_per_start=1,
     )
     experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
 
     # Initialize the controller
-    clbf_controller = NeuralCLBFController(
+    clbf_controller = NeuralCBFController(
         dynamics_model,
         scenarios,
         data_module,
-        experiment_suite,
-        clbf_hidden_layers=3,
-        clbf_hidden_size=32,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=32,
-        f_nn_hidden_layers=3,
-        f_nn_hidden_size=32,
-        dynamics_timestep=controller_period,
-        primal_learning_rate=1e-3,
-        dual_learning_rate=1e-3,
-        epochs_per_episode=5,
+        experiment_suite=experiment_suite,
+        cbf_hidden_layers=4,
+        cbf_hidden_size=128,
+        cbf_lambda=1.0,
+        controller_period=controller_period,
+        cbf_relaxation_penalty=1e2,
     )
 
     # Initialize the logger and trainer
