@@ -42,8 +42,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         experiment_suite: ExperimentSuite,
         clbf_hidden_layers: int = 2,
         clbf_hidden_size: int = 48,
-        u_nn_hidden_layers: int = 1,  # todo @dawsonc delete unused parameters
-        u_nn_hidden_size: int = 8,
         clf_lambda: float = 1.0,
         safe_level: float = 1.0,
         clf_relaxation_penalty: float = 50.0,
@@ -61,8 +59,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             experiment_suite: defines the experiments to run during training
             clbf_hidden_layers: number of hidden layers to use for the CLBF network
             clbf_hidden_size: number of neurons per hidden layer in the CLBF network
-            u_nn_hidden_layers: number of hidden layers to use for the proof controller
-            u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             clf_lambda: convergence rate for the CLBF
             safe_level: safety level set value for the CLBF
             clf_relaxation_penalty: the penalty for relaxing CLBF conditions.

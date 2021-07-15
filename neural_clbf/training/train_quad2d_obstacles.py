@@ -105,8 +105,6 @@ def main(args):
         experiment_suite,
         clbf_hidden_layers=3,
         clbf_hidden_size=32,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=32,
         controller_period=controller_period,
         clf_relaxation_penalty=50.0,
         epochs_per_episode=1000,
