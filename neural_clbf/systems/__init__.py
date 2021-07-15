@@ -11,6 +11,7 @@ from .single_track_car import STCar
 from .segway import Segway
 from .turtlebot import TurtleBot
 from .linear_satellite import LinearSatellite
+from .crazyflie import Crazyflie
 
 __all__ = [
     "ControlAffineSystem",
@@ -24,6 +25,7 @@ __all__ = [
     "TurtleBot",
     "Segway",
     "LinearSatellite",
+    "Crazyflie"
 ]
 
 try:
