@@ -2,6 +2,7 @@
 from abc import abstractmethod
 from typing import Tuple, Optional, List
 
+from matplotlib.axes import Axes
 import numpy as np
 from shapely.geometry import (
     GeometryCollection,
@@ -133,7 +134,18 @@ class Scene:
                     if noise > 0:
                         measurements[q_idx, ray_idx] += np.random.normal(0.0, noise)
 
-        return torch.tensor(measurements)
+        return torch.tensor(measurements).type_as(qs)
+
+    def plot_scene(self, ax: Axes):
+        """Plot the given scene
+
+        args:
+            ax: the matplotlib Axes on which to plot
+        """
+        # Plotting the scene is as simple as plotting each obstacle
+        for obstacle in self.obstacles:
+            x_pts, y_pts = obstacle.exterior.xy
+            ax.fill(x_pts, y_pts, alpha=0.3, fc="k", ec="none")
 
 
 class PlanarLidarSystem(ControlAffineSystem):
@@ -190,18 +202,6 @@ class PlanarLidarSystem(ControlAffineSystem):
         self.max_distance = max_distance
 
     @abstractmethod
-    def get_scene_frame_polygon(self, x: torch.Tensor) -> Polygon:
-        """Get the geometry of this agent expressed as a polygon in the scene frame
-
-        args:
-            x: a 1 x self.n_dims tensor of state
-
-        returns:
-            a Polygon representing this agent.
-        """
-        pass
-
-    @abstractmethod
     def planar_configuration(self, x: torch.Tensor) -> torch.Tensor:
         """Get the x and y position and orientation of this agent in the 2D plane
 
@@ -213,6 +213,26 @@ class PlanarLidarSystem(ControlAffineSystem):
         """
         pass
 
+    def get_observations(self, x: torch.Tensor) -> torch.Tensor:
+        """Get the vector of lidar measurements at this point
+
+        args:
+            x: an n x self.n_dims tensor of state
+
+        returns:
+            an n x self.num_rays tensor of lidar distance measurements
+        """
+        measurements = torch.zeros(x.shape[0], self.num_rays).type_as(x)
+
+        # We can only query the scene at one point at a time, so loop through x
+        for idx, x_row in enumerate(x):
+            q = self.planar_configuration(x_row)
+            measurements[idx, :] = self.scene.lidar_measurement(
+                q, self.num_rays, self.field_of_view, self.max_distance
+            )
+
+        return measurements
+
     def safe_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating safe regions for this system
 
@@ -220,18 +240,12 @@ class PlanarLidarSystem(ControlAffineSystem):
             x: a tensor of points in the state space
         """
         # A state is safe if the shortest lidar ray is at least some distance long.
-        # We can only query the scene at one point at a time, so loop through x
         safe_mask = torch.ones_like(x, dtype=torch.bool)
         min_safe_ray_length = 0.25
 
-        for idx, x_row in enumerate(x):
-            q = self.planar_configuration(x_row)
-            measurements = self.scene.lidar_measurement(
-                q, self.num_rays, self.field_of_view, self.max_distance
-            )
+        measurements = self.get_observations(x)
 
-            if measurements.min() < min_safe_ray_length:
-                safe_mask[idx] = False
+        safe_mask.logical_and_(measurements.min(dim=1)[0] >= min_safe_ray_length)
 
         return safe_mask
 
@@ -245,13 +259,8 @@ class PlanarLidarSystem(ControlAffineSystem):
         unsafe_mask = torch.zeros_like(x, dtype=torch.bool)
         min_safe_ray_length = 0.1
 
-        for idx, x_row in enumerate(x):
-            q = self.planar_configuration(x_row)
-            measurements = self.scene.lidar_measurement(
-                q, self.num_rays, self.field_of_view, self.max_distance
-            )
+        measurements = self.get_observations(x)
 
-            if measurements.min() < min_safe_ray_length:
-                unsafe_mask[idx] = True
+        unsafe_mask.logical_or_(measurements.min(dim=1)[0] <= min_safe_ray_length)
 
         return unsafe_mask
