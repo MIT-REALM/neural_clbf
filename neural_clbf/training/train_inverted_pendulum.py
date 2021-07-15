@@ -101,8 +101,6 @@ def main(args):
         experiment_suite=experiment_suite,
         clbf_hidden_layers=2,
         clbf_hidden_size=64,
-        u_nn_hidden_layers=2,
-        u_nn_hidden_size=64,
         clf_lambda=1.0,
         safe_level=1.0,
         controller_period=controller_period,
