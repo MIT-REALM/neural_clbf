@@ -15,7 +15,7 @@ from neural_clbf.experiments import (
     CLFContourExperiment,
     RolloutTimeSeriesExperiment,
 )
-from neural_clbf.systems import TurtleBot
+from neural_clbf.systems import Crazyflie
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -23,9 +23,10 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 batch_size = 64
 controller_period = 0.01
 
+# I modified this to six dimensions since we have positions and velocities, whereas the turtlebots only use x, y, and theta. Check on this. 
 start_x = torch.tensor(
     [
-        [0, 0, 0],
+        [0, 0, 0, 0, 0, 0],
         # [1.0, 1.0, 0],
     ]
 )
@@ -34,26 +35,30 @@ simulation_dt = 0.001
 
 def main(args):
     # Define the scenarios
-    nominal_params = {"R": 3.25, "L": 14.0}
+    # mass of crazyflie is 28 grams = 0.028 kg
+    nominal_params = {"m": 0.028}
     scenarios = [
         nominal_params,
-        # {"R": 3.25, "L": 13.9},
-        # {"R": 3.25, "L": 14.1},
+        # can list some different mass values here to test different scenarios
     ]
 
     # Define the dynamics model
-    dynamics_model = TurtleBot(
+    dynamics_model = Crazyflie(
         nominal_params,
         dt=simulation_dt,
         controller_dt=controller_period,
         scenarios=scenarios,
     )
 
+    
     # Initialize the DataModule
     initial_conditions = [
         (-2.0, 2.0),  # x
         (-2.0, 2.0),  # y
-        (-np.pi / 2, np.pi / 2),  # theta
+        (-4.0, 0), # z
+        (-8.0, 8.0),  # vx
+        (-8.0, 8.0),  # vy
+        (-8.0, 8.0),  # vz
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
@@ -67,23 +72,25 @@ def main(args):
         quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
 
+    # Is it possible to make this 3D? Do we need to?
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
         "V_Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
         n_grid=50,
-        x_axis_index=TurtleBot.X,
-        y_axis_index=TurtleBot.Y,
+        x_axis_index=Crazyflie.X,
+        y_axis_index=Crazyflie.Y,
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
     rollout_experiment = RolloutTimeSeriesExperiment(
         "Rollout",
         start_x,
-        plot_x_indices=[TurtleBot.X, TurtleBot.Y, TurtleBot.THETA],
-        plot_x_labels=["$x$", "$y$"],
-        plot_u_indices=[TurtleBot.V, TurtleBot.THETA_DOT],
-        plot_u_labels=["$v$", "$\\dot{\\theta}$"],
+        plot_x_indices=[Crazyflie.X, Crazyflie.Y, Crazyflie.Z, Crazyflie.VX, Crazyflie.VY, Crazyflie.VZ],
+        plot_x_labels=["$x$", "$y$", "$z$", "$vx$", "$vy$", "$vz$"],
+        # Not sure on the u indices and labels. I think they're for the control variables?
+        plot_u_indices=[Crazyflie.F, Crazyflie.PHI, Crazyflie.THETA, Crazyflie.PSI],
+        plot_u_labels=["$F$", "$Phi$", "$Theta$", "$Psi$"],
         t_sim=6.0,
         n_sims_per_start=2,
     )
