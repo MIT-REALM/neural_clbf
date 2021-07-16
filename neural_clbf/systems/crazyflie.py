@@ -183,7 +183,7 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: the points from which we calculate distance
         """
-        # this was for turtlebot, not sure if modification is needed for crazyflie
+        # this was for turtlebot, not sure if modification is needed for crazyflie. I think it should be fine as is; seems generalized
         upper_limit, _ = self.state_limits
         return x.norm(dim=-1) / upper_limit.norm()
 
@@ -218,12 +218,16 @@ class Crazyflie(ControlAffineSystem):
         f = torch.zeros((batch_size, self.n_dims, 1))
         f = f.type_as(x)
 
-        # f is a zero vector as nothing should happen when no control input is given
-        f[:, TurtleBot.X, 0] = 0
+        # Derivatives of positions are just velocities
+        f[:, Crazyflie.X] = x[:, Crazyflie.VX]  # x
+        f[:, Crazyflie.Y] = x[:, Crazyflie.VY]  # y
+        f[:, Crazyflie.Z] = x[:, Crazyflie.VZ]  # z
 
-        f[:, TurtleBot.Y, 0] = 0
+        # Constant acceleration in z due to gravity
+        f[:, Crazyflie.VZ] = grav
 
-        f[:, TurtleBot.THETA, 0] = 0
+        # Orientation velocities are directly actuated
+
 
         return f
 
@@ -243,36 +247,29 @@ class Crazyflie(ControlAffineSystem):
         g = g.type_as(x)
 
         # Extract the needed parameters
-        R, L = params["R"], params["L"]
-        # and state variables
-        theta = x[:, TurtleBot.THETA]
+        m = params["m"]
 
-        # Tensor for wheel velocities
-        v = torch.zeros((2, 2))
-        v = v.type_as(x)
+        # Derivatives of linear velocities depend on thrust f
+        s_theta = torch.sin(x[:, Crazyflie.THETA])
+        c_theta = torch.cos(x[:, Crazyflie.THETA])
+        s_phi = torch.sin(x[:, Crazyflie.PHI])
+        c_phi = torch.cos(x[:, Crazyflie.PHI])
+        g[:, Crazyflie.VX, Crazyflie.F] = -s_theta / m
+        g[:, Crazyflie.VY, Crazyflie.F] = c_theta * s_phi / m
+        g[:, Crazyflie.VZ, Crazuflie.F] = -c_theta * c_phi / m
 
-        # Building tensor v
-        v[0, 0] = 1 / R
-        v[1, 0] = 1 / R
-        v[0, 1] = L / (2 * R)
-        v[1, 1] = -L / (2 * R)
-
-        # Effect on x
-        g[:, TurtleBot.X, TurtleBot.V] = R / 2 * torch.cos(theta)
-        g[:, TurtleBot.X, TurtleBot.THETA_DOT] = R / 2 * torch.cos(theta)
-
-        # Effect on y
-        g[:, TurtleBot.Y, TurtleBot.V] = R / 2 * torch.sin(theta)
-        g[:, TurtleBot.Y, TurtleBot.THETA_DOT] = R / 2 * torch.sin(theta)
-
-        # Effect on theta
-        g[:, TurtleBot.THETA, TurtleBot.V] = -R / (2 * L)
-        g[:, TurtleBot.THETA, TurtleBot.THETA_DOT] = R / (2 * L)
-
-        g = g.matmul(v)
+        #not sure what to do with this particular line. It seems to be mapping the angles to their derivatives,
+        # which would normally be control variables. However, we're controlling the angles directly now,
+        # so I believe this can be omitted. 
+        
+        # Derivatives of all orientations are control variables
+        # g[:, Crazyflie.PHI :, Crazyflie.PHI_DOT :] = torch.eye(self.n_controls - 1)
 
         return g
 
+# this last section differs from Quad3D. It's an entirely different function. I don't believe it needs to
+# be modified but I don't know for sure. Could be that the u_eq function (which is present in Quad3D) 
+# was moved elsewhere?
     def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
         
 
