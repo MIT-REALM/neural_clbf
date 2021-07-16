@@ -15,7 +15,7 @@ class Crazyflie(ControlAffineSystem):
         p = [x, y, z, vx, vy, vz]
     representing the x,y,z positions and velocities of the crazyflie
     and it has control inputs
-        u = [theta, phi, psi, f]
+        u = [f, theta, phi, psi]
     representing the desired roll, pitch, yaw, and net rotor thrust
     
     phi = rotation about x axis
