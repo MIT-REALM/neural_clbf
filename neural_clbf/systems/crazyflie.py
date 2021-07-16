@@ -17,11 +17,15 @@ class Crazyflie(ControlAffineSystem):
     and it has control inputs
         u = [theta, phi, psi, f]
     representing the desired roll, pitch, yaw, and net rotor thrust
-    theta = rotation about x axis
-    phi = rotation about y axis
+    
+    phi = rotation about x axis
+    theta = rotation about y axis
     psi = rotation about z axis
+    
     The system is parameterized by
         m: mass
+        
+    Note: z is positive in the direction of gravity
     """
 
     # Number of states and controls
@@ -38,10 +42,10 @@ class Crazyflie(ControlAffineSystem):
     VZ = 5
     
     # Control indices
-    THETA = 0
+    F = 0
     PHI = 1
-    PSI = 2
-    F = 3
+    THETA = 2
+    PSI = 3
 
     def __init__(
         self,
@@ -51,7 +55,7 @@ class Crazyflie(ControlAffineSystem):
         scenarios: Optional[ScenarioList] = None,
     ):
         """
-        Initialize the inverted pendulum.
+        Initialize the Crazyflie.
         args:
             nominal_params: a dictionary giving the parameter values for the system.
                             Requires keys ["m"]
@@ -88,7 +92,7 @@ class Crazyflie(ControlAffineSystem):
         return Crazyflie.N_DIMS
     
     # angles are a control input, so theoretically this pulls the angle values from input? Other models have angles as a state variable 
-    # so I'm not so sure that this will actually work. Check other models and with Charles. 
+    # so I'm not so sure that this will actually work
     @property
     def angle_dims(self) -> List[int]:
         return [Crazyflie.theta, Crazyflie.phi, Crazyflie.psi]
@@ -129,7 +133,9 @@ class Crazyflie(ControlAffineSystem):
         # these values should be measured on the hardware.
         
         # unsure on justification for net force upper limit; copied from quad3d
-        upper_limit = torch.tensor([np.pi.2, np,pi/2, np.pi/2, 100])
+        # upper limits: force, phi, theta, psi
+        # should psi limit be either 2*pi or boundless? 
+        upper_limit = torch.tensor([100, np.pi.2, np,pi/2, np.pi/2])
         lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
@@ -139,7 +145,17 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        safe_mask = x.norm(dim=-1) <= 0.8
+        safe_mask = torch.ones_like(x[:,0], dtype=torch.bool)
+        
+        # We have a floor that we need to avoid and a radius we need to stay inside of
+        safe_z = 0.0
+        # safe radius probably can be modified depending on what we need; placeholder value for now that was copied from quad3d
+        safe_radius = 3
+        
+        # note that direction of gravity is positive, so all points above the ground have negative z component
+        safe_mask = torch.logical_and(
+            x[:, Crazyflie.Z] <= safe_z, x.norm(dim=-1) <= safe_radius
+        )
 
         return safe_mask
 
@@ -148,9 +164,17 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        unsafe_mask = x.norm(dim=-1) >= 1.5
 
-        return unsafe_mask
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        # We have a floor that we need to avoid and a radius we need to stay inside of
+        unsafe_z = 0.3
+        unsafe_radius = 3.5
+        
+        # note that direction of gravity is positive, so all points above the ground have negative z component
+        unsafe_mask = torch.logical_or(
+            x[:, Crazyflie.Z] >= unsafe_z, x.norm(dim=-1) >= unsafe_radius
+        )
 
     def distance_to_goal(self, x: torch.Tensor) -> torch.Tensor:
         """Return the distance from each point in x to the goal (positive for points
@@ -159,6 +183,7 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: the points from which we calculate distance
         """
+        # this was for turtlebot, not sure if modification is needed for crazyflie
         upper_limit, _ = self.state_limits
         return x.norm(dim=-1) / upper_limit.norm()
 
@@ -167,7 +192,14 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = x.norm(dim=-1) <= 0.3
+        goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
+
+        # Define the goal region as being near the goal
+        near_goal = x.norm(dim=-1) <= 0.3
+        goal_mask.logical_and_(near_goal)
+
+        # The goal set has to be a subset of the safe set
+        goal_mask.logical_and_(self.safe_mask(x))
 
         return goal_mask
 
