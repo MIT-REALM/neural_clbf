@@ -110,15 +110,16 @@ class Crazyflie(ControlAffineSystem):
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
         
-        # copied the values from quad3d, but not sure on a justification for any values
+        # copied most values from quad3d, but not sure on a justification for any values
         upper_limit[Crazyflie.X] = 4.0
         upper_limit[Crazyflie.Y] = 4.0
-        upper_limit[Crazyflie.Z] = 4.0
+        upper_limit[Crazyflie.Z] = 0.0
         upper_limit[Crazyflie.VX] = 8.0
         upper_limit[Crazyflie.VY] = 8.0
         upper_limit[Crazyflie.VZ] = 8.0
 
         lower_limit = -1.0 * upper_limit
+        lower_limit[Crazyflie.Z] = -4.0
 
         return (upper_limit, lower_limit)
 
