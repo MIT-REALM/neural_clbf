@@ -116,7 +116,7 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/turtlebot",
+        "logs/crazyflie",
         name="full_test",
     )
     trainer = pl.Trainer.from_argparse_args(
