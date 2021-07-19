@@ -90,7 +90,7 @@ def main(args):
     V_contour_experiment = BFContourExperiment(
         "V_Contour",
         domain=[(-5.0, 5.0), (-5.0, 5.0)],
-        n_grid=40,
+        n_grid=80,
         x_axis_index=SingleIntegrator2D.PX,
         y_axis_index=SingleIntegrator2D.PY,
         x_axis_label="$x$",
