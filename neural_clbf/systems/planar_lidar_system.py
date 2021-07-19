@@ -5,14 +5,16 @@ from typing import Tuple, Optional, List
 from matplotlib.axes import Axes
 import numpy as np
 from shapely.geometry import (
+    box,
     GeometryCollection,
     LineString,
     Point,
     Polygon,
 )
+from shapely.affinity import rotate
 import torch
 
-from neural_clbf.systems.control_affine_system import ControlAffineSystem
+from neural_clbf.systems.observable_system import ObservableSystem
 from neural_clbf.systems.utils import (
     Scenario,
     ScenarioList,
@@ -33,6 +35,98 @@ class Scene:
         """
         # Save the provided obstacles
         self.obstacles = obstacles
+
+    def add_walls(self, room_size: float) -> None:
+        """Add walls to the scene (thin boxes)"""
+        wall_width = 0.1
+        semi_length = room_size / 2.0
+        # Place the walls aligned with the x and y axes
+        bottom_wall = box(
+            -semi_length - wall_width,
+            -semi_length - wall_width,
+            semi_length + wall_width,
+            -semi_length,
+        )
+        top_wall = box(
+            -semi_length - wall_width,
+            semi_length,
+            semi_length + wall_width,
+            semi_length + wall_width,
+        )
+        left_wall = box(
+            -semi_length - wall_width,
+            -semi_length - wall_width,
+            -semi_length,
+            semi_length + wall_width,
+        )
+        right_wall = box(
+            semi_length,
+            -semi_length - wall_width,
+            semi_length + wall_width,
+            semi_length + wall_width,
+        )
+        wall_obstacles = [bottom_wall, top_wall, left_wall, right_wall]
+
+        # Add the obstacles
+        for wall in wall_obstacles:
+            self.add_obstacle(wall)
+
+    def add_random_box(
+        self,
+        size_range: Tuple[float, float],
+        x_position_range: Tuple[float, float],
+        y_position_range: Tuple[float, float],
+        rotation_range: Tuple[float, float],
+    ) -> None:
+        """Add a random box to the scene
+
+        args:
+            size_range: tuple of min and max side lengths
+            x_position_range: tuple of min and max positions for center (in x)
+            y_position_range: tuple of min and max positions for center (in y)
+            rotation_range: tuple of min and max rotations
+        """
+        # Build the box without rotation
+        semi_height = np.random.uniform(*size_range) / 2.0
+        semi_width = np.random.uniform(*size_range) / 2.0
+        center_x = np.random.uniform(*x_position_range)
+        center_y = np.random.uniform(*y_position_range)
+
+        lower_left_x = center_x - semi_width
+        lower_left_y = center_y - semi_height
+        upper_right_x = center_x + semi_width
+        upper_right_y = center_y + semi_height
+
+        new_box = box(lower_left_x, lower_left_y, upper_right_x, upper_right_y)
+
+        # Add some rotation
+        rotation_angle = np.random.uniform(*rotation_range)
+        rotated_box = rotate(new_box, rotation_angle, use_radians=True)
+
+        # Add the box to the scene
+        self.add_obstacle(rotated_box)
+
+    def add_random_boxes(
+        self,
+        num_boxes: int,
+        size_range: Tuple[float, float],
+        x_position_range: Tuple[float, float],
+        y_position_range: Tuple[float, float],
+        rotation_range: Tuple[float, float],
+    ) -> None:
+        """Add random boxes to the scene
+
+        args:
+            num_boxes: how many boxes to add
+            size_range: tuple of min and max side lengths
+            x_position_range: tuple of min and max positions for center (in x)
+            y_position_range: tuple of min and max positions for center (in y)
+            rotation_range: tuple of min and max rotations
+        """
+        for _ in range(num_boxes):
+            self.add_random_box(
+                size_range, x_position_range, y_position_range, rotation_range
+            )
 
     def add_obstacle(self, obstacle: Polygon) -> None:
         """Add an obstacle to the scene
@@ -55,7 +149,6 @@ class Scene:
             obstacle
         )  # will raise a ValueError if obstacle is not in obstacles
 
-    @torch.no_grad()
     def lidar_measurement(
         self,
         qs: torch.Tensor,
@@ -63,22 +156,28 @@ class Scene:
         field_of_view: Tuple[float, float] = (-np.pi / 2, np.pi / 2),
         max_distance: float = 100,
         noise: float = 0.0,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return a simulated LIDAR measurement of the scene, taken from the specified pose
 
         args:
-            qs: a Nx3 tensor containing the x, y, and theta coordinates for each of N
-                measurements to be taken.
+            qs: a N x 6 tensor containing the x, y, and theta coordinates for each of N
+                measurements to be taken, along with the velocity in each coordinate.
             num_rays: the number of equally spaced rays to measure
             field_of_view: a tuple specifying the maximum and minimum angle of the field
                            of view of the LIDAR sensor, measured in the vehicle frame
-            max_distance: Any rays that would measure a greater distance will saturate
-                          at this value.
+            max_distance: Any rays that would measure a greater distance will not
+                          register a contact.
             noise: if non-zero, apply white Gaussian noise with this standard deviation
                    and zero mean to all measurements.
         returns:
-            an N x num-rays tensor containing the measurements along each ray. Rays are
-            ordered in the counter-clockwise direction.
+            an N x num_rays x 4 tensor containing the measurements along each
+                ray. Rays are ordered in the counter-clockwise direction, and each
+                measurement contains the (x, y) location of the contact point and the
+                velocity (xdot, ydot) (as might be obtained by subtracting the last
+                measurement). These measurements will be in the agent frame. If no
+                contact point is found within max_distance, then a 0.0 will be placed
+                in the corresponding element of the second return tensor (a 1 otherwise)
+            an N x num_rays tensor indicating which data points are valid
         """
         # Sanity check on inputs
         assert field_of_view[1] > field_of_view[0], "Field of view must be (min, max)"
@@ -87,21 +186,22 @@ class Scene:
             qs = torch.reshape(qs, (1, -1))
 
         # Create the array to store the results, then iterate through each sample point
-        # We initialize each measurement to max_distance, since that's the desired value
-        # if we don't find an intersection
-        measurements = np.zeros((qs.shape[0], num_rays)) + max_distance
+        measurements = torch.zeros(qs.shape[0], 4, num_rays).type_as(qs)
+        valid = torch.ones(qs.shape[0], num_rays).type_as(qs)
+
+        # Figure out the angles to measure on
+        angles = torch.linspace(field_of_view[0], field_of_view[1], num_rays)
 
         for q_idx, q in enumerate(qs):
             agent_point = Point(q[0].item(), q[1].item())
             # Sweep through the field of view, checking for an intersection
             # out to max_distance
-            sweep_angle = float(field_of_view[1] - field_of_view[0]) / num_rays
             for ray_idx in range(num_rays):
-                ray_start = q[:2].numpy()  # start at the agent (x, y)
+                ray_start = q[:2].detach().numpy()  # start at the agent (x, y)
                 ray_direction = np.array(
                     [
-                        np.cos(q[2].item() + field_of_view[0] + ray_idx * sweep_angle),
-                        np.sin(q[2].item() + field_of_view[0] + ray_idx * sweep_angle),
+                        np.cos(q[2].detach().item() + angles[ray_idx]),
+                        np.sin(q[2].detach().item() + angles[ray_idx]),
                     ]
                 )
                 ray_end = ray_start + max_distance * ray_direction
@@ -125,18 +225,68 @@ class Scene:
                 # Get the nearest distance and save that as the measurement
                 # (with noise if needed)
                 if intersections:
-                    measurements[q_idx, ray_idx] = min(
+                    # Figure out which point is closest
+                    closest_idx = np.argmin(
                         [
                             agent_point.distance(intersection)
                             for intersection in intersections
                         ]
                     )
-                    if noise > 0:
-                        measurements[q_idx, ray_idx] += np.random.normal(0.0, noise)
+                    contact_pt = intersections[closest_idx]  # type: ignore
+                else:
+                    # If no intersection was found, mark the corresponding element
+                    # of the valid mask tensor and continue
+                    valid[q_idx, ray_idx] = 0.0
+                    continue
 
-        return torch.tensor(measurements).type_as(qs)
+                # Get the coordinates of that point
+                contact_x, contact_y = contact_pt.coords[0]
 
-    def plot_scene(self, ax: Axes):
+                # Add noise if necessary
+                if noise > 0:
+                    contact_x += np.random.normal(0.0, noise)
+                    contact_y += np.random.normal(0.0, noise)
+
+                # Get the point relative to the agent coordinates in the world frame
+                contact_pt_world = torch.tensor([contact_x, contact_y]).type_as(q)
+                contact_offset_world = contact_pt_world - q[:2]
+                # Rotate the point by -theta to bring it into the agent frame
+                rotation_mat = torch.tensor(
+                    [
+                        [torch.cos(q[2]), -torch.sin(q[2])],
+                        [torch.sin(q[2]), torch.cos(q[2])],
+                    ]
+                )
+                contact_pt_agent = torch.matmul(rotation_mat, contact_offset_world)
+
+                # Now we need to get the velocity, which we can derive by hand
+                theta = q[2]
+                s_theta = torch.sin(theta)
+                c_theta = torch.cos(theta)
+                theta_dot = q[5]
+                vx = q[3]
+                vy = q[4]
+                contact_vx_agent = (
+                    -theta_dot * s_theta * contact_offset_world[0]
+                    - c_theta * vx
+                    - theta_dot * c_theta * contact_offset_world[1]
+                    + s_theta * vy
+                )
+                contact_vy_agent = (
+                    theta_dot * c_theta * contact_offset_world[0]
+                    - s_theta * vx
+                    - theta_dot * s_theta * contact_offset_world[1]
+                    - c_theta * vy
+                )
+
+                # Save the measurement (we've already marked if this point is valid)
+                measurements[q_idx, :2, ray_idx] = contact_pt_agent
+                measurements[q_idx, 2, ray_idx] = contact_vx_agent
+                measurements[q_idx, 3, ray_idx] = contact_vy_agent
+
+        return measurements, valid
+
+    def plot(self, ax: Axes):
         """Plot the given scene
 
         args:
@@ -148,7 +298,7 @@ class Scene:
             ax.fill(x_pts, y_pts, alpha=0.3, fc="k", ec="none")
 
 
-class PlanarLidarSystem(ControlAffineSystem):
+class PlanarLidarSystem(ObservableSystem):
     """
     Represents a generic dynamical system that lives in a plane and observes its
     environment via Lidar.
@@ -165,6 +315,7 @@ class PlanarLidarSystem(ControlAffineSystem):
         num_rays: int = 10,
         field_of_view: Tuple[float, float] = (-np.pi / 2, np.pi / 2),
         max_distance: float = 10.0,
+        noise: float = 0.0,
     ):
         """
         Initialize a system.
@@ -182,6 +333,7 @@ class PlanarLidarSystem(ControlAffineSystem):
             num_rays: the number of Lidar rays
             field_of_view: the minimum and maximum angle at which to take lidar rays
             max_distance: lidar saturation distance
+            noise: the standard deviation of gaussian noise to apply to observations
         raises:
             ValueError if nominal_params are not valid for this system
         """
@@ -200,6 +352,7 @@ class PlanarLidarSystem(ControlAffineSystem):
         self.num_rays = num_rays
         self.field_of_view = field_of_view
         self.max_distance = max_distance
+        self.noise = noise
 
     @abstractmethod
     def planar_configuration(self, x: torch.Tensor) -> torch.Tensor:
@@ -213,23 +366,32 @@ class PlanarLidarSystem(ControlAffineSystem):
         """
         pass
 
+    @property
+    def n_obs(self) -> int:
+        return self.num_rays
+
+    @property
+    def obs_dim(self) -> int:
+        return 4
+
     def get_observations(self, x: torch.Tensor) -> torch.Tensor:
-        """Get the vector of lidar measurements at this point
+        """Get the vector of measurements at this point
 
         args:
-            x: an n x self.n_dims tensor of state
+            x: an N x self.n_dims tensor of state
 
         returns:
-            an n x self.num_rays tensor of lidar distance measurements
+            an N x self.obs_dim x self.n_obs tensor containing the observed data
         """
-        measurements = torch.zeros(x.shape[0], self.num_rays).type_as(x)
-
-        # We can only query the scene at one point at a time, so loop through x
-        for idx, x_row in enumerate(x):
-            q = self.planar_configuration(x_row)
-            measurements[idx, :] = self.scene.lidar_measurement(
-                q, self.num_rays, self.field_of_view, self.max_distance
-            )
+        # Get the lidar measurements from the scene
+        qs = self.planar_configuration(x)
+        measurements, _ = self.scene.lidar_measurement(
+            qs,
+            num_rays=self.num_rays,
+            field_of_view=self.field_of_view,
+            max_distance=self.max_distance,
+            noise=self.noise,
+        )
 
         return measurements
 
@@ -239,13 +401,16 @@ class PlanarLidarSystem(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        # A state is safe if the shortest lidar ray is at least some distance long.
-        safe_mask = torch.ones_like(x, dtype=torch.bool)
+        # A state is safe if the closest lidar point is at least some distance away
+        safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
         min_safe_ray_length = 0.25
 
         measurements = self.get_observations(x)
 
-        safe_mask.logical_and_(measurements.min(dim=1)[0] >= min_safe_ray_length)
+        # Get the x and y values
+        ray_lengths = measurements[:, :2, :].norm(dim=-1)
+
+        safe_mask.logical_and_(ray_lengths.min(dim=1)[0] >= min_safe_ray_length)
 
         return safe_mask
 
@@ -255,12 +420,25 @@ class PlanarLidarSystem(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        # A state is unsafe if it is in collision with any obstacle in the scene
-        unsafe_mask = torch.zeros_like(x, dtype=torch.bool)
+        # A state is safe if the closest lidar point too close
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
         min_safe_ray_length = 0.1
 
         measurements = self.get_observations(x)
 
-        unsafe_mask.logical_or_(measurements.min(dim=1)[0] <= min_safe_ray_length)
+        # Get the x and y values
+        ray_lengths = measurements[:, :2, :].norm(dim=-1)
+
+        unsafe_mask.logical_or_(ray_lengths.min(dim=1)[0] <= min_safe_ray_length)
 
         return unsafe_mask
+
+    def plot_environment(self, ax: Axes) -> None:
+        """
+        Add a plot of the environment to the given figure by plotting the underlying
+        scene.
+
+        args:
+            ax: the axis on which to plot
+        """
+        self.scene.plot(ax)

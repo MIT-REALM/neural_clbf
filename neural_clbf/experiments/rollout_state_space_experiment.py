@@ -195,6 +195,9 @@ class RolloutStateSpaceExperiment(Experiment):
             data=results_df,
         )
 
+        # Plot the environment
+        controller_under_test.dynamics_model.plot_environment(ax)
+
         fig_handle = ("Rollout (state space)", fig)
 
         if display_plots:

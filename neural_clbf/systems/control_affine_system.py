@@ -6,6 +6,7 @@ from abc import (
 )
 from typing import Callable, Tuple, Optional, List
 
+from matplotlib.axes import Axes
 import numpy as np
 import torch
 from torch.autograd.functional import jacobian
@@ -368,7 +369,37 @@ class ControlAffineSystem(ABC):
         xdot = f + torch.bmm(g, u.unsqueeze(-1))
         return xdot.view(x.shape)
 
-    @torch.no_grad()
+    def zero_order_hold(
+        self,
+        x: torch.Tensor,
+        u: torch.Tensor,
+        controller_dt: float,
+        params: Optional[Scenario] = None,
+    ) -> torch.Tensor:
+        """
+        Simulate dynamics forward for controller_dt, simulating at self.dt, with control
+        held constant at u, starting from x
+
+        args:
+            x: bs x self.n_dims tensor of state
+            u: bs x self.n_controls tensor of controls
+            controller_dt: the amount of time to hold for
+            params: a dictionary giving the parameter values for the system. If None,
+                    default to the nominal parameters used at initialization
+        returns:
+            x_next: bs x self.n_dims tensor of next states
+        """
+        num_steps = int(controller_dt / self.dt)
+        for tstep in range(1, num_steps):
+            # Get the derivatives for this control input
+            xdot = self.closed_loop_dynamics(x, u, params)
+
+            # Simulate forward
+            x = x + self.dt * xdot
+
+        # Return the simulated state
+        return x
+
     def simulate(
         self,
         x_init: torch.Tensor,
@@ -506,3 +537,13 @@ class ControlAffineSystem(ABC):
             )
 
         return u
+
+    def plot_environment(self, ax: Axes) -> None:
+        """
+        Add a plot of the environment to the given figure. Defaults to do nothing
+        unless overidden.
+
+        args:
+            ax: the axis on which to plot
+        """
+        pass

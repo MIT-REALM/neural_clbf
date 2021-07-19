@@ -1,4 +1,5 @@
 from .controller import Controller
+from .neural_bf_controller import NeuralObsBFController
 from .clf_controller import CLFController
 from .cbf_controller import CBFController
 from .neural_clbf_controller import NeuralCLBFController
@@ -9,5 +10,6 @@ __all__ = [
     "CBFController",
     "NeuralCLBFController",
     "NeuralCBFController",
+    "NeuralObsBFController",
     "Controller",
 ]
