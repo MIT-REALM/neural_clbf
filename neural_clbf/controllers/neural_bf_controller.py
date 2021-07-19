@@ -388,11 +388,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # which reformulate to h(t+1) - (1 - alpha) h(t) \leq 0
         barrier_function_violation = h_tplus1 - (1 - self.h_alpha) * h_t
         barrier_function_violation = F.relu(eps + barrier_function_violation)
-        barrier_loss = barrier_function_violation.mean()
+        barrier_loss = 1e1 * barrier_function_violation.mean()
         barrier_acc = (barrier_function_violation <= eps).sum() / x.shape[0]
 
         loss.append(("Barrier descent loss", barrier_loss))
-        loss.append(("Barrier descent accuracy", barrier_acc))
+
+        if accuracy:
+            loss.append(("Barrier descent accuracy", barrier_acc))
 
         return loss
 
