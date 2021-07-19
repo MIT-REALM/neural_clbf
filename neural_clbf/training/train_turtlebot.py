@@ -81,7 +81,7 @@ def main(args):
         "Rollout",
         start_x,
         plot_x_indices=[TurtleBot.X, TurtleBot.Y, TurtleBot.THETA],
-        plot_x_labels=["$x$", "$y$"],
+        plot_x_labels=["$x$", "$y$", "$\\theta$"],
         plot_u_indices=[TurtleBot.V, TurtleBot.THETA_DOT],
         plot_u_labels=["$v$", "$\\dot{\\theta}$"],
         t_sim=6.0,
