@@ -23,7 +23,7 @@ from neural_clbf.training.utils import current_git_hash
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 64
-controller_period = 0.1
+controller_period = 0.01
 
 start_x = torch.tensor([[4.75, 2.5]])
 simulation_dt = 0.001
@@ -80,7 +80,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=0,
         trajectory_length=1,
-        fixed_samples=1000,
+        fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
         batch_size=batch_size,
