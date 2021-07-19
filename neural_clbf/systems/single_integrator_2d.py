@@ -52,6 +52,7 @@ class SingleIntegrator2D(PlanarLidarSystem):
         args:
             nominal_params: a dictionary giving the parameter values for the system.
                             No required keys.
+            scene: the scene in which to operate
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
         raises:
@@ -100,8 +101,8 @@ class SingleIntegrator2D(PlanarLidarSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[SingleIntegrator2D.PX] = 10.0
-        upper_limit[SingleIntegrator2D.PY] = 10.0
+        upper_limit[SingleIntegrator2D.PX] = 5.0
+        upper_limit[SingleIntegrator2D.PY] = 5.0
 
         lower_limit = -1.0 * upper_limit
 
@@ -114,8 +115,8 @@ class SingleIntegrator2D(PlanarLidarSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = torch.tensor([10.0, 10.0])
-        lower_limit = -torch.tensor([10.0, 10.0])
+        upper_limit = torch.tensor([5.0, 5.0])
+        lower_limit = -torch.tensor([5.0, 5.0])
 
         return (upper_limit, lower_limit)
 
@@ -160,3 +161,32 @@ class SingleIntegrator2D(PlanarLidarSystem):
         g[:, SingleIntegrator2D.PY, SingleIntegrator2D.VY] = 1.0
 
         return g
+
+    def planar_configuration(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the x, y, theta configuration of this system at the given states."""
+        # This system has constant heading at theta = 0.
+        thetas = torch.zeros(x.shape[0], 1).type_as(x)
+        # Set velocities at zero for now
+        velocities = torch.zeros(x.shape[0], 3).type_as(x)
+        q = torch.cat((x, thetas, velocities), dim=-1)
+        return q
+
+    def u_nominal(
+        self, x: torch.Tensor, params: Optional[Scenario] = None
+    ) -> torch.Tensor:
+        """
+        Compute the nominal control for the nominal parameters.
+
+        args:
+            x: bs x self.n_dims tensor of state
+            params: the model parameters used
+        returns:
+            u_nominal: bs x self.n_controls tensor of controls
+        """
+        # For this dead-simple single integrator, we just find the direction from our
+        # current position to the origin and go in that direction at constant velocity
+        u = self.goal_point - x
+        u_upper, u_lower = self.control_limits
+        u = torch.clamp(u, u_lower, u_upper)
+
+        return u

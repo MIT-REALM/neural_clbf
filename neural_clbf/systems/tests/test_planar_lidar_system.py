@@ -64,35 +64,70 @@ def test_scene_lidar_measurement():
     scene = Scene(obstacles)
 
     # Get a lidar measurement from x=y=3, theta = 0 (all rays should saturate since this
-    # looks away from all the obstacles)
-    q = torch.tensor([3.0, 3.0, 0.0])
+    # looks away from all the obstacles), with all velocities zero
+    q = torch.tensor([3.0, 3.0, 0.0, 0.0, 0.0, 0.0])
     num_rays = 10
     field_of_view = (-np.pi / 2, np.pi / 2)
     max_distance = 10
-    measurement = scene.lidar_measurement(q, num_rays, field_of_view, max_distance)
-    assert measurement.shape == (1, num_rays)
-    assert np.allclose(measurement, max_distance)
+    measurement, valid = scene.lidar_measurement(
+        q, num_rays, field_of_view, max_distance
+    )
+    # Check that the measurements are the proper shape
+    assert measurement.ndim == 3
+    assert measurement.shape[0] == 1  # one point queried
+    assert measurement.shape[1] == 4  # x, y, xdot, ydot are measured
+    assert measurement.shape[2] == num_rays  # number of measurements
+
+    # Nothing should be in view, so all the measurements should be invalid
+    assert valid.max() == 0.0
 
     # Get some lidar measurement right up next to the blocks
-    # (these should actually measure something)
+    # (these should actually measure something), with some velocities
     q = torch.tensor(
         [
-            [0.7, 1.5, 0.0],
-            [0.75, 1.25, -np.pi / 4],
+            [0.7, 1.5, 0.0, 0.1, 0.1, 0.0],
+            [0.75, 1.25, -np.pi / 4, 0.1, 0.1, 0.1],
         ]
     )
-    num_rays = 50
+    num_rays = 3
     field_of_view = (-np.pi / 4, np.pi / 4)
     max_distance = 10
-    measurement = scene.lidar_measurement(q, num_rays, field_of_view, max_distance)
-    assert measurement.shape == (2, num_rays)
+    measurement, valid = scene.lidar_measurement(
+        q, num_rays, field_of_view, max_distance
+    )
+    assert measurement.ndim == 3
+    assert measurement.shape == (2, 4, num_rays)
 
-    measurement1 = measurement[0, :]
-    measurement2 = measurement[1, :]
+    # Check each measurement individually
+    measurement1 = measurement[0]
+    measurement2 = measurement[1]
 
-    # Test the expected measurements based on some pen-and-paper geometry
-    assert np.isclose(measurement1.max(), 0.3 / np.sin(np.pi / 4))
-    assert np.isclose(measurement1.min(), 0.3)
+    # Measurement for the first point
+    expect_x = 0.3
+    expect_y_lower = -0.3
+    expect_y_mid = 0.0
+    expect_y_upper = 0.3
+    expect_vx = -0.1
+    expect_vy = -0.1
+    expect_meas_upper = torch.tensor([expect_x, expect_y_upper, expect_vx, expect_vy])
+    expect_meas_mid = torch.tensor([expect_x, expect_y_mid, expect_vx, expect_vy])
+    expect_meas_lower = torch.tensor([expect_x, expect_y_lower, expect_vx, expect_vy])
+    assert np.allclose(measurement1[:, 0], expect_meas_lower)
+    assert np.allclose(measurement1[:, 1], expect_meas_mid)
+    assert np.allclose(measurement1[:, 2], expect_meas_upper)
 
-    assert np.isclose(measurement2.max(), np.sqrt(0.25 ** 2 + 0.25 ** 2))
-    assert np.isclose(measurement2.min(), 0.25)
+    # Measurement for the second point (only check the last ray)
+    expect_x = 0.25 * torch.cos(q[1, 2])
+    expect_y = 0.25 * torch.sin(q[1, 2])
+    expect_vx = (
+        -0.1 * torch.sin(q[1, 2]) * 0.25
+        - torch.cos(q[1, 2]) * 0.1
+        + torch.sin(q[1, 2]) * 0.1
+    )
+    expect_vy = (
+        0.1 * torch.cos(q[1, 2]) * 0.25
+        - torch.sin(q[1, 2]) * 0.1
+        - torch.cos(q[1, 2]) * 0.1
+    )
+    expect_meas = torch.tensor([expect_x, expect_y, expect_vx, expect_vy])
+    assert np.allclose(measurement2[:, -1], expect_meas)
