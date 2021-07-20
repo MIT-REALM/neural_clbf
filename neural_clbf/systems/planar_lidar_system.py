@@ -403,12 +403,12 @@ class PlanarLidarSystem(ObservableSystem):
         """
         # A state is safe if the closest lidar point is at least some distance away
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
-        min_safe_ray_length = 0.75
+        min_safe_ray_length = 0.5
 
         measurements = self.get_observations(x)
 
         # Get the x and y values
-        ray_lengths = measurements[:, :2, :].norm(dim=-1)
+        ray_lengths = measurements[:, :2, :].norm(dim=1)
 
         safe_mask.logical_and_(ray_lengths.min(dim=1)[0] >= min_safe_ray_length)
 
@@ -422,12 +422,12 @@ class PlanarLidarSystem(ObservableSystem):
         """
         # A state is safe if the closest lidar point too close
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
-        min_safe_ray_length = 0.1
+        min_safe_ray_length = 0.05
 
         measurements = self.get_observations(x)
 
         # Get the x and y values
-        ray_lengths = measurements[:, :2, :].norm(dim=-1)
+        ray_lengths = measurements[:, :2, :].norm(dim=1)
 
         unsafe_mask.logical_or_(ray_lengths.min(dim=1)[0] <= min_safe_ray_length)
 

@@ -197,6 +197,10 @@ class BFContourExperiment(Experiment):
                 levels=[0.5],
             )
 
+            # Plot the environment if possible
+            if hasattr(controller_under_test.dynamics_model, "plot_environment"):
+                controller_under_test.dynamics_model.plot_environment(ax)
+
             ax.plot([], [], c="blue", label="h(o(x)) = 0.0")
             if hasattr(controller_under_test, "safe_level"):
                 ax.tricontour(
