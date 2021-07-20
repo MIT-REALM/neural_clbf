@@ -23,6 +23,7 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 batch_size = 64
 controller_period = 0.01
 
+#TODO @dylan look at implementing unit tests. see other files for examples
 # I modified this to six dimensions since we have positions and velocities, whereas the turtlebots only use x, y, and theta. Check on this. 
 start_x = torch.tensor(
     [
@@ -74,6 +75,7 @@ def main(args):
 
     # Is it possible to make this 3D? Do we need to?
     # Define the experiment suite
+    # TODO @dylan look at clf_contour_experiment.py for more info; change y to z; maybe add slices for y as input argument
     V_contour_experiment = CLFContourExperiment(
         "V_Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
@@ -83,6 +85,7 @@ def main(args):
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
+    # might make large plot when using all state variables, try to find out what a reasonable subset would be
     rollout_experiment = RolloutTimeSeriesExperiment(
         "Rollout",
         start_x,
@@ -115,6 +118,7 @@ def main(args):
     )
 
     # Initialize the logger and trainer
+    # TODO @dylan modify name line to set to current repository name/version; see other training files 
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/crazyflie",
         name="full_test",
