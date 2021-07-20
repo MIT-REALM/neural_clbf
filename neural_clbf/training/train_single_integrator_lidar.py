@@ -120,7 +120,7 @@ def main(args):
         h_hidden_size=48,
         u_hidden_layers=2,
         u_hidden_size=48,
-        h_alpha=0.9,
+        h_alpha=0.1,
         controller_period=controller_period,
         scale_parameter=10.0,
     )
