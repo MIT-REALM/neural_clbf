@@ -56,7 +56,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         h_hidden_size: int = 48,
         u_hidden_layers: int = 2,
         u_hidden_size: int = 48,
-        h_alpha: float = 1.0,
+        h_alpha: float = 0.9,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
         scale_parameter: float = 10.0,
