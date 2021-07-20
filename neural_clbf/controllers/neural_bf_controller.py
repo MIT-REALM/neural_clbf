@@ -59,7 +59,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         h_alpha: float = 0.9,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
-        scale_parameter: float = 10.0,
     ):
         """Initialize the controller.
 
@@ -77,7 +76,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the BF decrease loss
-            scale_parameter: normalize non-angle data points to between +/- this value.
         """
         super(NeuralObsBFController, self).__init__(
             dynamics_model=dynamics_model,

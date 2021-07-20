@@ -133,7 +133,7 @@ class RolloutStateSpaceExperiment(Experiment):
 
             # Log the current state and control for each simulation
             for sim_index in range(n_sims):
-                log_packet = {"t": tstep * delta_t}
+                log_packet = {"t": tstep * delta_t, "Simulation": sim_index}
 
                 # Include the parameters
                 param_string = ""
@@ -191,7 +191,8 @@ class RolloutStateSpaceExperiment(Experiment):
             ax=ax,
             x=self.plot_x_label,
             y=self.plot_y_label,
-            hue="Parameters",
+            style="Parameters",
+            hue="Simulation",
             data=results_df,
         )
 
