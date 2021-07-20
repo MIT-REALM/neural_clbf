@@ -7,6 +7,8 @@ import numpy as np
 from .control_affine_system import ControlAffineSystem
 from neural_clbf.systems.utils import Scenario, ScenarioList
 
+#TODO @Dylan pull locally on terminal and run checks for formatting for both this
+#file and the crazyflie training file
 
 class Crazyflie(ControlAffineSystem):
     """
@@ -66,7 +68,6 @@ class Crazyflie(ControlAffineSystem):
         """
         super().__init__(
             nominal_params, dt=dt, controller_dt=controller_dt, scenarios=scenarios,
-            use_linearized_controller=False
         )
 
     def validate_params(self, params: Scenario) -> bool:
@@ -95,7 +96,7 @@ class Crazyflie(ControlAffineSystem):
     # so I'm not so sure that this will actually work
     @property
     def angle_dims(self) -> List[int]:
-        return [Crazyflie.theta, Crazyflie.phi, Crazyflie.psi]
+        return []
 
     @property
     def n_controls(self) -> int:
@@ -111,6 +112,7 @@ class Crazyflie(ControlAffineSystem):
         upper_limit = torch.ones(self.n_dims)
         
         # copied most values from quad3d, but not sure on a justification for any values
+        # switch z upwards positive
         upper_limit[Crazyflie.X] = 4.0
         upper_limit[Crazyflie.Y] = 4.0
         upper_limit[Crazyflie.Z] = 0.0
@@ -130,13 +132,13 @@ class Crazyflie(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        # TODO @bethlow these are relaxed for now, but eventually
+        # TODO @dylan these are relaxed for now, but eventually
         # these values should be measured on the hardware.
         
         # unsure on justification for net force upper limit; copied from quad3d
         # upper limits: force, phi, theta, psi
-        # should psi limit be either 2*pi or boundless? 
-        upper_limit = torch.tensor([100, np.pi.2, np,pi/2, np.pi/2])
+        # should psi limit be either 2*pi or boundless? Should be fine to set to 2pi 
+        upper_limit = torch.tensor([100, np.pi/2, np.pi/2, np.pi/2])
         lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
@@ -146,11 +148,10 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        safe_mask = torch.ones_like(x[:,0], dtype=torch.bool)
-        
         # We have a floor that we need to avoid and a radius we need to stay inside of
         safe_z = 0.0
-        # safe radius probably can be modified depending on what we need; placeholder value for now that was copied from quad3d
+        # safe radius probably can be modified depending on what we need; placeholder value for now that was copied from quad3d. find more empirically a good value
+        # might need some tweaking for safe and unsafe when redefining z to be positive upwards
         safe_radius = 3
         
         # note that direction of gravity is positive, so all points above the ground have negative z component
@@ -165,10 +166,8 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-
-        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
-
         # We have a floor that we need to avoid and a radius we need to stay inside of
+        # recheck values with new definition of z for unsafe mask too
         unsafe_z = 0.3
         unsafe_radius = 3.5
         
@@ -184,7 +183,9 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: the points from which we calculate distance
         """
-        # this was for turtlebot, not sure if modification is needed for crazyflie. I think it should be fine as is; seems generalized
+        # this was for turtlebot, not sure if modification is needed for crazyflie. 
+        # I think it should be fine as is; seems generalized
+        # probably don't need, may be deprecated eventually
         upper_limit, _ = self.state_limits
         return x.norm(dim=-1) / upper_limit.norm()
 
@@ -193,6 +194,7 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
+        # might need to be tweaked empirically
         goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Define the goal region as being near the goal
@@ -215,6 +217,7 @@ class Crazyflie(ControlAffineSystem):
             f: bs x self.n_dims x 1 tensor
         """
         # Extract batch size and set up a tensor for holding the result
+        # modify for upwards z direction TODO @ dylan 
         batch_size = x.shape[0]
         f = torch.zeros((batch_size, self.n_dims, 1))
         f = f.type_as(x)
@@ -228,7 +231,6 @@ class Crazyflie(ControlAffineSystem):
         f[:, Crazyflie.VZ] = grav
 
         # Orientation velocities are directly actuated
-
 
         return f
 
@@ -267,31 +269,5 @@ class Crazyflie(ControlAffineSystem):
         # g[:, Crazyflie.PHI :, Crazyflie.PHI_DOT :] = torch.eye(self.n_controls - 1)
 
         return g
-
-# this last section differs from Quad3D. It's an entirely different function. I don't believe it needs to
-# be modified but I don't know for sure. Could be that the u_eq function (which is present in Quad3D) 
-# was moved elsewhere?
-    def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
-        
-
-        self.P = torch.eye(3,3)
-        self.K = torch.ones(self.n_controls, self.n_dims)
-
-        K = self.K.type_as(x)
-        goal = self.goal_point.squeeze().type_as(x)
-        u_nominal = -(K @ (x - goal).T).T
-
-        # Adjust for the equilibrium setpoint
-        u = u_nominal + self.u_eq.type_as(x)
-        # Clamp given the control limits
-        # import pdb; pdb.set_trace()
-        upper_u_lim, lower_u_lim = self.control_limits
-        u = torch.clamp(u, min=lower_u_lim[0].item(), max=upper_u_lim[0].item())
-        # for dim_idx in range(self.n_controls):
-        #     u[:, dim_idx] = torch.clamp(
-        #         u[:, dim_idx],
-        #         min=lower_u_lim[dim_idx].item(),
-        #         max=upper_u_lim[dim_idx].item(),
-        #     ) 
-
-        return u
+    
+# TODO @dylan go to quad3D look at u_eq and put it in here
