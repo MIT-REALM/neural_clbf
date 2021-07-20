@@ -80,7 +80,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=0,
         trajectory_length=1,
-        fixed_samples=10000,
+        fixed_samples=1000,
         max_points=100000,
         val_split=0.1,
         batch_size=batch_size,
