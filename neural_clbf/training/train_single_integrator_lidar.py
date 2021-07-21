@@ -79,16 +79,16 @@ def main(args):
 
     # Initialize the DataModule
     initial_conditions = [
-        (-5.0, 5.0),  # x
-        (-5.0, 5.0),  # y
+        (-4.9, 4.9),  # x
+        (-4.9, 4.9),  # y
     ]
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=0,
-        trajectory_length=1,
+        trajectories_per_episode=100,
+        trajectory_length=100,
         fixed_samples=10000,
-        max_points=100000,
+        max_points=20000,
         val_split=0.1,
         batch_size=batch_size,
     )
