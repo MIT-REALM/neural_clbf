@@ -25,12 +25,14 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 batch_size = 64
 controller_period = 0.01
 
-start_x = torch.tensor([
-    [4.75, 2.5],
-    [-4.75, 2.5],
-    [-4.75, -2.5],
-    [4.75, -2.5],
-])
+start_x = torch.tensor(
+    [
+        [4.75, 2.5],
+        [-4.75, 2.5],
+        [-4.75, -2.5],
+        [4.75, -2.5],
+    ]
+)
 simulation_dt = 0.001
 
 # Scene parameters
