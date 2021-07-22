@@ -59,6 +59,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         h_alpha: float = 0.9,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
+        validation_dynamics_model: Optional[ObservableSystem] = None,
     ):
         """Initialize the controller.
 
@@ -76,6 +77,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the BF decrease loss
+            validation_dynamics_model: optionally provide a dynamics model to use during
+                                       validation
         """
         super(NeuralObsBFController, self).__init__(
             dynamics_model=dynamics_model,
@@ -86,6 +89,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Define this again so that Mypy is happy
         self.dynamics_model = dynamics_model
+        # And save the validation model
+        self.training_dynamics_model = dynamics_model
+        self.validation_dynamics_model = validation_dynamics_model
 
         # Save the datamodule
         self.datamodule = datamodule
@@ -385,7 +391,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # The discrete-time barrier function is h(t+1) - h(t) \leq -alpha h(t)
         # which reformulate to h(t+1) - (1 - alpha) h(t) \leq 0
-        barrier_function_violation = h_tplus1 - (1 - self.h_alpha) * h_t
+        # First, adjust the convergence rate according to the timestep
+        adjusted_alpha = self.controller_period * self.h_alpha
+        barrier_function_violation = h_tplus1 - (1 - adjusted_alpha) * h_t
         barrier_function_violation = F.relu(eps + barrier_function_violation)
         barrier_loss = 1e1 * barrier_function_violation.mean()
         barrier_acc = (barrier_function_violation <= eps).sum() / x.shape[0]
@@ -570,6 +578,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.experiment_suite.run_all_and_log_plots(
             self, self.logger, self.current_epoch
         )
+
+        # Now swap in the validation dynamics model and run the experiments again
+        self.dynamics_model = self.validation_dynamics_model
+        self.experiment_suite.run_all_and_log_plots(
+            self, self.logger, self.current_epoch, "validation"
+        )
+        self.dynamics_model = self.training_dynamics_model
 
     @pl.core.decorators.auto_move_data
     def simulator_fn(
