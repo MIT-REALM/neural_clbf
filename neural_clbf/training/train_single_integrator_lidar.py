@@ -66,10 +66,32 @@ def main(args):
         rotation_range,
     )
 
+    # (spicy!) and make another random scene for validation
+    validation_scene = Scene([])
+    validation_scene.add_walls(room_size)
+    validation_scene.add_random_boxes(
+        num_obstacles,
+        box_size_range,
+        position_range,
+        position_range,
+        rotation_range,
+    )
+
     # Define the dynamics model
     dynamics_model = SingleIntegrator2D(
         nominal_params,
         scene,
+        dt=simulation_dt,
+        controller_dt=controller_period,
+        num_rays=num_rays,
+        field_of_view=field_of_view,
+        max_distance=max_distance,
+    )
+
+    # And define a second dynamics model for validation (with the different scene)
+    validation_dynamics_model = SingleIntegrator2D(
+        nominal_params,
+        validation_scene,
         dt=simulation_dt,
         controller_dt=controller_period,
         num_rays=num_rays,
@@ -94,8 +116,8 @@ def main(args):
     )
 
     # Define the experiment suite
-    V_contour_experiment = BFContourExperiment(
-        "V_Contour",
+    h_contour_experiment = BFContourExperiment(
+        "h_Contour",
         domain=[(-5.0, 5.0), (-5.0, 5.0)],
         n_grid=80,
         x_axis_index=SingleIntegrator2D.PX,
@@ -114,7 +136,7 @@ def main(args):
         n_sims_per_start=1,
         t_sim=5.0,
     )
-    experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
+    experiment_suite = ExperimentSuite([h_contour_experiment, rollout_experiment])
 
     # Initialize the controller
     bf_controller = NeuralObsBFController(
@@ -129,6 +151,7 @@ def main(args):
         u_hidden_size=48,
         h_alpha=0.1,
         controller_period=controller_period,
+        validation_dynamics_model=validation_dynamics_model,
     )
 
     # Initialize the logger and trainer
