@@ -59,6 +59,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         h_alpha: float = 0.9,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
+        epochs_per_episode: Optional[int] = None,
         validation_dynamics_model: Optional[ObservableSystem] = None,
     ):
         """Initialize the controller.
@@ -77,6 +78,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the BF decrease loss
+            epochs_per_episode: optionally gather additional training data every few
+                                epochs. If none, no new data will be gathered.f
             validation_dynamics_model: optionally provide a dynamics model to use during
                                        validation
         """
@@ -104,6 +107,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         assert h_alpha > 0
         assert h_alpha <= 1
         self.h_alpha = h_alpha
+        self.epochs_per_episode = epochs_per_episode
 
         # ----------------------------------------------------------------------------
         # Define the encoder network
@@ -260,7 +264,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Get the decision signal (from 0 to 1 due to sigmoid output)
         # decision = self.intervention_nn(h)
-        decision = F.sigmoid(20 * (h + 0.25))
+        decision = torch.sigmoid(20 * (h + 0.25))
 
         # Get the control input from the encoded observations and the barrier function
         # value
@@ -591,7 +595,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self,
         x_init: torch.Tensor,
         num_steps: int,
-        relaxation_penalty: Optional[float] = None,
     ):
         return self.dynamics_model.simulate(
             x_init,
@@ -600,6 +603,17 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             guard=self.dynamics_model.out_of_bounds_mask,
             controller_period=self.controller_period,
         )
+
+    def on_validation_epoch_end(self):
+        """This function is called at the end of every validation epoch"""
+        # We want to generate new data at the end of every episode
+        if (
+            self.current_epoch > 0  # don't gather new data if we've just started
+            and self.epochs_per_episode is not None
+            and self.current_epoch % self.epochs_per_episode == 0
+        ):
+            # Use the model's simulation function with this controller
+            self.datamodule.add_data(self.simulator_fn)
 
     def configure_optimizers(self):
         opt = torch.optim.Adam(

@@ -107,9 +107,9 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
+        trajectories_per_episode=20,
         trajectory_length=100,
-        fixed_samples=10000,
+        fixed_samples=2000,
         max_points=20000,
         val_split=0.1,
         batch_size=batch_size,
@@ -152,6 +152,7 @@ def main(args):
         h_alpha=0.1,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
+        epochs_per_episode=5,
     )
 
     # Initialize the logger and trainer
