@@ -3,7 +3,7 @@ run each experiment.
 """
 from datetime import datetime
 import os
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from matplotlib.pyplot import figure
 import matplotlib.pyplot as plt
@@ -98,6 +98,7 @@ class ExperimentSuite(object):
         controller_under_test: "Controller",
         logger: LightningLoggerBase,
         log_epoch: int,
+        plot_tag: Optional[str] = None,
     ):
         """Run all experiments, plot the results, and log the plots using the provided
         logger
@@ -106,14 +107,21 @@ class ExperimentSuite(object):
             controller_under_test: the controller with which to run the experiments
             logger: the logger to use for saving the plots
             log_epoch: the current log epoch
+            plot_tag: if provided, format plot names as "plot_name::plot_tag"
         """
+        # Handle default argument
+        if plot_tag is None:
+            plot_tag = ""
+        else:
+            plot_tag = "::" + plot_tag
+
         # Run the experiments and get the plot handles
         fig_handles = self.run_all_and_plot(controller_under_test, display_plots=False)
 
         # Log each plot
         for plot_name, figure_handle in fig_handles:
             logger.experiment.add_figure(
-                plot_name, figure_handle, global_step=log_epoch
+                plot_name + plot_tag, figure_handle, global_step=log_epoch
             )
         logger.experiment.close()
         logger.experiment.flush()
