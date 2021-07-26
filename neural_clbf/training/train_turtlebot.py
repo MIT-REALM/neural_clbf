@@ -16,6 +16,7 @@ from neural_clbf.experiments import (
     RolloutTimeSeriesExperiment,
 )
 from neural_clbf.systems import TurtleBot
+from neural_clbf.training.utils import current_git_hash
 
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -80,12 +81,12 @@ def main(args):
     rollout_experiment = RolloutTimeSeriesExperiment(
         "Rollout",
         start_x,
-        plot_x_indices=[TurtleBot.X, TurtleBot.Y, TurtleBot.THETA],
-        plot_x_labels=["$x$", "$y$", "$\\theta$"],
+        plot_x_indices=[TurtleBot.X, TurtleBot.Y],
+        plot_x_labels=["$x$", "$y$"],
         plot_u_indices=[TurtleBot.V, TurtleBot.THETA_DOT],
         plot_u_labels=["$v$", "$\\dot{\\theta}$"],
         t_sim=6.0,
-        n_sims_per_start=2,
+        n_sims_per_start=5,
     )
     experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
 
@@ -109,11 +110,13 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/turtlebot",
-        name="full_test",
+        "logs/turtlebot/",
+        name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True
+        args, 
+        logger=tb_logger, 
+        reload_dataloaders_every_epoch=True
     )
 
     # Train
