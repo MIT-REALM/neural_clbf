@@ -33,7 +33,7 @@ start_x = torch.tensor(
         [4.75, -2.5, -np.pi / 2],
     ]
 )
-simulation_dt = 0.001
+simulation_dt = 0.005
 
 # Scene parameters
 room_size = 10.0
@@ -108,10 +108,10 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=20,
+        trajectories_per_episode=10,
         trajectory_length=100,
-        fixed_samples=2000,
-        max_points=8000,
+        fixed_samples=1000,
+        max_points=4000,
         val_split=0.1,
         batch_size=batch_size,
     )
@@ -120,7 +120,7 @@ def main(args):
     h_contour_experiment = BFContourExperiment(
         "h_Contour",
         domain=[(-5.0, 5.0), (-5.0, 5.0)],
-        n_grid=80,
+        n_grid=50,
         x_axis_index=TurtleBot2D.X,
         y_axis_index=TurtleBot2D.Y,
         x_axis_label="$x$",
