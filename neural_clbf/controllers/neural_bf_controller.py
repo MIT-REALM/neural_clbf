@@ -272,10 +272,16 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         encoded_obs_w_h = torch.cat((encoded_obs, h), 1)
         u_learned = self.u_nn(encoded_obs_w_h)
 
+        # Scale the output of the learned control function to match the range of
+        # allowable control inputs
+        u_upper, u_lower = self.dynamics_model.control_limits
+        u_range = (u_upper - u_lower) / 2.0
+        u_center = (u_upper + u_lower) / 2.0
+        u_learned = u_learned * u_range + u_center
+
         # Blend the learned control with the nominal control based on the decision
         # value
-        # u = (1 - decision) * u_nominal + decision * u_learned
-        u = u_nominal + u_learned
+        u = (1 - decision) * u_nominal + decision * u_learned
 
         # Then clamp the control input based on the specified limits
         u_upper, u_lower = self.dynamics_model.control_limits
