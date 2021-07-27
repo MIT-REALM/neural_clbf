@@ -92,8 +92,6 @@ class Crazyflie(ControlAffineSystem):
     def n_dims(self) -> int:
         return Crazyflie.N_DIMS
     
-    # angles are a control input, so theoretically this pulls the angle values from input? Other models have angles as a state variable 
-    # so I'm not so sure that this will actually work
     @property
     def angle_dims(self) -> List[int]:
         return []
@@ -111,8 +109,8 @@ class Crazyflie(ControlAffineSystem):
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
         
-        # copied most values from quad3d, but not sure on a justification for any values
-        # switch z upwards positive
+        #TODO @dylan test these empirically once we get controllers implemented
+        #TODO @ dylan switch z upwards positive
         upper_limit[Crazyflie.X] = 4.0
         upper_limit[Crazyflie.Y] = 4.0
         upper_limit[Crazyflie.Z] = 0.0
@@ -135,10 +133,9 @@ class Crazyflie(ControlAffineSystem):
         # TODO @dylan these are relaxed for now, but eventually
         # these values should be measured on the hardware.
         
-        # unsure on justification for net force upper limit; copied from quad3d
         # upper limits: force, phi, theta, psi
-        # should psi limit be either 2*pi or boundless? Should be fine to set to 2pi 
-        upper_limit = torch.tensor([100, np.pi/2, np.pi/2, np.pi/2])
+        # set psi limit to 2*pi from pi/2, may cause issues
+        upper_limit = torch.tensor([100, np.pi/2, np.pi/2, 2*np.pi])
         lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
@@ -151,10 +148,11 @@ class Crazyflie(ControlAffineSystem):
         # We have a floor that we need to avoid and a radius we need to stay inside of
         safe_z = 0.0
         # safe radius probably can be modified depending on what we need; placeholder value for now that was copied from quad3d. find more empirically a good value
-        # might need some tweaking for safe and unsafe when redefining z to be positive upwards
+        #TODO @dylan might need some tweaking for safe and unsafe when redefining z to be positive upwards
         safe_radius = 3
         
         # note that direction of gravity is positive, so all points above the ground have negative z component
+        #TODO @dylan redefine z direction so that points above ground have positive z component
         safe_mask = torch.logical_and(
             x[:, Crazyflie.Z] <= safe_z, x.norm(dim=-1) <= safe_radius
         )
@@ -167,11 +165,12 @@ class Crazyflie(ControlAffineSystem):
             x: a tensor of points in the state space
         """
         # We have a floor that we need to avoid and a radius we need to stay inside of
-        # recheck values with new definition of z for unsafe mask too
+        #TODO @dylan recheck values with new definition of z for unsafe mask too
         unsafe_z = 0.3
         unsafe_radius = 3.5
         
         # note that direction of gravity is positive, so all points above the ground have negative z component
+        #TODO @dylan check this too since z will be changed to positive upwards
         unsafe_mask = torch.logical_or(
             x[:, Crazyflie.Z] >= unsafe_z, x.norm(dim=-1) >= unsafe_radius
         )
@@ -183,9 +182,7 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: the points from which we calculate distance
         """
-        # this was for turtlebot, not sure if modification is needed for crazyflie. 
-        # I think it should be fine as is; seems generalized
-        # probably don't need, may be deprecated eventually
+        # probably don't need this function, may be deprecated eventually
         upper_limit, _ = self.state_limits
         return x.norm(dim=-1) / upper_limit.norm()
 
@@ -194,7 +191,7 @@ class Crazyflie(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        # might need to be tweaked empirically
+        #TODO @dylan might need to be tweaked empirically
         goal_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Define the goal region as being near the goal
@@ -217,7 +214,7 @@ class Crazyflie(ControlAffineSystem):
             f: bs x self.n_dims x 1 tensor
         """
         # Extract batch size and set up a tensor for holding the result
-        # modify for upwards z direction TODO @ dylan 
+        #TODO @dylan modify for upwards z direction
         batch_size = x.shape[0]
         f = torch.zeros((batch_size, self.n_dims, 1))
         f = f.type_as(x)
@@ -244,6 +241,7 @@ class Crazyflie(ControlAffineSystem):
         returns:
             g: bs x self.n_dims x self.n_controls tensor
         """
+        #TODO @dylan modify this for z defined positive upwards
         # Extract batch size and set up a tensor for holding the result
         batch_size = x.shape[0]
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
@@ -261,13 +259,10 @@ class Crazyflie(ControlAffineSystem):
         g[:, Crazyflie.VY, Crazyflie.F] = c_theta * s_phi / m
         g[:, Crazyflie.VZ, Crazuflie.F] = -c_theta * c_phi / m
 
-        #not sure what to do with this particular line. It seems to be mapping the angles to their derivatives,
-        # which would normally be control variables. However, we're controlling the angles directly now,
-        # so I believe this can be omitted. 
         
         # Derivatives of all orientations are control variables
         # g[:, Crazyflie.PHI :, Crazyflie.PHI_DOT :] = torch.eye(self.n_controls - 1)
 
         return g
     
-# TODO @dylan go to quad3D look at u_eq and put it in here
+#TODO @dylan go to quad3D look at u_eq and put it in here
