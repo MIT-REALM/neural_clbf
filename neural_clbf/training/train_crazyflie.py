@@ -72,8 +72,7 @@ def main(args):
         batch_size=64,
         quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
-
-    # Is it possible to make this 3D? No. We can only pick 2D slices
+    
     # Define the experiment suite
     # TODO @dylan look at clf_contour_experiment.py for more info; change y to z; maybe add slices for y as input argument
     V_contour_experiment_xy = CLFContourExperiment(
@@ -86,7 +85,7 @@ def main(args):
         y_axis_label="$y$",
     )
     
-    V_contour_experiment_xz=CLFContourExperiment(
+    V_contour_experiment_xz = CLFContourExperiment(
         "V_Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
         n_grid=50,
@@ -106,11 +105,45 @@ def main(args):
         y_axis_label="$z$",
     )
     
-    #TODO @dylan might make large plot when using all state variables, try to find out what a reasonable subset would be
-    rollout_experiment = RolloutTimeSeriesExperiment(
+    # Three plots in XZ with force and each angle plotted for inputs
+    rollout_experiment_xz_force_phi = RolloutTimeSeriesExperiment(
         "Rollout",
         start_x,
-        plot_x_indices=[Crazyflie.X Crazyflie.Y]
+        plot_x_indices=[Crazyflie.X Crazyflie.Z]
+        plot_x_labels=["$x$, $z$],
+        plot_u_indices=[Crazyflie.F, Crazyflie.PHI]
+        plot_u_labels=["$F$", "$Phi$"]
+        t_sim=6.0,
+        n_sims_per_start=2,
+    )
+                       
+    rollout_experiment_xz_force_theta = RolloutTimeSeriesExperiment(
+        "Rollout",
+        start_x,
+        plot_x_indices=[Crazyflie.X Crazyflie.Z]
+        plot_x_labels=["$x$, $z$],
+        plot_u_indices=[Crazyflie.F, Crazyflie.THETA]
+        plot_u_labels=["$F$", "$Theta$"]
+        t_sim=6.0,
+        n_sims_per_start=2,
+    )
+                       
+    rollout_experiment_xz_force_psi = RolloutTimeSeriesExperiment(
+        "Rollout",
+        start_x,
+        plot_x_indices=[Crazyflie.X Crazyflie.Z]
+        plot_x_labels=["$x$, $z$],
+        plot_u_indices=[Crazyflie.F, Crazyflie.PSI]
+        plot_u_labels=["$F$", "$Psi$"]
+        t_sim=6.0,
+        n_sims_per_start=2,
+    )
+                       
+    # Three plots in YZ with force and each angle plotted for inputs
+    rollout_experiment_yz_force_phi = RolloutTimeSeriesExperiment(
+        "Rollout",
+        start_x,
+        plot_x_indices=[Crazyflie.Y Crazyflie.Z]
         plot_x_labels=["$y$, $z$],
         plot_u_indices=[Crazyflie.F, Crazyflie.PHI]
         plot_u_labels=["$F$", "$Phi$"]
@@ -118,28 +151,27 @@ def main(args):
         n_sims_per_start=2,
     )
                        
-    rollout_experiment = RolloutTimeSeriesExperiment(
+    rollout_experiment_yz_force_theta = RolloutTimeSeriesExperiment(
         "Rollout",
         start_x,
-        plot_x_indices=[Crazyflie.X Crazyflie.Y]
+        plot_x_indices=[Crazyflie.Y Crazyflie.Z]
         plot_x_labels=["$y$, $z$],
-        plot_u_indices=[Crazyflie.F, Crazyflie.PHI]
-        plot_u_labels=["$F$", "$Phi$"]
+        plot_u_indices=[Crazyflie.F, Crazyflie.THETA]
+        plot_u_labels=["$F$", "$Theta$"]
         t_sim=6.0,
         n_sims_per_start=2,
     )
                        
-    rollout_experiment = RolloutTimeSeriesExperiment(
+    rollout_experiment_yz_force_psi = RolloutTimeSeriesExperiment(
         "Rollout",
         start_x,
-        plot_x_indices=[Crazyflie.X Crazyflie.Y]
+        plot_x_indices=[Crazyflie.Y Crazyflie.Z]
         plot_x_labels=["$y$, $z$],
-        plot_u_indices=[Crazyflie.F, Crazyflie.PHI]
-        plot_u_labels=["$F$", "$Phi$"]
+        plot_u_indices=[Crazyflie.F, Crazyflie.PSI]
+        plot_u_labels=["$F$", "$Psi$"]
         t_sim=6.0,
         n_sims_per_start=2,
     )
-                       
     experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
 
     # Initialize the controller
