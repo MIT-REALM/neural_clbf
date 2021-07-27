@@ -263,8 +263,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_nominal = self.dynamics_model.u_nominal(x)
 
         # Get the decision signal (from 0 to 1 due to sigmoid output)
-        decision = self.intervention_nn(h)
-        # decision = torch.sigmoid(20 * (h + 0.25))
+        # decision = self.intervention_nn(h)
+        decision = torch.sigmoid(20 * (h + 0.01))
 
         # Get the control input from the encoded observations and the barrier function
         # value
