@@ -124,8 +124,7 @@ class TurtleBot2D(PlanarLidarSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        # TODO @bethlow these are relaxed for now, but eventually
-        # these values should be measured on the hardware.
+        # These are relaxed for now, but eventually they should be measured on hardware
         upper_limit = torch.ones(self.n_controls)
         upper_limit[TurtleBot2D.V] = 10.0
         upper_limit[TurtleBot2D.THETA_DOT] = 4.0 * np.pi
