@@ -73,10 +73,10 @@ def main(args):
         quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
 
-    # Is it possible to make this 3D? Do we need to?
+    # Is it possible to make this 3D? No. We can only pick 2D slices
     # Define the experiment suite
     # TODO @dylan look at clf_contour_experiment.py for more info; change y to z; maybe add slices for y as input argument
-    V_contour_experiment = CLFContourExperiment(
+    V_contour_experiment_xy = CLFContourExperiment(
         "V_Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
         n_grid=50,
@@ -85,18 +85,61 @@ def main(args):
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
-    # might make large plot when using all state variables, try to find out what a reasonable subset would be
+    
+    V_contour_experiment_xz=CLFContourExperiment(
+        "V_Contour",
+        domain=[(-2.0, 2.0), (-2.0, 2.0)],
+        n_grid=50,
+        x_axis_index=Crazyflie.X
+        y_axis_index=Crazyflie.Z,
+        x_axis_label="$x",
+        y_axis_label="$z$",
+    )
+    
+    V_contour_experiment_yz = CLFContourExperiment(
+        "V_Contour",
+        domain=[(-2.0, 2.0), (-2.0, 2.0)],
+        n_grid=50,
+        x_axis_index=Crazyflie.Y
+        y_axis_index=Crazyflie.Z,
+        x_axis_label="$y",
+        y_axis_label="$z$",
+    )
+    
+    #TODO @dylan might make large plot when using all state variables, try to find out what a reasonable subset would be
     rollout_experiment = RolloutTimeSeriesExperiment(
         "Rollout",
         start_x,
-        plot_x_indices=[Crazyflie.X, Crazyflie.Y, Crazyflie.Z, Crazyflie.VX, Crazyflie.VY, Crazyflie.VZ],
-        plot_x_labels=["$x$", "$y$", "$z$", "$vx$", "$vy$", "$vz$"],
-        # Not sure on the u indices and labels. I think they're for the control variables?
-        plot_u_indices=[Crazyflie.F, Crazyflie.PHI, Crazyflie.THETA, Crazyflie.PSI],
-        plot_u_labels=["$F$", "$Phi$", "$Theta$", "$Psi$"],
+        plot_x_indices=[Crazyflie.X Crazyflie.Y]
+        plot_x_labels=["$y$, $z$],
+        plot_u_indices=[Crazyflie.F, Crazyflie.PHI]
+        plot_u_labels=["$F$", "$Phi$"]
         t_sim=6.0,
         n_sims_per_start=2,
     )
+                       
+    rollout_experiment = RolloutTimeSeriesExperiment(
+        "Rollout",
+        start_x,
+        plot_x_indices=[Crazyflie.X Crazyflie.Y]
+        plot_x_labels=["$y$, $z$],
+        plot_u_indices=[Crazyflie.F, Crazyflie.PHI]
+        plot_u_labels=["$F$", "$Phi$"]
+        t_sim=6.0,
+        n_sims_per_start=2,
+    )
+                       
+    rollout_experiment = RolloutTimeSeriesExperiment(
+        "Rollout",
+        start_x,
+        plot_x_indices=[Crazyflie.X Crazyflie.Y]
+        plot_x_labels=["$y$, $z$],
+        plot_u_indices=[Crazyflie.F, Crazyflie.PHI]
+        plot_u_labels=["$F$", "$Phi$"]
+        t_sim=6.0,
+        n_sims_per_start=2,
+    )
+                       
     experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
 
     # Initialize the controller
@@ -118,13 +161,14 @@ def main(args):
     )
 
     # Initialize the logger and trainer
-    # TODO @dylan modify name line to set to current repository name/version; see other training files 
     tb_logger = pl_loggers.TensorBoardLogger(
         "logs/crazyflie",
-        name="full_test",
+        name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True
+        args, 
+        logger=tb_logger, 
+        reload_dataloaders_every_epoch=True
     )
 
     # Train
