@@ -24,11 +24,9 @@ batch_size = 64
 controller_period = 0.01
 
 #TODO @dylan look at implementing unit tests. see other files for examples
-# I modified this to six dimensions since we have positions and velocities, whereas the turtlebots only use x, y, and theta.
 start_x = torch.tensor(
     [
         [0, 0, 0, 0, 0, 0],
-        # [1.0, 1.0, 0],
     ]
 )
 simulation_dt = 0.001
