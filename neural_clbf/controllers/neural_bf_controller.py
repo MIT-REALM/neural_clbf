@@ -274,7 +274,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Blend the learned control with the nominal control based on the decision
         # value
-        u = (1 - decision) * u_nominal + decision * u_learned
+        # u = (1 - decision) * u_nominal + decision * u_learned
+        u = u_nominal
 
         # Then clamp the control input based on the specified limits
         u_upper, u_lower = self.dynamics_model.control_limits
