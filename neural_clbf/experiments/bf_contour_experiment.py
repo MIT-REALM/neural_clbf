@@ -172,7 +172,7 @@ class BFContourExperiment(Experiment):
         ax = fig.add_subplot(projection="3d")
         fig.set_size_inches(12, 8)
 
-        contours = ax.plot_trisurf(
+        contours = ax.scatter(
             results_df[self.x_axis_label],
             results_df[self.y_axis_label],
             results_df["h"],
