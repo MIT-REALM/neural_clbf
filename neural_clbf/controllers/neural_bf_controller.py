@@ -580,11 +580,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             self.log(loss_key + " / val", avg_losses[loss_key], sync_dist=True)
 
         # **Now entering spicetacular automation zone**
-        # We automatically run experiments every few epochs
-
-        # Only plot every 5 epochs
-        if self.current_epoch % 5 != 0:
-            return
+        # We automatically run experiments during validation
 
         self.experiment_suite.run_all_and_log_plots(
             self, self.logger, self.current_epoch
