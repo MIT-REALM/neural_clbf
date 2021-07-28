@@ -27,7 +27,7 @@ class Crazyflie(ControlAffineSystem):
     The system is parameterized by
         m: mass
         
-    Note: z is positive in the direction of gravity
+    Note: z is positive upwards
     """
 
     # Number of states and controls
@@ -110,16 +110,15 @@ class Crazyflie(ControlAffineSystem):
         upper_limit = torch.ones(self.n_dims)
         
         #TODO @dylan test these empirically once we get controllers implemented
-        #TODO @ dylan switch z upwards positive
         upper_limit[Crazyflie.X] = 4.0
         upper_limit[Crazyflie.Y] = 4.0
-        upper_limit[Crazyflie.Z] = 0.0
+        upper_limit[Crazyflie.Z] = 4.0
         upper_limit[Crazyflie.VX] = 8.0
         upper_limit[Crazyflie.VY] = 8.0
         upper_limit[Crazyflie.VZ] = 8.0
 
         lower_limit = -1.0 * upper_limit
-        lower_limit[Crazyflie.Z] = -4.0
+        lower_limit[Crazyflie.Z] = 0
 
         return (upper_limit, lower_limit)
 
@@ -146,15 +145,15 @@ class Crazyflie(ControlAffineSystem):
             x: a tensor of points in the state space
         """
         # We have a floor that we need to avoid and a radius we need to stay inside of
-        safe_z = 0.0
-        # safe radius probably can be modified depending on what we need; placeholder value for now that was copied from quad3d. find more empirically a good value
-        #TODO @dylan might need some tweaking for safe and unsafe when redefining z to be positive upwards
-        safe_radius = 3
+        safe_z_floor = 0.3
+        safe_z_ceiling = 4.0
+        
+        #TODO @dylan find empirically a good value for safe_radius
+        safe_radius = 4
         
         # note that direction of gravity is positive, so all points above the ground have negative z component
-        #TODO @dylan redefine z direction so that points above ground have positive z component
         safe_mask = torch.logical_and(
-            x[:, Crazyflie.Z] <= safe_z, x.norm(dim=-1) <= safe_radius
+            x[:, Crazyflie.Z] <= safe_z_ceiling, x[:, Crazyflie.Z] >= safe_z_floor, x.norm(dim=-1) <= safe_radius
         )
 
         return safe_mask
@@ -165,14 +164,12 @@ class Crazyflie(ControlAffineSystem):
             x: a tensor of points in the state space
         """
         # We have a floor that we need to avoid and a radius we need to stay inside of
-        #TODO @dylan recheck values with new definition of z for unsafe mask too
-        unsafe_z = 0.3
+        unsafe_z_floor = 0.3
+        unsafe_z_ceiling = 4.0
         unsafe_radius = 3.5
         
-        # note that direction of gravity is positive, so all points above the ground have negative z component
-        #TODO @dylan check this too since z will be changed to positive upwards
         unsafe_mask = torch.logical_or(
-            x[:, Crazyflie.Z] >= unsafe_z, x.norm(dim=-1) >= unsafe_radius
+            x[:, Crazyflie.Z] < unsafe_z_floor, x[:, Crazyflie.Z] > unsafe_z_ceiling, x.norm(dim=-1) > unsafe_radius
         )
 
     def distance_to_goal(self, x: torch.Tensor) -> torch.Tensor:
@@ -214,7 +211,6 @@ class Crazyflie(ControlAffineSystem):
             f: bs x self.n_dims x 1 tensor
         """
         # Extract batch size and set up a tensor for holding the result
-        #TODO @dylan modify for upwards z direction
         batch_size = x.shape[0]
         f = torch.zeros((batch_size, self.n_dims, 1))
         f = f.type_as(x)
@@ -225,7 +221,7 @@ class Crazyflie(ControlAffineSystem):
         f[:, Crazyflie.Z] = x[:, Crazyflie.VZ]  # z
 
         # Constant acceleration in z due to gravity
-        f[:, Crazyflie.VZ] = grav
+        f[:, Crazyflie.VZ] = -9.81
 
         # Orientation velocities are directly actuated
 
@@ -241,7 +237,6 @@ class Crazyflie(ControlAffineSystem):
         returns:
             g: bs x self.n_dims x self.n_controls tensor
         """
-        #TODO @dylan modify this for z defined positive upwards
         # Extract batch size and set up a tensor for holding the result
         batch_size = x.shape[0]
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
@@ -255,9 +250,9 @@ class Crazyflie(ControlAffineSystem):
         c_theta = torch.cos(x[:, Crazyflie.THETA])
         s_phi = torch.sin(x[:, Crazyflie.PHI])
         c_phi = torch.cos(x[:, Crazyflie.PHI])
-        g[:, Crazyflie.VX, Crazyflie.F] = -s_theta / m
-        g[:, Crazyflie.VY, Crazyflie.F] = c_theta * s_phi / m
-        g[:, Crazyflie.VZ, Crazuflie.F] = -c_theta * c_phi / m
+        g[:, Crazyflie.VX, Crazyflie.F] = s_theta / m
+        g[:, Crazyflie.VY, Crazyflie.F] = -s_phi * c_theta / m
+        g[:, Crazyflie.VZ, Crazuflie.F] = c_phi * c_theta / m
 
         
         # Derivatives of all orientations are control variables
@@ -265,4 +260,8 @@ class Crazyflie(ControlAffineSystem):
 
         return g
     
-#TODO @dylan go to quad3D look at u_eq and put it in here
+    @property
+    def u_eq(self):
+        u_eq = torch.zeros((1, self.n_controls))
+        u_eq[0, Crazyflie.F] = self.nominal_params["m"] * 9.81
+        return u_eq
