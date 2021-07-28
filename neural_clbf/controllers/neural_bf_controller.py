@@ -591,11 +591,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         )
 
         # Now swap in the validation dynamics model and run the experiments again
-        self.dynamics_model = self.validation_dynamics_model
-        self.experiment_suite.run_all_and_log_plots(
-            self, self.logger, self.current_epoch, "validation"
-        )
-        self.dynamics_model = self.training_dynamics_model
+        if self.validation_dynamics_model is not None:
+            self.dynamics_model = self.validation_dynamics_model
+            self.experiment_suite.run_all_and_log_plots(
+                self, self.logger, self.current_epoch, "validation"
+            )
+            self.dynamics_model = self.training_dynamics_model
 
     @pl.core.decorators.auto_move_data
     def simulator_fn(
