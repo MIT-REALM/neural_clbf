@@ -232,7 +232,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
 
-        h, _ = o.norm(dim=1).max(dim=-1)
+        h, _ = o.norm(dim=1).min(dim=-1)
         h = h.unsqueeze(-1)
 
         return h
