@@ -167,7 +167,9 @@ class BFContourExperiment(Experiment):
         sns.set_theme(context="talk", style="white")
 
         # Plot a contour of h
-        fig, ax = plt.subplots(1, 1, projection="3d")
+        fig = plt.figure()
+        # fig, ax = plt.subplots(projection="3d")
+        ax = fig.add_subplot(projection="3d")
         fig.set_size_inches(12, 8)
 
         contours = ax.plot_trisurf(
