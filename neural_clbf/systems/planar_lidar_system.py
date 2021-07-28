@@ -180,7 +180,7 @@ class Scene:
             an N x num_rays tensor indicating which data points are valid
         """
         # Sanity check on inputs
-        assert field_of_view[1] > field_of_view[0], "Field of view must be (min, max)"
+        assert field_of_view[1] >= field_of_view[0], "Field of view must be (min, max)"
         # Reshape input if necessary
         if qs.ndim == 1:
             qs = torch.reshape(qs, (1, -1))

@@ -2,6 +2,7 @@ import pytest
 import numpy as np
 from shapely.geometry import box
 import torch
+import matplotlib.pyplot as plt
 
 from neural_clbf.systems.planar_lidar_system import Scene
 
@@ -131,3 +132,39 @@ def test_scene_lidar_measurement():
     )
     expect_meas = torch.tensor([expect_x, expect_y, expect_vx, expect_vy])
     assert np.allclose(measurement2[:, -1], expect_meas)
+
+
+def plot_scene_lidar_measurement():
+    """Test whether the simulated LIDAR measurement is working"""
+    # Create a test scene
+    obstacles = [box(0.0, 0.0, 1.0, 1.0), box(1.0, 1.0, 2.0, 2.0)]
+    scene = Scene(obstacles)
+
+    # Get some lidar measurement right up next to the blocks
+    # (these should actually measure something), with some velocities
+    q = torch.tensor(
+        [
+            [0.7, 1.5, 0.0, 0.0, 0.0, 0.0],
+        ]
+    )
+    num_rays = 32
+    field_of_view = (-np.pi, np.pi)
+    max_distance = 1.0
+    measurement, _ = scene.lidar_measurement(q, num_rays, field_of_view, max_distance)
+
+    fig, ax = plt.subplots()
+    scene.plot(ax)
+    ax.set_aspect("equal")
+
+    ax.plot(q[:, 0], q[:, 1], "ko")
+
+    lidar_pts = torch.zeros(num_rays, 2)
+    lidar_pts[:, 0] = measurement[0, 0, :] + q[0, 0]
+    lidar_pts[:, 1] = measurement[0, 1, :] + q[0, 1]
+    ax.plot(lidar_pts[:, 0], lidar_pts[:, 1], "k-o")
+
+    plt.show()
+
+
+if __name__ == "__main__":
+    plot_scene_lidar_measurement()
