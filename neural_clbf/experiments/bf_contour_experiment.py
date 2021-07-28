@@ -180,46 +180,46 @@ class BFContourExperiment(Experiment):
         )
         plt.colorbar(contours, ax=ax, orientation="vertical")
 
-        # Overlay the safe/unsafe regions (if specified)
-        if self.plot_unsafe_region:
-            ax.plot([], [], c="green", label="Safe Region")
-            ax.tricontour(
-                results_df[self.x_axis_label],
-                results_df[self.y_axis_label],
-                results_df["Safe region"],
-                colors=["green"],
-                levels=[0.5],
-            )
-            ax.plot([], [], c="magenta", label="Unsafe Region")
-            ax.tricontour(
-                results_df[self.x_axis_label],
-                results_df[self.y_axis_label],
-                results_df["Unsafe region"],
-                colors=["magenta"],
-                levels=[0.5],
-            )
+        # # Overlay the safe/unsafe regions (if specified)
+        # if self.plot_unsafe_region:
+        #     ax.plot([], [], c="green", label="Safe Region")
+        #     ax.tricontour(
+        #         results_df[self.x_axis_label],
+        #         results_df[self.y_axis_label],
+        #         results_df["Safe region"],
+        #         colors=["green"],
+        #         levels=[0.5],
+        #     )
+        #     ax.plot([], [], c="magenta", label="Unsafe Region")
+        #     ax.tricontour(
+        #         results_df[self.x_axis_label],
+        #         results_df[self.y_axis_label],
+        #         results_df["Unsafe region"],
+        #         colors=["magenta"],
+        #         levels=[0.5],
+        #     )
 
-            # Plot the environment if possible
-            if hasattr(controller_under_test.dynamics_model, "plot_environment"):
-                controller_under_test.dynamics_model.plot_environment(ax)
+        #     # Plot the environment if possible
+        #     if hasattr(controller_under_test.dynamics_model, "plot_environment"):
+        #         controller_under_test.dynamics_model.plot_environment(ax)
 
-            ax.plot([], [], c="blue", label="h(o(x)) = 0.0")
-            if hasattr(controller_under_test, "safe_level"):
-                ax.tricontour(
-                    results_df[self.x_axis_label],
-                    results_df[self.y_axis_label],
-                    results_df["h"],
-                    colors=["blue"],
-                    levels=[0.0],
-                )
-            else:
-                ax.tricontour(
-                    results_df[self.x_axis_label],
-                    results_df[self.y_axis_label],
-                    results_df["h"],
-                    colors=["blue"],
-                    levels=[0.0],
-                )
+        #     ax.plot([], [], c="blue", label="h(o(x)) = 0.0")
+        #     if hasattr(controller_under_test, "safe_level"):
+        #         ax.tricontour(
+        #             results_df[self.x_axis_label],
+        #             results_df[self.y_axis_label],
+        #             results_df["h"],
+        #             colors=["blue"],
+        #             levels=[0.0],
+        #         )
+        #     else:
+        #         ax.tricontour(
+        #             results_df[self.x_axis_label],
+        #             results_df[self.y_axis_label],
+        #             results_df["h"],
+        #             colors=["blue"],
+        #             levels=[0.0],
+        #         )
 
         # Make the legend
         ax.legend(
