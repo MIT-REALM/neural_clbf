@@ -212,9 +212,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # is (the same transformation will be applied to each point).
         e = self.encoder_nn(o)
 
-        # # Then max-pool over the last dimension
-        # e, _ = e.max(dim=-1)
-        e = e.sum(dim=-1)
+        # Then max-pool over the last dimension
+        e, _ = e.max(dim=-1)
 
         return e
 
@@ -232,6 +231,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
+
+        h, _ = o.norm(dim=1).max(dim=-1)
 
         return h
 
