@@ -194,6 +194,12 @@ class Scene:
 
         for q_idx, q in enumerate(qs):
             agent_point = Point(q[0].item(), q[1].item())
+
+            # Check if we're in collision
+            in_collision = False
+            for obstacle in self.obstacles:
+                in_collision = in_collision or obstacle.intersects(agent_point)
+
             # Sweep through the field of view, checking for an intersection
             # out to max_distance
             for ray_idx in range(num_rays):
@@ -224,7 +230,10 @@ class Scene:
 
                 # Get the nearest distance and save that as the measurement
                 # (with noise if needed)
-                if intersections:
+                if in_collision:
+                    # Handle the special case where we collide with an obstacle
+                    contact_pt = agent_point
+                elif intersections:
                     # Figure out which point is closest
                     closest_idx = np.argmin(
                         [
@@ -235,9 +244,10 @@ class Scene:
                     contact_pt = intersections[closest_idx]  # type: ignore
                 else:
                     # If no intersection was found, mark the corresponding element
-                    # of the valid mask tensor and continue
+                    # of the valid mask tensor, and set the contact point as the
+                    # end point of the ray
                     valid[q_idx, ray_idx] = 0.0
-                    continue
+                    contact_pt = Point(*ray_end)
 
                 # Get the coordinates of that point
                 contact_x, contact_y = contact_pt.coords[0]
