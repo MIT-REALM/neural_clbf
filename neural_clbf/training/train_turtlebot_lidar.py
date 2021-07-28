@@ -5,6 +5,7 @@ import torch.multiprocessing
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
+from shapely.geometry import box
 
 from neural_clbf.controllers import NeuralObsBFController
 from neural_clbf.datamodules.episodic_datamodule import (
@@ -58,13 +59,14 @@ def main(args):
     # Make the random scene
     scene = Scene([])
     scene.add_walls(room_size)
-    scene.add_random_boxes(
-        num_obstacles,
-        box_size_range,
-        position_range,
-        position_range,
-        rotation_range,
-    )
+    # scene.add_random_boxes(
+    #     num_obstacles,
+    #     box_size_range,
+    #     position_range,
+    #     position_range,
+    #     rotation_range,
+    # )
+    scene.add_obstacle(box(-1, -1, 1, 1))
 
     # (spicy!) and make another random scene for validation
     validation_scene = Scene([])
