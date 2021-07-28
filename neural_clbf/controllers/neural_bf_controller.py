@@ -224,7 +224,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
                observations
         returns:
-            h: bs tensor of BF values
+            h: bs x 1 tensor of BF values
         """
         # Encode the observations
         encoded_obs = self.encoder(o)
@@ -232,7 +232,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
 
-        h, _ = o.norm(dim=1).max(dim=-1)
+        h, _ = o.norm(dim=1).max(dim=-1).unsqueeze(-1)
 
         return h
 
