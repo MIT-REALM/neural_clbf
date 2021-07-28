@@ -172,7 +172,7 @@ def main(args):
         check_val_every_n_epoch=1,
         stochastic_weight_avg=True,
         track_grad_norm=2,
-        max_epochs=2,
+        max_epochs=20,
     )
 
     # Train
