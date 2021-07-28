@@ -167,10 +167,10 @@ class BFContourExperiment(Experiment):
         sns.set_theme(context="talk", style="white")
 
         # Plot a contour of h
-        fig, ax = plt.subplots(1, 1)
+        fig, ax = plt.subplots(1, 1, projection="3d")
         fig.set_size_inches(12, 8)
 
-        contours = ax.tricontourf(
+        contours = ax.plot_trisurf(
             results_df[self.x_axis_label],
             results_df[self.y_axis_label],
             results_df["h"],
