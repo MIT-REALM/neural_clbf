@@ -131,6 +131,20 @@ class RolloutStateSpaceExperiment(Experiment):
             if tstep % controller_update_freq == 0:
                 u_current = controller_under_test.u(x_current)
 
+            # Get the barrier function if applicable
+            h: Optional[torch.Tensor] = None
+            if hasattr(controller_under_test, "h") and hasattr(
+                controller_under_test.dynamics_model, "get_observations"
+            ):
+                dynamics_model = controller_under_test.dynamics_model
+                obs = dynamics_model.get_observations(x_current)  # type: ignore
+                h = controller_under_test.h(obs)  # type: ignore
+
+            # Get the Lyapunov function if applicable
+            V: Optional[torch.Tensor] = None
+            if hasattr(controller_under_test, "V"):
+                V = controller_under_test.V(x_current)  # type: ignore
+
             # Log the current state and control for each simulation
             for sim_index in range(n_sims):
                 log_packet = {"t": tstep * delta_t, "Simulation": sim_index}
@@ -148,6 +162,13 @@ class RolloutStateSpaceExperiment(Experiment):
                 y_value = x_current[sim_index, self.plot_y_index].cpu().numpy().item()
                 log_packet[self.plot_x_label] = x_value
                 log_packet[self.plot_y_label] = y_value
+
+                # Log the barrier function if applicable
+                if h is not None:
+                    log_packet["h"] = h[sim_index].cpu().numpy().item()
+                # Log the Lyapunov function if applicable
+                if V is not None:
+                    log_packet["V"] = V.cpu().numpy().item()
 
                 results_df = results_df.append(log_packet, ignore_index=True)
 
@@ -184,11 +205,32 @@ class RolloutStateSpaceExperiment(Experiment):
         # Set the color scheme
         sns.set_theme(context="talk", style="white")
 
+        # Figure out how many plots we need (one for the rollout, one for h if logged,
+        # and one for V if logged)
+        num_plots = 1
+        if "h" in results_df:
+            num_plots += 1
+        if "V" in results_df:
+            num_plots += 1
+
         # Plot the state trajectories
-        fig, ax = plt.subplots(1, 1)
-        fig.set_size_inches(8, 8)
+        fig, ax = plt.subplots(1, num_plots)
+        fig.set_size_inches(8 * num_plots, 8)
+
+        # Assign plots to axes
+        if num_plots == 1:
+            rollout_ax = ax
+        else:
+            rollout_ax = ax[0]
+
+        if "h" in results_df:
+            h_ax = ax[1]
+        if "V" in results_df:
+            V_ax = ax[num_plots - 1]
+
+        # Plot the rollout
         sns.lineplot(
-            ax=ax,
+            ax=rollout_ax,
             x=self.plot_x_label,
             y=self.plot_y_label,
             style="Parameters",
@@ -196,8 +238,33 @@ class RolloutStateSpaceExperiment(Experiment):
             data=results_df,
         )
 
+        # Remove the legend -- too much clutter
+        rollout_ax.legend([], [], frameon=False)
+
         # Plot the environment
-        controller_under_test.dynamics_model.plot_environment(ax)
+        controller_under_test.dynamics_model.plot_environment(rollout_ax)
+
+        # Plot the barrier function if applicable
+        if "h" in results_df:
+            sns.lineplot(ax=h_ax, x="t", y="h", hue="Parameters", data=results_df)
+            h_ax.set_ylabel("$h$")
+            h_ax.set_xlabel("t")
+            # Remove the legend -- too much clutter
+            h_ax.legend([], [], frameon=False)
+
+            # Plot a reference line at h = 0
+            h_ax.plot([0, results_df.index.max()], [0, 0], color="k")
+
+        # Plot the lyapunov function if applicable
+        if "V" in results_df:
+            sns.lineplot(ax=V_ax, x="t", y="V", hue="Parameters", data=results_df)
+            V_ax.set_ylabel("$V$")
+            V_ax.set_xlabel("t")
+            # Remove the legend -- too much clutter
+            V_ax.legend([], [], frameon=False)
+
+            # Plot a reference line at h = 0
+            h_ax.plot([0, results_df.t.max()], [0, 0], color="k")
 
         fig_handle = ("Rollout (state space)", fig)
 
