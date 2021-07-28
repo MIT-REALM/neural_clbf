@@ -215,7 +215,7 @@ class RolloutStateSpaceExperiment(Experiment):
 
         # Plot the state trajectories
         fig, ax = plt.subplots(1, num_plots)
-        fig.set_size_inches(8 * num_plots, 8)
+        fig.set_size_inches(9 * num_plots, 6)
 
         # Assign plots to axes
         if num_plots == 1:
