@@ -156,7 +156,7 @@ def main(args):
         u_hidden_size=48,
         h_alpha=0.1,
         controller_period=controller_period,
-        # validation_dynamics_model=validation_dynamics_model,
+        validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=5,
     )
 
