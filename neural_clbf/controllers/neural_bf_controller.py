@@ -120,12 +120,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.encoder_layers["input_linear"] = nn.Conv1d(
             self.input_size, self.encoder_hidden_size, 1  # kernel size = 1
         )
-        self.encoder_layers["input_activation"] = nn.Tanh()
+        self.encoder_layers["input_activation"] = nn.ReLU()
         for i in range(self.encoder_hidden_layers):
             self.encoder_layers[f"layer_{i}_linear"] = nn.Conv1d(
                 self.encoder_hidden_size, self.encoder_hidden_size, 1  # kernel size = 1
             )
-            self.encoder_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.encoder_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.encoder_nn = nn.Sequential(self.encoder_layers)
 
         # ----------------------------------------------------------------------------
@@ -138,12 +138,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.h_layers["input_linear"] = nn.Linear(
             self.encoder_hidden_size, self.h_hidden_size
         )
-        self.h_layers["input_activation"] = nn.Tanh()
+        self.h_layers["input_activation"] = nn.ReLU()
         for i in range(self.h_hidden_layers):
             self.h_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.h_hidden_size, self.h_hidden_size
             )
-            self.h_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.h_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.h_layers["output_linear"] = nn.Linear(self.h_hidden_size, 1)
         self.h_nn = nn.Sequential(self.h_layers)
 
@@ -158,12 +158,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             self.encoder_hidden_size + 1,  # add one for the barrier function input
             self.u_hidden_size,
         )
-        self.u_layers["input_activation"] = nn.Tanh()
+        self.u_layers["input_activation"] = nn.ReLU()
         for i in range(self.u_hidden_layers):
             self.u_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.u_hidden_size, self.u_hidden_size
             )
-            self.u_layers[f"layer_{i}_activation"] = nn.Tanh()
+            self.u_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.u_layers["output_linear"] = nn.Linear(
             self.u_hidden_size, self.dynamics_model.n_controls
         )
@@ -264,7 +264,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Get the decision signal (from 0 to 1 due to sigmoid output)
         # decision = self.intervention_nn(h)
-        decision = torch.sigmoid(100 * (h + 0.01))
+        # decision = torch.sigmoid(100 * (h + 0.01))
+        decision = 0.0
 
         # Get the control input from the encoded observations and the barrier function
         # value

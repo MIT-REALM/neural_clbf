@@ -253,6 +253,7 @@ class RolloutStateSpaceExperiment(Experiment):
                 style="Parameters",
                 hue="Simulation",
                 data=results_df,
+                markers=True,
             )
             h_ax.set_ylabel("$h$")
             h_ax.set_xlabel("t")
@@ -271,6 +272,7 @@ class RolloutStateSpaceExperiment(Experiment):
                 style="Parameters",
                 hue="Simulation",
                 data=results_df,
+                markers=True,
             )
             V_ax.set_ylabel("$V$")
             V_ax.set_xlabel("t")
