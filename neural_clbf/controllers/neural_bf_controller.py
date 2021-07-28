@@ -42,7 +42,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
     (inspired by Zengyi's approach to macbf)
 
     encoder:
-        observations -> fully-connected layers -> zero invalid elements -> max_pool -> e
+        observations -> fully-connected layers -> zero invalid elements -> min_pool -> e
     """
 
     def __init__(
@@ -212,8 +212,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # is (the same transformation will be applied to each point).
         e = self.encoder_nn(o)
 
-        # Then max-pool over the last dimension
-        e, _ = e.max(dim=-1)
+        # Then min-pool over the last dimension. We use min instead of max (the more
+        # traditional pooling choice) because the lidar measurements jump to zero on
+        # collisions with something, and that makes the max tend to be discontinuous.
+        e, _ = e.min(dim=-1)
 
         return e
 
@@ -231,9 +233,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
-
-        h, _ = o.norm(dim=1).min(dim=-1)
-        h = h.unsqueeze(-1)
 
         return h
 
