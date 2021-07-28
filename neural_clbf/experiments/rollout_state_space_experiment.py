@@ -246,7 +246,14 @@ class RolloutStateSpaceExperiment(Experiment):
 
         # Plot the barrier function if applicable
         if "h" in results_df:
-            sns.lineplot(ax=h_ax, x="t", y="h", hue="Parameters", data=results_df)
+            sns.lineplot(
+                ax=h_ax,
+                x="t",
+                y="h",
+                style="Parameters",
+                hue="Simulation",
+                data=results_df,
+            )
             h_ax.set_ylabel("$h$")
             h_ax.set_xlabel("t")
             # Remove the legend -- too much clutter
@@ -257,7 +264,14 @@ class RolloutStateSpaceExperiment(Experiment):
 
         # Plot the lyapunov function if applicable
         if "V" in results_df:
-            sns.lineplot(ax=V_ax, x="t", y="V", hue="Parameters", data=results_df)
+            sns.lineplot(
+                ax=V_ax,
+                x="t",
+                y="V",
+                style="Parameters",
+                hue="Simulation",
+                data=results_df,
+            )
             V_ax.set_ylabel("$V$")
             V_ax.set_xlabel("t")
             # Remove the legend -- too much clutter
