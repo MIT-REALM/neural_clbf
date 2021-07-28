@@ -212,8 +212,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # is (the same transformation will be applied to each point).
         e = self.encoder_nn(o)
 
-        # Then max-pool over the last dimension
-        e, _ = e.max(dim=-1)
+        # # Then max-pool over the last dimension
+        # e, _ = e.max(dim=-1)
+        e = e.sum(dim=-1)
 
         return e
 
