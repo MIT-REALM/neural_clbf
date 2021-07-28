@@ -28,9 +28,9 @@ controller_period = 0.01
 start_x = torch.tensor(
     [
         [4.5, 2.5, np.pi / 2],
-        [-4.5, 2.5, np.pi / 2],
-        [-4.5, -2.5, -np.pi / 2],
-        [4.5, -2.5, -np.pi / 2],
+        # [-4.5, 2.5, np.pi / 2],
+        # [-4.5, -2.5, -np.pi / 2],
+        # [4.5, -2.5, -np.pi / 2],
     ]
 )
 simulation_dt = 0.005
@@ -108,7 +108,9 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=10,
+        # trajectories_per_episode=10,
+        # trajectory_length=100,
+        trajectories_per_episode=0,
         trajectory_length=100,
         fixed_samples=1000,
         max_points=4000,
@@ -120,7 +122,7 @@ def main(args):
     h_contour_experiment = BFContourExperiment(
         "h_Contour",
         domain=[(-5.0, 5.0), (-5.0, 5.0)],
-        n_grid=50,
+        n_grid=80,
         x_axis_index=TurtleBot2D.X,
         y_axis_index=TurtleBot2D.Y,
         x_axis_label="$x$",
@@ -152,7 +154,7 @@ def main(args):
         u_hidden_size=48,
         h_alpha=0.1,
         controller_period=controller_period,
-        validation_dynamics_model=validation_dynamics_model,
+        # validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=5,
     )
 
