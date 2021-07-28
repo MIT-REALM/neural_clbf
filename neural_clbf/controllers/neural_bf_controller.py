@@ -206,7 +206,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             e: bs x self.encoder_hidden_size encoding of the observations
         """
-        # First run the observations through the encoder network, which uses
+        # First, scale the observations
+        o *= 0.1
+        # Then run the observations through the encoder network, which uses
         # convolutional layers with kernel size 1 to implement a fully connected
         # network that doesn't care what the length of the last dimension of the input
         # is (the same transformation will be applied to each point).
