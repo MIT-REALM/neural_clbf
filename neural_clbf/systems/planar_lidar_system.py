@@ -38,7 +38,7 @@ class Scene:
 
     def add_walls(self, room_size: float) -> None:
         """Add walls to the scene (thin boxes)"""
-        wall_width = 0.1
+        wall_width = 0.25
         semi_length = room_size / 2.0
         # Place the walls aligned with the x and y axes
         bottom_wall = box(
