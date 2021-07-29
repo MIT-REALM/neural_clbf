@@ -64,7 +64,8 @@ def test_turtlebot_dynamics():
     # If linear velocity is increased and angular velocity constant
     # then we should experience positive position change in x and y, and no
     # change in theta
-    u = u_eq[0] + 1.0
+    u = u_eq.clone()
+    u[0, TurtleBot.V] += 1.0
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     assert xdot[0, TurtleBot.X] > 0.0
     assert xdot[0, TurtleBot.Y] > 0.0
@@ -75,7 +76,8 @@ def test_turtlebot_dynamics():
 
     # If controls in the linear velocity are decreased, then we should
     # experience negative x and y position change
-    u = u_eq[0] - 1.0
+    u = u_eq.clone()
+    u[0, TurtleBot.V] -= 1.0
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     assert xdot[0, TurtleBot.X] < 0.0
     assert xdot[0, TurtleBot.Y] < 0.0
@@ -86,7 +88,8 @@ def test_turtlebot_dynamics():
 
     # If angular velocity is positive and linear velocity is zero,
     # then we should experience positive theta orientation
-    u = u_eq[1] + 2.0
+    u = u_eq.clone()
+    u[0, TurtleBot.THETA_DOT] += 2.0
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     assert xdot[0, TurtleBot.THETA] > 0
     # x and y position should still be zero
@@ -95,11 +98,12 @@ def test_turtlebot_dynamics():
 
     # If both angular velocity and linear velocity are increased, we should
     # experience positive change in x and y position and orientation angle
-    u = u_eq[1] + 1.0
-    u[:, 0] += 1.0
+    u = u_eq.clone()
+    u[0, TurtleBot.V] += 1
+    u[0, TurtleBot.THETA_DOT] += 1
+
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     assert xdot[0, TurtleBot.X] > 0.0
     assert xdot[0, TurtleBot.Y] > 0.0
     assert xdot[0, TurtleBot.THETA] > 0.0
     assert turtlebot.n_dims == 3
-    
