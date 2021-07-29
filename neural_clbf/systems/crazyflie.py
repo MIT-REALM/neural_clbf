@@ -252,7 +252,7 @@ class Crazyflie(ControlAffineSystem):
         c_phi = torch.cos(x[:, Crazyflie.PHI])
         g[:, Crazyflie.VX, Crazyflie.F] = s_theta / m
         g[:, Crazyflie.VY, Crazyflie.F] = -s_phi * c_theta / m
-        g[:, Crazyflie.VZ, Crazuflie.F] = c_phi * c_theta / m
+        g[:, Crazyflie.VZ, Crazyflie.F] = c_phi * c_theta / m
 
         
         # Derivatives of all orientations are control variables
