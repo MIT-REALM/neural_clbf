@@ -331,7 +331,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
         """
-        eps = 1e-2
+        eps = 0.2
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
 
