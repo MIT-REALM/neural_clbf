@@ -450,7 +450,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_t = self.u_(x, o, h)
         u_nominal = self.dynamics_model.u_nominal(x)
         u_norm = (u_t - u_nominal).norm(dim=-1)
-        h_negative_mask = F.relu(-h)
+        h_negative_mask = F.relu(-h).squeeze().detach()
         u_norm_loss = (u_norm * h_negative_mask).mean()
         loss.append(("||u - u_nominal||", u_norm_loss))
 
