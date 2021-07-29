@@ -411,7 +411,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         dhdt = (h_tplus1 - h_t) / self.controller_period
         barrier_function_violation = dhdt + self.h_alpha * h_t
         barrier_function_violation = F.relu(eps + barrier_function_violation)
-        barrier_loss = 1e1 * barrier_function_violation.mean()
+        barrier_loss = 1e2 * barrier_function_violation.mean()
         barrier_acc = (barrier_function_violation <= eps).sum() / x.shape[0]
 
         loss.append(("Barrier descent loss", barrier_loss))
