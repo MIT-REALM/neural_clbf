@@ -59,14 +59,14 @@ def main(args):
     # Make the random scene
     scene = Scene([])
     scene.add_walls(room_size)
-    # scene.add_random_boxes(
-    #     num_obstacles,
-    #     box_size_range,
-    #     position_range,
-    #     position_range,
-    #     rotation_range,
-    # )
-    scene.add_obstacle(box(-1, -1, 1, 1))
+    scene.add_random_boxes(
+        num_obstacles,
+        box_size_range,
+        position_range,
+        position_range,
+        rotation_range,
+    )
+    # scene.add_obstacle(box(-1, -1, 1, 1))
 
     # (spicy!) and make another random scene for validation
     validation_scene = Scene([])
@@ -152,7 +152,7 @@ def main(args):
         h_hidden_size=48,
         u_hidden_layers=2,
         u_hidden_size=48,
-        h_alpha=0.9,
+        h_alpha=0.5,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=5,
