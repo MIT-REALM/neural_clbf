@@ -38,8 +38,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
     u:
         observations + h -> encoder -> fully-connected layers -> u
 
-    In both of these, we use the same permutation-invariant encoder
-    (inspired by Zengyi's approach to macbf)
+    In both of these, we use a fully-connected encoder
 
     encoder:
         observations -> fully-connected layers -> zero invalid elements -> min_pool -> e
@@ -112,18 +111,18 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # ----------------------------------------------------------------------------
         # Define the encoder network
         # ----------------------------------------------------------------------------
-        self.input_size = self.dynamics_model.obs_dim
+        self.input_size = self.dynamics_model.obs_dim * self.dynamics_model.n_obs
         self.encoder_hidden_layers = encoder_hidden_layers
         self.encoder_hidden_size = encoder_hidden_size
         # We're going to build the network up layer by layer, starting with the input
         self.encoder_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.encoder_layers["input_linear"] = nn.Conv1d(
-            self.input_size, self.encoder_hidden_size, 1  # kernel size = 1
+        self.encoder_layers["input_linear"] = nn.Linear(
+            self.input_size, self.encoder_hidden_size
         )
         self.encoder_layers["input_activation"] = nn.ReLU()
         for i in range(self.encoder_hidden_layers):
-            self.encoder_layers[f"layer_{i}_linear"] = nn.Conv1d(
-                self.encoder_hidden_size, self.encoder_hidden_size, 1  # kernel size = 1
+            self.encoder_layers[f"layer_{i}_linear"] = nn.Linear(
+                self.encoder_hidden_size, self.encoder_hidden_size
             )
             self.encoder_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.encoder_nn = nn.Sequential(self.encoder_layers)
@@ -197,8 +196,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         return self.dynamics_model.get_observations(x)
 
     def encoder(self, o: torch.Tensor):
-        """Encode the observations o to a fixed-size representation via a permutation-
-        invariant encoding
+        """Encode the observations o to a fixed-size representation
 
         args:
             o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
@@ -206,17 +204,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             e: bs x self.encoder_hidden_size encoding of the observations
         """
-        # We run the observations through the encoder network, which uses
-        # convolutional layers with kernel size 1 to implement a fully connected
-        # network that doesn't care what the length of the last dimension of the input
-        # is (the same transformation will be applied to each point).
+        # We run the observations through the encoder network to generate an observation
+        # in the latent space.
         e = self.encoder_nn(o)
-
-        # Then min-pool over the last dimension. We use min instead of max (the more
-        # traditional pooling choice) because the lidar measurements jump to zero on
-        # collisions with something, and that makes the max tend to be discontinuous.
-        # e, _ = e.min(dim=-1)
-        e = e.sum(dim=-1)
 
         return e
 

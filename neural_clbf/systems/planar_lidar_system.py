@@ -186,7 +186,7 @@ class Scene:
             qs = torch.reshape(qs, (1, -1))
 
         # Create the array to store the results, then iterate through each sample point
-        measurements = torch.zeros(qs.shape[0], 4, num_rays).type_as(qs)
+        measurements = torch.zeros(qs.shape[0], 1, num_rays).type_as(qs)
         valid = torch.ones(qs.shape[0], num_rays).type_as(qs)
 
         # Figure out the angles to measure on
@@ -269,30 +269,12 @@ class Scene:
                 )
                 contact_pt_agent = torch.matmul(rotation_mat, contact_offset_world)
 
-                # Now we need to get the velocity, which we can derive by hand
-                theta = q[2]
-                s_theta = torch.sin(theta)
-                c_theta = torch.cos(theta)
-                theta_dot = q[5]
-                vx = q[3]
-                vy = q[4]
-                contact_vx_agent = (
-                    -theta_dot * s_theta * contact_offset_world[0]
-                    - c_theta * vx
-                    - theta_dot * c_theta * contact_offset_world[1]
-                    + s_theta * vy
-                )
-                contact_vy_agent = (
-                    theta_dot * c_theta * contact_offset_world[0]
-                    - s_theta * vx
-                    - theta_dot * s_theta * contact_offset_world[1]
-                    - c_theta * vy
-                )
+                # Now we compute the range. We did all this bruhaha of converting to
+                # agent frame in torch tensors so that we maintain a computation graph
+                # back to state, allowing the control input to influence these values
 
                 # Save the measurement (we've already marked if this point is valid)
-                measurements[q_idx, :2, ray_idx] = contact_pt_agent
-                measurements[q_idx, 2, ray_idx] = contact_vx_agent
-                measurements[q_idx, 3, ray_idx] = contact_vy_agent
+                measurements[q_idx, 0, ray_idx] = contact_pt_agent.norm()
 
         return measurements, valid
 
@@ -382,7 +364,7 @@ class PlanarLidarSystem(ObservableSystem):
 
     @property
     def obs_dim(self) -> int:
-        return 4
+        return 1
 
     def get_observations(self, x: torch.Tensor) -> torch.Tensor:
         """Get the vector of measurements at this point
