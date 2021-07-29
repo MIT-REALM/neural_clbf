@@ -215,7 +215,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Then min-pool over the last dimension. We use min instead of max (the more
         # traditional pooling choice) because the lidar measurements jump to zero on
         # collisions with something, and that makes the max tend to be discontinuous.
-        e, _ = e.min(dim=-1)
+        # e, _ = e.min(dim=-1)
+        e, _ = e.sum(dim=-1)
 
         return e
 
