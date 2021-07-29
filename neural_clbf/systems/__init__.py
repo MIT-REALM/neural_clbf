@@ -22,7 +22,6 @@ __all__ = [
     "STCar",
     "TurtleBot",
     "Segway",
-    "CrazyFlie"
     "LinearSatellite",
     "NonlinearSatellite",
 ]
