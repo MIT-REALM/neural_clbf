@@ -403,10 +403,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         h_tplus1 = self.h(o_tplus1)
 
         # The discrete-time barrier function is h(t+1) - h(t) \leq -alpha h(t)
-        # which reformulate to h(t+1) - (1 - alpha) h(t) \leq 0
-        # First, adjust the convergence rate according to the timestep
-        adjusted_alpha = self.controller_period * self.h_alpha
-        barrier_function_violation = h_tplus1 - (1 - adjusted_alpha) * h_t
+        # which reformulates to h(t+1) - (1 - alpha) h(t) \leq 0
+        # However, the gradient of loss wrt u becomes very small here (since it scales
+        # with the controller period), so approximating the continuous time condition
+        # works a bit better:
+        #       dh/dt \leq -alpha h ---> (h(t+1) - h(t)) / dt \leq -alpha h(t)
+        dhdt = (h_tplus1 - h_t) / self.controller_period
+        barrier_function_violation = dhdt + self.h_alpha * h_t
         barrier_function_violation = F.relu(eps + barrier_function_violation)
         barrier_loss = 1e1 * barrier_function_violation.mean()
         barrier_acc = (barrier_function_violation <= eps).sum() / x.shape[0]
