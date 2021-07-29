@@ -29,9 +29,9 @@ controller_period = 0.1
 start_x = torch.tensor(
     [
         [4.5, 2.5, np.pi / 2],
-        # [-4.5, 2.5, np.pi / 2],
-        # [-4.5, -2.5, -np.pi / 2],
-        # [4.5, -2.5, -np.pi / 2],
+        [-4.5, 2.5, np.pi / 2],
+        [-4.5, -2.5, -np.pi / 2],
+        [4.5, -2.5, -np.pi / 2],
     ]
 )
 simulation_dt = 0.005
@@ -59,14 +59,14 @@ def main(args):
     # Make the random scene
     scene = Scene([])
     scene.add_walls(room_size)
-    scene.add_random_boxes(
-        num_obstacles,
-        box_size_range,
-        position_range,
-        position_range,
-        rotation_range,
-    )
-    # scene.add_obstacle(box(-1, -1, 1, 1))
+    # scene.add_random_boxes(
+    #     num_obstacles,
+    #     box_size_range,
+    #     position_range,
+    #     position_range,
+    #     rotation_range,
+    # )
+    scene.add_obstacle(box(-1, -1, 1, 1))
 
     # (spicy!) and make another random scene for validation
     validation_scene = Scene([])
@@ -122,7 +122,7 @@ def main(args):
     h_contour_experiment = BFContourExperiment(
         "h_Contour",
         domain=[(-5.0, 5.0), (-5.0, 5.0)],
-        n_grid=80,
+        n_grid=70,
         x_axis_index=TurtleBot2D.X,
         y_axis_index=TurtleBot2D.Y,
         x_axis_label="$x$",

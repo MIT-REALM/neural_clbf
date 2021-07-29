@@ -206,7 +206,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """
         # We run the observations through the encoder network to generate an observation
         # in the latent space.
-        e = self.encoder_nn(o)
+        e = self.encoder_nn(o.reshape(-1, self.input_size))
 
         return e
 
