@@ -7,13 +7,7 @@ import numpy as np
 
 from .control_affine_system import ControlAffineSystem
 from neural_clbf.systems.utils import Scenario, lqr
-
-import neural_clbf.setup.commonroad as commonroad_loader  # type: ignore
-from vehiclemodels.parameters_vehicle2 import parameters_vehicle2  # type: ignore
-
-
-# make sure that the import worked
-assert commonroad_loader
+from neural_clbf.systems.car_parameters import VehicleParameters
 
 
 class KSCar(ControlAffineSystem):
@@ -74,7 +68,7 @@ class KSCar(ControlAffineSystem):
             ValueError if nominal_params are not valid for this system
         """
         # Get car parameters
-        self.car_params = parameters_vehicle2()
+        self.car_params = VehicleParameters()
 
         super().__init__(nominal_params, dt, controller_dt)
 
@@ -118,12 +112,12 @@ class KSCar(ControlAffineSystem):
         upper_limit = torch.ones(self.n_dims)
         upper_limit[KSCar.SXE] = 3.0
         upper_limit[KSCar.SYE] = 3.0
-        upper_limit[KSCar.DELTA] = self.car_params.steering.max
+        upper_limit[KSCar.DELTA] = self.car_params.steering_max
         upper_limit[KSCar.VE] = 3.0
         upper_limit[KSCar.PSI_E] = np.pi / 2
 
         lower_limit = -1.0 * upper_limit
-        lower_limit[KSCar.DELTA] = self.car_params.steering.min
+        lower_limit[KSCar.DELTA] = self.car_params.steering_min
 
         return (upper_limit, lower_limit)
 
@@ -136,14 +130,14 @@ class KSCar(ControlAffineSystem):
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = 10 * torch.tensor(
             [
-                5.0,  # self.car_params.steering.v_max,
-                self.car_params.longitudinal.a_max,
+                5.0,  # self.car_params.steering_v_max,
+                self.car_params.longitudinal_a_max,
             ]
         )
         lower_limit = 10 * torch.tensor(
             [
-                -5.0,  # self.car_params.steering.v_min,
-                -self.car_params.longitudinal.a_max,
+                -5.0,  # self.car_params.steering_v_min,
+                -self.car_params.longitudinal_a_max,
             ]
         )
 

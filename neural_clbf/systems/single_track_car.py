@@ -6,13 +6,7 @@ import numpy as np
 
 from .control_affine_system import ControlAffineSystem
 from neural_clbf.systems.utils import Scenario, lqr
-
-import neural_clbf.setup.commonroad as commonroad_loader  # type: ignore
-from vehiclemodels.parameters_vehicle2 import parameters_vehicle2  # type: ignore
-
-
-# make sure that the import worked
-assert commonroad_loader
+from neural_clbf.systems.car_parameters import VehicleParameters
 
 
 class STCar(ControlAffineSystem):
@@ -77,7 +71,7 @@ class STCar(ControlAffineSystem):
             ValueError if nominal_params are not valid for this system
         """
         # Get car parameters
-        self.car_params = parameters_vehicle2()
+        self.car_params = VehicleParameters()
 
         # Then initialize
         super().__init__(nominal_params, dt, controller_dt)
@@ -126,14 +120,14 @@ class STCar(ControlAffineSystem):
         upper_limit = torch.ones(self.n_dims)
         upper_limit[STCar.SXE] = 1.0
         upper_limit[STCar.SYE] = 1.0
-        upper_limit[STCar.DELTA] = self.car_params.steering.max
+        upper_limit[STCar.DELTA] = self.car_params.steering_max
         upper_limit[STCar.VE] = 1.0
         upper_limit[STCar.PSI_E] = np.pi / 2
         upper_limit[STCar.PSI_E_DOT] = np.pi / 2
         upper_limit[STCar.BETA] = np.pi / 3
 
         lower_limit = -1.0 * upper_limit
-        lower_limit[STCar.DELTA] = self.car_params.steering.min
+        lower_limit[STCar.DELTA] = self.car_params.steering_min
 
         return (upper_limit, lower_limit)
 
@@ -146,14 +140,14 @@ class STCar(ControlAffineSystem):
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = 10 * torch.tensor(
             [
-                5.0,  # self.car_params.steering.v_max,
-                self.car_params.longitudinal.a_max,
+                5.0,  # self.car_params.steering_v_max,
+                self.car_params.longitudinal_a_max,
             ]
         )
         lower_limit = 10 * torch.tensor(
             [
-                -5.0,  # self.car_params.steering.v_min,
-                -self.car_params.longitudinal.a_max,
+                -5.0,  # self.car_params.steering_v_min,
+                -self.car_params.longitudinal_a_max,
             ]
         )
 
@@ -278,9 +272,9 @@ class STCar(ControlAffineSystem):
         g = 9.81  # [m/s^2]
 
         # create equivalent bicycle parameters
-        mu = mu_scale * self.car_params.tire.p_dy1
-        C_Sf = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
-        C_Sr = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
+        mu = mu_scale * self.car_params.tire_p_dy1
+        C_Sf = -self.car_params.tire_p_ky1 / self.car_params.tire_p_dy1
+        C_Sr = -self.car_params.tire_p_ky1 / self.car_params.tire_p_dy1
         lf = self.car_params.a
         lr = self.car_params.b
         m = self.car_params.m
@@ -365,9 +359,9 @@ class STCar(ControlAffineSystem):
         delta = x[:, STCar.DELTA]
 
         # create equivalent bicycle parameters
-        mu = mu_scale * self.car_params.tire.p_dy1
-        C_Sf = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
-        C_Sr = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
+        mu = mu_scale * self.car_params.tire_p_dy1
+        C_Sf = -self.car_params.tire_p_ky1 / self.car_params.tire_p_dy1
+        C_Sr = -self.car_params.tire_p_ky1 / self.car_params.tire_p_dy1
         lf = self.car_params.a
         lr = self.car_params.b
         h = self.car_params.h_s
@@ -438,9 +432,9 @@ class STCar(ControlAffineSystem):
         # Compute the LQR gain matrix for the nominal parameters
         # create equivalent bicycle parameters
         g = 9.81  # [m/s^2]
-        mu = self.car_params.tire.p_dy1
-        C_Sf = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
-        C_Sr = -self.car_params.tire.p_ky1 / self.car_params.tire.p_dy1
+        mu = self.car_params.tire_p_dy1
+        C_Sf = -self.car_params.tire_p_ky1 / self.car_params.tire_p_dy1
+        C_Sr = -self.car_params.tire_p_ky1 / self.car_params.tire_p_dy1
         lf = self.car_params.a
         lr = self.car_params.b
         m = self.car_params.m
