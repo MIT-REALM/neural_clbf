@@ -265,8 +265,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_nominal = self.dynamics_model.u_nominal(x)
 
         # Get the decision signal (from 0 to 1 due to sigmoid output)
-        # decision = self.intervention_nn(h)
-        decision = torch.sigmoid(100 * (h + 0.1))
+        decision = self.intervention_nn(h)
+        # decision = torch.sigmoid(100 * (h + 0.1))
 
         # Get the control input from the encoded observations and the barrier function
         # value
@@ -340,7 +340,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #   2.) h < 0 in the safe region
         h_safe = h[safe_mask]
         safe_violation = F.relu(eps + h_safe)
-        safe_h_term = 1e2 * safe_violation.mean()
+        safe_h_term = 1e1 * safe_violation.mean()
         loss.append(("BF safe region term", safe_h_term))
         if accuracy:
             safe_h_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
@@ -349,7 +349,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #   3.) h > 0 in the unsafe region
         h_unsafe = h[unsafe_mask]
         unsafe_violation = F.relu(eps - h_unsafe)
-        unsafe_h_term = 1e2 * unsafe_violation.mean()
+        unsafe_h_term = 1e1 * unsafe_violation.mean()
         loss.append(("BF unsafe region term", unsafe_h_term))
         if accuracy:
             unsafe_h_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
@@ -445,12 +445,14 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """
         loss = []
 
-        # Add a very small term encouraging control inputs that match the nominal
+        # Add a term encouraging control inputs that match the nominal whenever h < 0
         h = self.h(o)
         u_t = self.u_(x, o, h)
         u_nominal = self.dynamics_model.u_nominal(x)
-        u_norm = (u_t - u_nominal).norm()
-        loss.append(("||u - u_nominal||", 1e-3 * u_norm))
+        u_norm = (u_t - u_nominal).norm(dim=-1)
+        h_negative_mask = F.relu(-h)
+        u_norm_loss = (u_norm * h_negative_mask).mean()
+        loss.append(("||u - u_nominal||", u_norm_loss))
 
         return loss
 
