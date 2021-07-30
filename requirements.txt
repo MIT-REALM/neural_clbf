@@ -12,10 +12,13 @@ brunette
 
 # Learning libraries
 # pytorch >= 1.8.0
-torch >= 1.8.0
+torch >= 1.9.0
 pytorch-lightning == 1.3.4
 
 # Optimization
 cvxpy
 cvxpylayers
 gurobipy
+
+# Geometry
+shapely

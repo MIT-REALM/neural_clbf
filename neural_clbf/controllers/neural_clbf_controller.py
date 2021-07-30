@@ -11,6 +11,7 @@ import pytorch_lightning as pl
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
 from neural_clbf.controllers.clf_controller import CLFController
+from neural_clbf.controllers.controller_utils import normalize_with_angles
 from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
 from neural_clbf.experiments import ExperimentSuite
 
@@ -42,8 +43,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         experiment_suite: ExperimentSuite,
         clbf_hidden_layers: int = 2,
         clbf_hidden_size: int = 48,
-        u_nn_hidden_layers: int = 1,
-        u_nn_hidden_size: int = 8,
         clf_lambda: float = 1.0,
         safe_level: float = 1.0,
         clf_relaxation_penalty: float = 50.0,
@@ -61,8 +60,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             experiment_suite: defines the experiments to run during training
             clbf_hidden_layers: number of hidden layers to use for the CLBF network
             clbf_hidden_size: number of neurons per hidden layer in the CLBF network
-            u_nn_hidden_layers: number of hidden layers to use for the proof controller
-            u_nn_hidden_size: number of neurons per hidden layer in the proof controller
             clf_lambda: convergence rate for the CLBF
             safe_level: safety level set value for the CLBF
             clf_relaxation_penalty: the penalty for relaxing CLBF conditions.
@@ -110,8 +107,8 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         self.x_center = (x_max + x_min) / 2.0
         self.x_range = (x_max - x_min) / 2.0
         # Scale to get the input between (-k, k), centered at 0
-        k = 1.0
-        self.x_range = self.x_range / k
+        self.k = 1.0
+        self.x_range = self.x_range / self.k
         # We shouldn't scale or offset any angle dimensions
         self.x_center[self.dynamics_model.angle_dims] = 0.0
         self.x_range[self.dynamics_model.angle_dims] = 1.0
@@ -155,32 +152,6 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
     def test_dataloader(self):
         return self.datamodule.test_dataloader()
 
-    def normalize(self, x: torch.Tensor) -> torch.Tensor:
-        """Normalize the input using the stored center point and range
-
-        args:
-            x: bs x self.dynamics_model.n_dims the points to normalize
-        """
-        return (x - self.x_center.type_as(x)) / self.x_range.type_as(x)
-
-    def normalize_with_angles(self, x: torch.Tensor) -> torch.Tensor:
-        """Normalize the input using the stored center point and range, and replace all
-        angles with the sine and cosine of the angles
-
-        args:
-            x: bs x self.dynamics_model.n_dims the points to normalize
-        """
-        # Scale and offset based on the center and range
-        x = self.normalize(x)
-
-        # Replace all angles with their sine, and append cosine
-        angle_dims = self.dynamics_model.angle_dims
-        angles = x[:, angle_dims]
-        x[:, angle_dims] = torch.sin(angles)
-        x = torch.cat((x, torch.cos(angles)), dim=-1)
-
-        return x
-
     def V_with_jacobian(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Computes the CLBF value and its Jacobian
 
@@ -191,7 +162,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             JV: bs x 1 x self.dynamics_model.n_dims Jacobian of each row of V wrt x
         """
         # Apply the offset and range to normalize about zero
-        x_norm = self.normalize_with_angles(x)
+        x_norm = normalize_with_angles(self.dynamics_model, x)
 
         # Compute the CLBF layer-by-layer, computing the Jacobian alongside
 

@@ -54,6 +54,26 @@ class Experiment(ABC):
         pass
 
     @abstractmethod
+    def plot(
+        self,
+        controller_under_test: "Controller",
+        results_df: pd.DataFrame,
+        display_plots: bool = False,
+    ) -> List[Tuple[str, figure]]:
+        """
+        Plot the results, and return the plot handles. Optionally
+        display the plots.
+
+        args:
+            controller_under_test: the controller with which to run the experiment
+            results_df: a DataFrame of results, as returned by `self.run`
+            display_plots: defaults to False. If True, display the plots (blocks until
+                           the user responds).
+        returns: a list of tuples containing the name of each figure and the figure
+                 object.
+        """
+        pass
+
     def run_and_plot(
         self, controller_under_test: "Controller", display_plots: bool = False
     ) -> List[Tuple[str, figure]]:
@@ -68,7 +88,8 @@ class Experiment(ABC):
         returns: a list of tuples containing the name of each figure and the figure
                  object.
         """
-        pass
+        results_df = self.run(controller_under_test)
+        return self.plot(controller_under_test, results_df, display_plots)
 
     def run_and_save_to_csv(self, controller_under_test: "Controller", save_dir: str):
         """
@@ -88,4 +109,4 @@ class Experiment(ABC):
 
         # Get the results and save
         results = self.run(controller_under_test)
-        results.to_csv(filename, results, index=False)
+        results.to_csv(filename, index=False)

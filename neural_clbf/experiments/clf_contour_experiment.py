@@ -151,23 +151,23 @@ class CLFContourExperiment(Experiment):
 
         return results_df
 
-    def run_and_plot(
-        self, controller_under_test: "Controller", display_plots: bool = False
+    def plot(
+        self,
+        controller_under_test: "Controller",
+        results_df: pd.DataFrame,
+        display_plots: bool = False,
     ) -> List[Tuple[str, figure]]:
         """
-        Run the experiment, plot the results, and return the plot handles. Optionally
+        Plot the results, and return the plot handles. Optionally
         display the plots.
 
         args:
             controller_under_test: the controller with which to run the experiment
             display_plots: defaults to False. If True, display the plots (blocks until
-                           the user responds) and do not return any figure handles.
+                           the user responds).
         returns: a list of tuples containing the name of each figure and the figure
-                 object. This list will be empty if display_plots is True
+                 object.
         """
-        # Get the results
-        results_df = self.run(controller_under_test)
-
         # Set the color scheme
         sns.set_theme(context="talk", style="white")
 
@@ -184,18 +184,19 @@ class CLFContourExperiment(Experiment):
         plt.colorbar(contours, ax=ax, orientation="vertical")
 
         # Also overlay the relaxation region
-        ax.plot([], [], c="silver", label="QP relaxation")
-        contours = ax.tricontour(
-            results_df[self.x_axis_label],
-            results_df[self.y_axis_label],
-            results_df["QP relaxation"],
-            colors=["silver"],
-            levels=[1e-5],
-        )
+        if results_df["QP relaxation"].max() > 1e-5:
+            ax.plot([], [], c="silver", label="QP relaxation")
+            contours = ax.tricontour(
+                results_df[self.x_axis_label],
+                results_df[self.y_axis_label],
+                results_df["QP relaxation"],
+                colors=["silver"],
+                levels=[1e-5],
+            )
 
         # And the safe/unsafe regions (if specified)
         if self.plot_unsafe_region:
-            ax.plot([], [], c="green", label="Safe/Unsafe Region")
+            ax.plot([], [], c="green", label="Safe Region")
             ax.tricontour(
                 results_df[self.x_axis_label],
                 results_df[self.y_axis_label],
@@ -203,22 +204,32 @@ class CLFContourExperiment(Experiment):
                 colors=["green"],
                 levels=[0.5],
             )
+            ax.plot([], [], c="magenta", label="Unsafe Region")
             ax.tricontour(
                 results_df[self.x_axis_label],
                 results_df[self.y_axis_label],
                 results_df["Unsafe region"],
-                colors=["green"],
+                colors=["magenta"],
                 levels=[0.5],
             )
 
             ax.plot([], [], c="blue", label="V(x) = c")
-            ax.tricontour(
-                results_df[self.x_axis_label],
-                results_df[self.y_axis_label],
-                results_df["V"],
-                colors=["blue"],
-                levels=[controller_under_test.safe_level],  # type: ignore
-            )
+            if hasattr(controller_under_test, "safe_level"):
+                ax.tricontour(
+                    results_df[self.x_axis_label],
+                    results_df[self.y_axis_label],
+                    results_df["V"],
+                    colors=["blue"],
+                    levels=[controller_under_test.safe_level],  # type: ignore
+                )
+            else:
+                ax.tricontour(
+                    results_df[self.x_axis_label],
+                    results_df[self.y_axis_label],
+                    results_df["V"],
+                    colors=["blue"],
+                    levels=[0.0],
+                )
 
         # Make the legend
         ax.legend(
@@ -226,8 +237,10 @@ class CLFContourExperiment(Experiment):
             loc="lower left",
             mode="expand",
             borderaxespad=0,
-            ncol=3,
+            ncol=4,
         )
+        ax.set_xlabel(self.x_axis_label)
+        ax.set_ylabel(self.y_axis_label)
 
         fig_handle = ("V Contour", fig)
 

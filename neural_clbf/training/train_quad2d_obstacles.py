@@ -65,7 +65,7 @@ def main(args):
 
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
-        "V Contour",
+        "V_Contour",
         domain=[(-1.0, 1.0), (-0.5, 1.0)],
         n_grid=15,
         x_axis_index=Quad2D.PX,
@@ -105,8 +105,6 @@ def main(args):
         experiment_suite,
         clbf_hidden_layers=3,
         clbf_hidden_size=32,
-        u_nn_hidden_layers=3,
-        u_nn_hidden_size=32,
         controller_period=controller_period,
         clf_relaxation_penalty=50.0,
         epochs_per_episode=1000,

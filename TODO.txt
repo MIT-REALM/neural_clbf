@@ -1,3 +1,5 @@
++ Try some training!
++ Make errors on experiments more interpretable
 
 + Rename package to something more general.
     + Neural Control Toolkit.
