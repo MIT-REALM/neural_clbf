@@ -243,6 +243,6 @@ class TurtleBot(ControlAffineSystem):
         u = u_nominal + self.u_eq.type_as(x)
         # Clamp given the control limits
         upper_u_lim, lower_u_lim = self.control_limits
-        u = torch.clamp(u, min=lower_u_lim[0].item(), max=upper_u_lim[0].item())
+        u = torch.clamp(u,upper_u_lim, lower_u_lim)
 
         return u
