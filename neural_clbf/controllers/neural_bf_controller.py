@@ -118,12 +118,20 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # We're going to build the network up layer by layer, starting with the input
         self.encoder_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.encoder_layers["input_linear"] = nn.Conv1d(
-            self.input_size, self.encoder_hidden_size, 1  # kernel size = 1
+            self.input_size,
+            self.encoder_hidden_size,
+            kernel_size=3,
+            padding=1,
+            padding_mode="circular",
         )
         self.encoder_layers["input_activation"] = nn.ReLU()
         for i in range(self.encoder_hidden_layers):
             self.encoder_layers[f"layer_{i}_linear"] = nn.Conv1d(
-                self.encoder_hidden_size, self.encoder_hidden_size, 1  # kernel size = 1
+                self.encoder_hidden_size,
+                self.encoder_hidden_size,
+                kernel_size=3,
+                padding=1,
+                padding_mode="circular",
             )
             self.encoder_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.encoder_nn = nn.Sequential(self.encoder_layers)
@@ -215,8 +223,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Then min-pool over the last dimension. We use min instead of max (the more
         # traditional pooling choice) because the lidar measurements jump to zero on
         # collisions with something, and that makes the max tend to be discontinuous.
-        # e, _ = e.min(dim=-1)
-        e = e.sum(dim=-1)
+        e, _ = e.min(dim=-1)
 
         return e
 
@@ -332,7 +339,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
         """
-        eps = 0.2
+        eps = 0.1
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
 
@@ -341,7 +348,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #   2.) h < 0 in the safe region
         h_safe = h[safe_mask]
         safe_violation = F.relu(eps + h_safe)
-        safe_h_term = 1e1 * safe_violation.mean()
+        safe_h_term = 1e2 * safe_violation.mean()
         loss.append(("BF safe region term", safe_h_term))
         if accuracy:
             safe_h_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
@@ -350,7 +357,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #   3.) h > 0 in the unsafe region
         h_unsafe = h[unsafe_mask]
         unsafe_violation = F.relu(eps - h_unsafe)
-        unsafe_h_term = 1e1 * unsafe_violation.mean()
+        unsafe_h_term = 1e2 * unsafe_violation.mean()
         loss.append(("BF unsafe region term", unsafe_h_term))
         if accuracy:
             unsafe_h_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
