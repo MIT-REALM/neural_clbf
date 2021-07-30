@@ -236,6 +236,7 @@ class RolloutStateSpaceExperiment(Experiment):
             style="Parameters",
             hue="Simulation",
             data=results_df,
+            markers=True,
         )
 
         # Remove the legend -- too much clutter
