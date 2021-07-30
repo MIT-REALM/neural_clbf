@@ -24,7 +24,7 @@ from neural_clbf.training.utils import current_git_hash
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 64
-controller_period = 0.5
+controller_period = 0.2
 
 start_x = torch.tensor(
     [
@@ -110,9 +110,12 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
+        # trajectories_per_episode=10,
+        # trajectory_length=100,
+        # fixed_samples=1000,
         trajectories_per_episode=10,
-        trajectory_length=100,
-        fixed_samples=1000,
+        trajectory_length=1,
+        fixed_samples=10,
         max_points=4000,
         val_split=0.1,
         batch_size=batch_size,
