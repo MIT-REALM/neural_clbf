@@ -34,7 +34,7 @@ start_x = torch.tensor(
         [4.5, -2.5, -np.pi / 2],
     ]
 )
-simulation_dt = 0.005
+simulation_dt = 0.1
 
 # Scene parameters
 room_size = 10.0
@@ -170,7 +170,7 @@ def main(args):
         check_val_every_n_epoch=1,
         stochastic_weight_avg=True,
         track_grad_norm=2,
-        max_epochs=20,
+        max_epochs=1,
     )
 
     # Train
