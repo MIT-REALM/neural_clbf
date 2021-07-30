@@ -29,9 +29,9 @@ controller_period = 0.1
 start_x = torch.tensor(
     [
         [4.5, 2.5, np.pi / 2],
-        # [-4.5, 2.5, np.pi / 2],
-        # [-4.5, -2.5, -np.pi / 2],
-        # [4.5, -2.5, -np.pi / 2],
+        [-4.5, 2.5, np.pi / 2],
+        [-4.5, -2.5, -np.pi / 2],
+        [4.5, -2.5, -np.pi / 2],
     ]
 )
 simulation_dt = 0.005
@@ -168,7 +168,7 @@ def main(args):
         logger=tb_logger,
         reload_dataloaders_every_epoch=True,
         check_val_every_n_epoch=1,
-        # stochastic_weight_avg=True,
+        stochastic_weight_avg=True,
         track_grad_norm=2,
         max_epochs=20,
     )
