@@ -14,6 +14,7 @@ from neural_clbf.experiments import (
     ExperimentSuite,
     CLFContourExperiment,
     RolloutTimeSeriesExperiment,
+    RolloutStateSpaceExperiment,
 )
 from neural_clbf.systems import TurtleBot
 from neural_clbf.training.utils import current_git_hash
@@ -78,8 +79,8 @@ def main(args):
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
-    rollout_experiment = RolloutTimeSeriesExperiment(
-        "Rollout",
+    rollout_time_series_experiment = RolloutTimeSeriesExperiment(
+        "Rollout Time Series",
         start_x,
         plot_x_indices=[TurtleBot.X, TurtleBot.Y],
         plot_x_labels=["$x$", "$y$"],
@@ -88,8 +89,24 @@ def main(args):
         t_sim=6.0,
         n_sims_per_start=5,
     )
-    experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
-
+    rollout_state_space_experiment = RolloutStateSpaceExperiment(
+        "Rollout State Space",
+        start_x,
+        plot_x_index=[TurtleBot.X],
+        plot_x_label=["$x$"],
+        plot_y_index=[TurtleBot.Y],
+        plot_y_label="$y$",
+        scenarios=scenarios,
+        n_sims_per_start=5,
+        t_sim=6.0,
+    )
+    experiment_suite = ExperimentSuite(
+        [
+            V_contour_experiment,
+            rollout_time_series_experiment,
+            rollout_state_space_experiment,
+        ]
+    )
     # Initialize the controller
     clbf_controller = NeuralCLBFController(
         dynamics_model,
@@ -114,9 +131,7 @@ def main(args):
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, 
-        logger=tb_logger, 
-        reload_dataloaders_every_epoch=True
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True
     )
 
     # Train

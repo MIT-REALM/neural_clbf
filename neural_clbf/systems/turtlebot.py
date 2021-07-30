@@ -234,7 +234,7 @@ class TurtleBot(ControlAffineSystem):
         # omega = -(x + y theta)
         self.P = torch.eye(3, 3)
         self.K = torch.ones(self.n_controls, self.n_dims)
-        
+
         K = self.K.type_as(x)
         goal = self.goal_point.squeeze().type_as(x)
         u_nominal = -(K @ (x - goal).T).T
