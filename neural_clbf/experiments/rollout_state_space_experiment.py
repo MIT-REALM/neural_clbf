@@ -147,7 +147,7 @@ class RolloutStateSpaceExperiment(Experiment):
 
             # Log the current state and control for each simulation
             for sim_index in range(n_sims):
-                log_packet = {"t": tstep * delta_t, "Simulation": sim_index}
+                log_packet = {"t": tstep * delta_t, "Simulation": str(sim_index)}
 
                 # Include the parameters
                 param_string = ""
@@ -181,7 +181,6 @@ class RolloutStateSpaceExperiment(Experiment):
                 )
                 x_current[i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
-        results_df = results_df.set_index("t")
         return results_df
 
     def plot(
@@ -253,7 +252,6 @@ class RolloutStateSpaceExperiment(Experiment):
                 style="Parameters",
                 hue="Simulation",
                 data=results_df,
-                markers=True,
             )
             h_ax.set_ylabel("$h$")
             h_ax.set_xlabel("t")
@@ -261,7 +259,25 @@ class RolloutStateSpaceExperiment(Experiment):
             h_ax.legend([], [], frameon=False)
 
             # Plot a reference line at h = 0
-            h_ax.plot([0, results_df.index.max()], [0, 0], color="k")
+            h_ax.plot([0, results_df["t"].max()], [0, 0], color="k")
+
+            # Also plot the derivatives on a second y axis
+            h_ax_right = h_ax.twinx()
+
+            # Get the derivatives for each simulation
+            for sim_index in results_df["Simulation"].unique():
+                sim_mask = results_df["Simulation"] == sim_index
+                delta_h = results_df[sim_mask]["h"].diff()[1:]
+                dhdt = delta_h.to_numpy() / controller_under_test.dynamics_model.dt
+                alpha = controller_under_test.h_alpha  # type: ignore
+                h_violation = dhdt - alpha * results_df[sim_mask]["h"][:-1].to_numpy()
+
+                h_ax_right.plot(
+                    results_df[sim_mask]["t"][:-1].to_numpy(),
+                    h_violation,
+                    linestyle=":",
+                )
+                h_ax_right.set_ylabel("$h$ violation")
 
         # Plot the lyapunov function if applicable
         if "V" in results_df:
@@ -272,7 +288,6 @@ class RolloutStateSpaceExperiment(Experiment):
                 style="Parameters",
                 hue="Simulation",
                 data=results_df,
-                markers=True,
             )
             V_ax.set_ylabel("$V$")
             V_ax.set_xlabel("t")

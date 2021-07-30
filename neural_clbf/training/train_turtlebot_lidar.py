@@ -24,7 +24,7 @@ from neural_clbf.training.utils import current_git_hash
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-batch_size = 256
+batch_size = 1024
 controller_period = 0.1
 
 start_x = torch.tensor(
@@ -171,7 +171,7 @@ def main(args):
         check_val_every_n_epoch=1,
         stochastic_weight_avg=True,
         track_grad_norm=2,
-        max_epochs=20,
+        max_epochs=200,
     )
 
     # Train
