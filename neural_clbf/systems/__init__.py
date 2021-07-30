@@ -1,6 +1,8 @@
 from warnings import warn
 
 from .control_affine_system import ControlAffineSystem
+from .observable_system import ObservableSystem
+from .planar_lidar_system import PlanarLidarSystem
 from .quad2d import Quad2D
 from .quad3d import Quad3D
 from .neural_lander import NeuralLander
@@ -10,10 +12,12 @@ from .single_track_car import STCar
 from .segway import Segway
 from .turtlebot import TurtleBot
 from .linear_satellite import LinearSatellite
-from .nonlinear_satellite import NonlinearSatellite
+from .single_integrator_2d import SingleIntegrator2D
 
 __all__ = [
     "ControlAffineSystem",
+    "ObservableSystem",
+    "PlanarLidarSystem",
     "InvertedPendulum",
     "Quad2D",
     "Quad3D",
@@ -23,7 +27,7 @@ __all__ = [
     "TurtleBot",
     "Segway",
     "LinearSatellite",
-    "NonlinearSatellite",
+    "SingleIntegrator2D",
 ]
 
 try:

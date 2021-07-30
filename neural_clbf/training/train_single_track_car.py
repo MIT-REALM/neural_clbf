@@ -77,7 +77,7 @@ def main(args):
         scenarios.append(s)
 
     V_contour_experiment = CLFContourExperiment(
-        "V Contour",
+        "V_Contour",
         domain=[(-1.0, 1.0), (-1.0, 1.0)],
         n_grid=50,
         x_axis_index=STCar.SXE,
@@ -99,8 +99,6 @@ def main(args):
         experiment_suite,
         clbf_hidden_layers=2,
         clbf_hidden_size=64,
-        u_nn_hidden_layers=2,
-        u_nn_hidden_size=64,
         clf_lambda=1.0,
         safe_level=1.0,
         controller_period=controller_period,

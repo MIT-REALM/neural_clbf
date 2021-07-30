@@ -133,7 +133,7 @@ class RolloutStateSpaceExperiment(Experiment):
 
             # Log the current state and control for each simulation
             for sim_index in range(n_sims):
-                log_packet = {"t": tstep * delta_t}
+                log_packet = {"t": tstep * delta_t, "Simulation": sim_index}
 
                 # Include the parameters
                 param_string = ""
@@ -163,22 +163,23 @@ class RolloutStateSpaceExperiment(Experiment):
         results_df = results_df.set_index("t")
         return results_df
 
-    def run_and_plot(
-        self, controller_under_test: "Controller", display_plots: bool = False
+    def plot(
+        self,
+        controller_under_test: "Controller",
+        results_df: pd.DataFrame,
+        display_plots: bool = False,
     ) -> List[Tuple[str, figure]]:
         """
-        Run the experiment, plot the results, and return the plot handles. Optionally
+        Plot the results, and return the plot handles. Optionally
         display the plots.
 
         args:
             controller_under_test: the controller with which to run the experiment
             display_plots: defaults to False. If True, display the plots (blocks until
-                           the user responds) and do not return any figure handles.
+                           the user responds).
         returns: a list of tuples containing the name of each figure and the figure
-                 object. This list will be empty if display_plots is True
+                 object.
         """
-        # Get the results
-        results_df = self.run(controller_under_test)
 
         # Set the color scheme
         sns.set_theme(context="talk", style="white")
@@ -190,9 +191,13 @@ class RolloutStateSpaceExperiment(Experiment):
             ax=ax,
             x=self.plot_x_label,
             y=self.plot_y_label,
-            hue="Parameters",
+            style="Parameters",
+            hue="Simulation",
             data=results_df,
         )
+
+        # Plot the environment
+        controller_under_test.dynamics_model.plot_environment(ax)
 
         fig_handle = ("Rollout (state space)", fig)
 
