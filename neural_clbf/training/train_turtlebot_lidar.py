@@ -168,7 +168,7 @@ def main(args):
         logger=tb_logger,
         reload_dataloaders_every_epoch=True,
         check_val_every_n_epoch=1,
-        stochastic_weight_avg=True,
+        # stochastic_weight_avg=True,
         track_grad_norm=2,
         max_epochs=20,
     )
