@@ -139,7 +139,8 @@ def main(args):
         n_sims_per_start=1,
         t_sim=5.0,
     )
-    experiment_suite = ExperimentSuite([h_contour_experiment, rollout_experiment])
+    # experiment_suite = ExperimentSuite([h_contour_experiment, rollout_experiment])
+    experiment_suite = ExperimentSuite([rollout_experiment])
 
     # Initialize the controller
     bf_controller = NeuralObsBFController(
