@@ -635,7 +635,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             self.datamodule.add_data(self.simulator_fn)
 
     def configure_optimizers(self):
-        opt = torch.optim.SGD(
+        opt = torch.optim.Adam(
             self.parameters(),
             lr=self.primal_learning_rate,
         )
