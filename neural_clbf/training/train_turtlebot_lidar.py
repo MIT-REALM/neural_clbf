@@ -34,7 +34,7 @@ start_x = torch.tensor(
         [4.5, -2.5, -np.pi / 2],
     ]
 )
-simulation_dt = 0.1
+simulation_dt = 0.001
 
 # Scene parameters
 room_size = 10.0
