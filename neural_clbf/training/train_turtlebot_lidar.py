@@ -24,7 +24,7 @@ from neural_clbf.training.utils import current_git_hash
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 64
-controller_period = 0.2
+controller_period = 0.1
 
 start_x = torch.tensor(
     [
@@ -34,7 +34,7 @@ start_x = torch.tensor(
         [4.5, -2.5, -np.pi / 2],
     ]
 )
-simulation_dt = 0.001
+simulation_dt = 0.1
 
 # Scene parameters
 room_size = 10.0
