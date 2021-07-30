@@ -5,7 +5,8 @@ import torch.multiprocessing
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import numpy as np
-from shapely.geometry import box
+
+# from shapely.geometry import box
 
 from neural_clbf.controllers import NeuralObsBFController
 from neural_clbf.datamodules.episodic_datamodule import (
@@ -110,13 +111,10 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        # trajectories_per_episode=10,
-        # trajectory_length=100,
-        # fixed_samples=1000,
-        trajectories_per_episode=10,
-        trajectory_length=1,
-        fixed_samples=10,
-        max_points=4000,
+        trajectories_per_episode=100,
+        trajectory_length=100,
+        fixed_samples=10000,
+        max_points=20000,
         val_split=0.1,
         batch_size=batch_size,
     )
@@ -142,8 +140,7 @@ def main(args):
         n_sims_per_start=1,
         t_sim=5.0,
     )
-    # experiment_suite = ExperimentSuite([h_contour_experiment, rollout_experiment])
-    experiment_suite = ExperimentSuite([rollout_experiment])
+    experiment_suite = ExperimentSuite([h_contour_experiment, rollout_experiment])
 
     # Initialize the controller
     bf_controller = NeuralObsBFController(
@@ -174,7 +171,7 @@ def main(args):
         check_val_every_n_epoch=1,
         stochastic_weight_avg=True,
         track_grad_norm=2,
-        max_epochs=1,
+        max_epochs=20,
     )
 
     # Train
