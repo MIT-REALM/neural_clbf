@@ -293,7 +293,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u = (1 - decision) * u_nominal + decision * u_learned
 
         # Then clamp the control input based on the specified limits
-        u_upper, u_lower = self.dynamics_model.control_limits
         u = torch.clamp(u, u_lower, u_upper)
 
         return u
@@ -451,15 +450,55 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             loss: a list of tuples containing ("category_name", loss_value).
         """
         loss = []
+        eps = 0.1
 
         # Add a term encouraging control inputs that match the nominal whenever h < 0
         h = self.h(o)
         u_t = self.u_(x, o, h)
         u_nominal = self.dynamics_model.u_nominal(x)
         u_norm = (u_t - u_nominal).norm(dim=-1)
-        h_negative_mask = h < 0
-        u_norm_loss = 0.1 * (u_norm * h_negative_mask).mean()
+        h_negative_mask = h < -eps
+        u_norm_loss = 1e-2 * (u_norm * h_negative_mask).mean()
         loss.append(("||u - u_nominal||", u_norm_loss))
+
+        return loss
+
+    def debug_loss(
+        self,
+        x: torch.Tensor,
+        o: torch.Tensor,
+        goal_mask: torch.Tensor,
+        safe_mask: torch.Tensor,
+        unsafe_mask: torch.Tensor,
+    ) -> List[Tuple[str, torch.Tensor]]:
+        """
+        Evaluate a debugging loss
+
+        args:
+            x: the points at which to evaluate the loss,
+            o: the observations at points x
+            goal_mask: the points in x marked as part of the goal
+            safe_mask: the points in x marked safe
+            unsafe_mask: the points in x marked unsafe
+            accuracy: if True, return the accuracy (from 0 to 1) as well as the losses
+        returns:
+            loss: a list of tuples containing ("category_name", loss_value).
+        """
+        loss = []
+
+        # This is a dummy loss testing backpropagation through forward simulation
+
+        # Get the barrier function at this current state
+        h_t = self.h(o)
+
+        # Get the control input
+        u_t = self.u_(x, o, h_t)
+
+        # Propagate the dynamics forward via a zero-order hold for one control period
+        x_tplus1 = self.dynamics_model.zero_order_hold(x, u_t, self.controller_period)
+        o_tplus1 = self.get_observations(x_tplus1)
+
+        loss.append(("Debug loss", o_tplus1.norm()))
 
         return loss
 

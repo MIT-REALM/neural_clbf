@@ -31,11 +31,11 @@ start_x = torch.tensor(
     [
         [4.5, 2.5, np.pi / 2],
         [-4.5, 2.5, np.pi / 2],
-        [-4.5, -2.5, -np.pi / 2],
-        [4.5, -2.5, -np.pi / 2],
+        # [-4.5, -2.5, -np.pi / 2],
+        # [4.5, -2.5, -np.pi / 2],
     ]
 )
-simulation_dt = 0.1
+simulation_dt = 0.001
 
 # Scene parameters
 room_size = 10.0
@@ -111,9 +111,12 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
+        # trajectories_per_episode=100,
+        # trajectory_length=100,
+        # fixed_samples=10000,
+        trajectories_per_episode=10,
         trajectory_length=100,
-        fixed_samples=10000,
+        fixed_samples=1000,
         max_points=20000,
         val_split=0.1,
         batch_size=batch_size,
