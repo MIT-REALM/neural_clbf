@@ -390,7 +390,7 @@ class ControlAffineSystem(ABC):
             x_next: bs x self.n_dims tensor of next states
         """
         num_steps = int(controller_dt / self.dt)
-        for tstep in range(1, num_steps):
+        for tstep in range(0, num_steps):
             # Get the derivatives for this control input
             xdot = self.closed_loop_dynamics(x, u, params)
 
