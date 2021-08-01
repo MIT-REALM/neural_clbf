@@ -278,6 +278,7 @@ class RolloutStateSpaceExperiment(Experiment):
                     linestyle=":",
                 )
                 h_ax_right.set_ylabel("$h$ violation")
+                h_ax_right.set_ylim(-1.0, 1.0)
 
         # Plot the lyapunov function if applicable
         if "V" in results_df:
