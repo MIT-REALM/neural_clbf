@@ -156,7 +156,7 @@ class Scene:
         field_of_view: Tuple[float, float] = (-np.pi / 2, np.pi / 2),
         max_distance: float = 100,
         noise: float = 0.0,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         """Return a simulated LIDAR measurement of the scene, taken from the specified pose
 
         args:
@@ -170,14 +170,13 @@ class Scene:
             noise: if non-zero, apply white Gaussian noise with this standard deviation
                    and zero mean to all measurements.
         returns:
-            an N x num_rays x 4 tensor containing the measurements along each
+            an N x 4 x num_rays tensor containing the measurements along each
                 ray. Rays are ordered in the counter-clockwise direction, and each
                 measurement contains the (x, y) location of the contact point and the
                 velocity (xdot, ydot) (as might be obtained by subtracting the last
                 measurement). These measurements will be in the agent frame. If no
                 contact point is found within max_distance, then a 0.0 will be placed
                 in the corresponding element of the second return tensor (a 1 otherwise)
-            an N x num_rays tensor indicating which data points are valid
         """
         # Sanity check on inputs
         assert field_of_view[1] >= field_of_view[0], "Field of view must be (min, max)"
@@ -187,7 +186,6 @@ class Scene:
 
         # Create the array to store the results, then iterate through each sample point
         measurements = torch.zeros(qs.shape[0], 4, num_rays).type_as(qs)
-        valid = torch.ones(qs.shape[0], num_rays).type_as(qs)
 
         # Figure out the angles to measure on
         angles = torch.linspace(field_of_view[0], field_of_view[1], num_rays)
@@ -243,10 +241,8 @@ class Scene:
                     )
                     contact_pt = intersections[closest_idx]  # type: ignore
                 else:
-                    # If no intersection was found, mark the corresponding element
-                    # of the valid mask tensor, and set the contact point as the
+                    # If no intersection was found, set the contact point as the
                     # end point of the ray
-                    valid[q_idx, ray_idx] = 0.0
                     contact_pt = Point(*ray_end)
 
                 # Get the coordinates of that point
@@ -289,12 +285,12 @@ class Scene:
                     - c_theta * vy
                 )
 
-                # Save the measurement (we've already marked if this point is valid)
+                # Save the measurement
                 measurements[q_idx, :2, ray_idx] = contact_pt_agent
                 measurements[q_idx, 2, ray_idx] = contact_vx_agent
                 measurements[q_idx, 3, ray_idx] = contact_vy_agent
 
-        return measurements, valid
+        return measurements
 
     def plot(self, ax: Axes):
         """Plot the given scene
@@ -395,7 +391,7 @@ class PlanarLidarSystem(ObservableSystem):
         """
         # Get the lidar measurements from the scene
         qs = self.planar_configuration(x)
-        measurements, _ = self.scene.lidar_measurement(
+        measurements = self.scene.lidar_measurement(
             qs,
             num_rays=self.num_rays,
             field_of_view=self.field_of_view,
