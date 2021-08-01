@@ -378,7 +378,10 @@ class PlanarLidarSystem(ObservableSystem):
 
     @property
     def obs_dim(self) -> int:
-        return 4
+        """Measures (x, y) contact point, velocity of contact point in agent frame,
+        and distance to contact point
+        """
+        return 5
 
     def get_observations(self, x: torch.Tensor) -> torch.Tensor:
         """Get the vector of measurements at this point
@@ -398,6 +401,11 @@ class PlanarLidarSystem(ObservableSystem):
             max_distance=self.max_distance,
             noise=self.noise,
         )
+
+        # Add distance as a fifth measurement (subtract 0.5 to get distance to edge
+        # of safe zone)
+        distance = measurements[:, :2, :].norm(dim=1).unsqueeze(1) - 0.5
+        measurements = torch.cat((measurements, distance), dim=1)
 
         return measurements
 

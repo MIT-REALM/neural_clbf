@@ -32,11 +32,11 @@ start_x = torch.tensor(
     [
         [4.5, 2.5, np.pi / 2],
         [-4.5, 2.5, np.pi / 2],
-        # [-4.5, -2.5, -np.pi / 2],
-        # [4.5, -2.5, -np.pi / 2],
+        [-4.5, -2.5, -np.pi / 2],
+        [4.5, -2.5, -np.pi / 2],
     ]
 )
-simulation_dt = 0.001
+simulation_dt = 0.01
 
 # Scene parameters
 room_size = 10.0
@@ -112,13 +112,14 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
-        trajectory_length=100,
-        fixed_samples=10000,
-        # trajectories_per_episode=10,
+        # trajectories_per_episode=100,
         # trajectory_length=100,
-        # fixed_samples=1000,
-        max_points=20000,
+        # fixed_samples=10000,
+        # max_points=20000,
+        trajectories_per_episode=10,
+        trajectory_length=1,
+        fixed_samples=10,
+        max_points=2000,
         val_split=0.1,
         batch_size=batch_size,
     )
@@ -127,7 +128,7 @@ def main(args):
     h_contour_experiment = BFContourExperiment(
         "h_Contour",
         domain=[(-5.0, 5.0), (-5.0, 5.0)],
-        n_grid=80,
+        n_grid=60,
         x_axis_index=TurtleBot2D.X,
         y_axis_index=TurtleBot2D.Y,
         x_axis_label="$x$",
@@ -151,16 +152,16 @@ def main(args):
         dynamics_model,
         data_module,
         experiment_suite=experiment_suite,
-        encoder_hidden_layers=1,
-        encoder_hidden_size=48,
-        h_hidden_layers=1,
-        h_hidden_size=48,
-        u_hidden_layers=1,
-        u_hidden_size=48,
-        h_alpha=0.5,
+        encoder_hidden_layers=3,
+        encoder_hidden_size=32,
+        h_hidden_layers=3,
+        h_hidden_size=32,
+        u_hidden_layers=3,
+        u_hidden_size=32,
+        h_alpha=0.1,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
-        epochs_per_episode=5,
+        epochs_per_episode=10,
     )
 
     # Initialize the logger and trainer
@@ -174,8 +175,8 @@ def main(args):
         reload_dataloaders_every_epoch=True,
         check_val_every_n_epoch=1,
         stochastic_weight_avg=True,
-        track_grad_norm=2,
-        max_epochs=200,
+        # track_grad_norm=2,
+        max_epochs=400,
     )
 
     # Train
