@@ -36,13 +36,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         observations -> encoder -> fully-connected layers -> h
 
     u:
-        observations + h + u_nominal -> encoder -> fully-connected layers -> u
+        observations + h + state -> encoder -> fully-connected layers -> u
 
     In both of these, we use the same permutation-invariant encoder
     (inspired by Zengyi's approach to macbf)
 
     encoder:
-        observations -> fully-connected layers -> zero invalid elements -> min_pool -> e
+        observations -> fully-connected layers -> zero invalid elements -> max_pool -> e
     """
 
     def __init__(
@@ -120,18 +120,14 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.encoder_layers["input_linear"] = nn.Conv1d(
             self.input_size,
             self.encoder_hidden_size,
-            kernel_size=3,
-            padding=1,
-            padding_mode="circular",
+            kernel_size=1,
         )
         self.encoder_layers["input_activation"] = nn.ReLU()
         for i in range(self.encoder_hidden_layers):
             self.encoder_layers[f"layer_{i}_linear"] = nn.Conv1d(
                 self.encoder_hidden_size,
                 self.encoder_hidden_size,
-                kernel_size=3,
-                padding=1,
-                padding_mode="circular",
+                kernel_size=1,
             )
             self.encoder_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.encoder_nn = nn.Sequential(self.encoder_layers)
@@ -160,13 +156,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # ----------------------------------------------------------------------------
         self.u_hidden_layers = u_hidden_layers
         self.u_hidden_size = u_hidden_size
-        # Inputs are the encoded observations + 1 for the barrier function + the nominal
-        # control signal
-        num_u_inputs = self.encoder_hidden_size + 1 + self.dynamics_model.n_controls
+        # Inputs are the encoded observations + 1 for the barrier function + state
+        num_u_inputs = self.encoder_hidden_size + 1 + self.dynamics_model.n_dims
         # We're going to build the network up layer by layer, starting with the input
         self.u_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.u_layers["input_linear"] = nn.Linear(
-            num_u_inputs,  # add one for the barrier function input
+            num_u_inputs,
             self.u_hidden_size,
         )
         self.u_layers["input_activation"] = nn.ReLU()
@@ -181,6 +176,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Use a sigmoid on the output to respect actuation bounds
         self.u_layers["output_activation"] = nn.Sigmoid()
         self.u_nn = nn.Sequential(self.u_layers)
+
+        # Associated with u, we also have the network that decides when to override
+        # the nominal controller, based on a simple linear+sigmoid decision rule
+        self.intervention_layers: OrderedDict[str, nn.Module] = OrderedDict()
+        self.intervention_layers["linear"] = nn.Linear(1, 1)
+        self.intervention_layers["activation"] = nn.Sigmoid()
+        self.intervention_nn = nn.Sequential(self.intervention_layers)
 
     def prepare_data(self):
         return self.datamodule.prepare_data()
@@ -257,22 +259,25 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """
         # The architecture of this controller is as follows.
         #
-        # x -> nominal_controller -
-        #                          \
-        #                h ----------
-        #                            \
-        # o -> encoder -/-------------> u_nn -> scale -> u
+        # x ----------------------------------> u_nominal -> *decision --
+        #                          \                                     \
+        #                h ----------                                     \
+        #                            \                                     \
+        # o -> encoder -/-------------> u_nn -> scale --> *(1-decision) - (+) -> u
 
         # Get the nominal control
         u_nominal = self.dynamics_model.u_nominal(x)
 
+        # Get the decision signal (from 0 to 1 due to sigmoid output)
+        decision = self.intervention_nn(h)
+
         # Get the encoded observations and concatenate with the barrier function
         # and the nominal controller
         encoded_obs = self.encoder(o)
-        encoded_obs_w_h_u = torch.cat((encoded_obs, h, u_nominal), 1)
+        encoded_obs_w_h_x = torch.cat((encoded_obs, h, x), 1)
 
         # Get the control input
-        u_learned = self.u_nn(encoded_obs_w_h_u)
+        u_learned = self.u_nn(encoded_obs_w_h_x)
 
         # Scale the output of the learned control function to match the range of
         # allowable control inputs
@@ -281,7 +286,11 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_center = (u_upper + u_lower) / 2.0
         u_learned = u_learned * u_range + u_center
 
-        return u_learned
+        # Blend the learned control with the nominal control based on the decision
+        # value
+        u = (1 - decision) * u_nominal + decision * u_learned
+
+        return u
 
     def u(self, x: torch.Tensor) -> torch.Tensor:
         """Returns the control input at a given state. Computes the observations and
@@ -323,7 +332,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
         """
-        eps = 0.1
+        eps = 1e-2
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
 
@@ -373,7 +382,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        eps = 0.01
+        eps = 1e-2
 
         # We'll encourage satisfying the BF conditions by...
         #
@@ -403,7 +412,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         dhdt = (h_tplus1 - h_t) / self.controller_period
         barrier_function_violation = dhdt + self.h_alpha * h_t
         barrier_function_violation = F.relu(eps + barrier_function_violation)
-        barrier_loss = 1e2 * barrier_function_violation.mean()
+        barrier_loss = 1e1 * barrier_function_violation.mean()
         barrier_acc = (barrier_function_violation <= eps).sum() / x.shape[0]
 
         loss.append(("Barrier descent loss", barrier_loss))
@@ -442,7 +451,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_t = self.u_(x, o, h)
         u_nominal = self.dynamics_model.u_nominal(x)
         u_norm = (u_t - u_nominal).norm(dim=-1)
-        u_norm_loss = 1e-2 * u_norm.mean()
+        u_norm_loss = 1e-3 * u_norm.mean()
         loss.append(("||u - u_nominal||", u_norm_loss))
 
         return loss
