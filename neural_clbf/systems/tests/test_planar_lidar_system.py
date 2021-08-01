@@ -70,17 +70,12 @@ def test_scene_lidar_measurement():
     num_rays = 10
     field_of_view = (-np.pi / 2, np.pi / 2)
     max_distance = 10
-    measurement, valid = scene.lidar_measurement(
-        q, num_rays, field_of_view, max_distance
-    )
+    measurement = scene.lidar_measurement(q, num_rays, field_of_view, max_distance)
     # Check that the measurements are the proper shape
     assert measurement.ndim == 3
     assert measurement.shape[0] == 1  # one point queried
     assert measurement.shape[1] == 4  # x, y, xdot, ydot are measured
     assert measurement.shape[2] == num_rays  # number of measurements
-
-    # Nothing should be in view, so all the measurements should be invalid
-    assert valid.max() == 0.0
 
     # Get some lidar measurement right up next to the blocks
     # (these should actually measure something), with some velocities
@@ -93,9 +88,7 @@ def test_scene_lidar_measurement():
     num_rays = 3
     field_of_view = (-np.pi / 4, np.pi / 4)
     max_distance = 10
-    measurement, valid = scene.lidar_measurement(
-        q, num_rays, field_of_view, max_distance
-    )
+    measurement = scene.lidar_measurement(q, num_rays, field_of_view, max_distance)
     assert measurement.ndim == 3
     assert measurement.shape == (2, 4, num_rays)
 

@@ -242,6 +242,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
 
+        # Let's try adding a learned correction to distance as the BF
+        min_distance_squared, _ = (o[:, :2, :] ** 2).sum(dim=1).min(dim=-1)
+        h = h + (0.5 ** 2 - min_distance_squared).reshape(-1, 1)
+
         return h
 
     def u_(self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor):
