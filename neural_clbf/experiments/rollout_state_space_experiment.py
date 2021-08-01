@@ -270,7 +270,7 @@ class RolloutStateSpaceExperiment(Experiment):
                 delta_h = results_df[sim_mask]["h"].diff()[1:]
                 dhdt = delta_h.to_numpy() / controller_under_test.dynamics_model.dt
                 alpha = controller_under_test.h_alpha  # type: ignore
-                h_violation = dhdt - alpha * results_df[sim_mask]["h"][:-1].to_numpy()
+                h_violation = dhdt + alpha * results_df[sim_mask]["h"][:-1].to_numpy()
 
                 h_ax_right.plot(
                     results_df[sim_mask]["t"][:-1].to_numpy(),

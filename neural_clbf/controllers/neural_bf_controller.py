@@ -36,7 +36,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         observations -> encoder -> fully-connected layers -> h
 
     u:
-        observations + h -> encoder -> fully-connected layers -> u
+        observations + h + u_nominal -> encoder -> fully-connected layers -> u
 
     In both of these, we use the same permutation-invariant encoder
     (inspired by Zengyi's approach to macbf)
@@ -160,10 +160,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # ----------------------------------------------------------------------------
         self.u_hidden_layers = u_hidden_layers
         self.u_hidden_size = u_hidden_size
+        # Inputs are the encoded observations + 1 for the barrier function + the nominal
+        # control signal
+        num_u_inputs = self.encoder_hidden_size + 1 + self.dynamics_model.n_controls
         # We're going to build the network up layer by layer, starting with the input
         self.u_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.u_layers["input_linear"] = nn.Linear(
-            self.encoder_hidden_size + 1,  # add one for the barrier function input
+            num_u_inputs,  # add one for the barrier function input
             self.u_hidden_size,
         )
         self.u_layers["input_activation"] = nn.ReLU()
@@ -175,14 +178,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.u_layers["output_linear"] = nn.Linear(
             self.u_hidden_size, self.dynamics_model.n_controls
         )
+        # Use a sigmoid on the output to respect actuation bounds
+        self.u_layers["output_activation"] = nn.Sigmoid()
         self.u_nn = nn.Sequential(self.u_layers)
-
-        # Associated with u, we also have the network that decides when to override
-        # the nominal controller, based on a simple linear+sigmoid decision rule
-        self.intervention_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.intervention_layers["linear"] = nn.Linear(1, 1)
-        self.intervention_layers["activation"] = nn.Sigmoid()
-        self.intervention_nn = nn.Sequential(self.intervention_layers)
 
     def prepare_data(self):
         return self.datamodule.prepare_data()
@@ -218,14 +216,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # convolutional layers with kernel size 1 to implement a fully connected
         # network that doesn't care what the length of the last dimension of the input
         # is (the same transformation will be applied to each point).
-        e = self.encoder_nn(o)
+        encoded_full = self.encoder_nn(o)
 
-        # Then min-pool over the last dimension. We use min instead of max (the more
-        # traditional pooling choice) because the lidar measurements jump to zero on
-        # collisions with something, and that makes the max tend to be discontinuous.
-        e, _ = e.min(dim=-1)
+        # Then max-pool over the last dimension.
+        encoded_reduced, _ = encoded_full.max(dim=-1)
 
-        return e
+        return encoded_reduced
 
     def h(self, o: torch.Tensor):
         """Return the BF value for the observations o
@@ -241,10 +237,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
-
-        # Let's try adding a learned correction to distance as the BF
-        min_distance_squared, _ = (o[:, :2, :] ** 2).sum(dim=1).min(dim=-1)
-        h = h + (0.5 ** 2 - min_distance_squared).reshape(-1, 1)
 
         return h
 
@@ -263,27 +255,24 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control values
         """
-        # The architecture of this controller is as follows. h is used to determine
-        # whether or not to supercede the nominal controller, and o is used to determine
-        # the superceding control input.
+        # The architecture of this controller is as follows.
         #
-        # x -> nominal_controller ---> (*) --------------> (+) ---> u
-        #                               ^                   ^
-        # h -> linear ---> sigmoid ----/--> (1 - ) -> (*) -/
-        #               \                             ^
-        # o -> encoder --> u_nn ---------------------/
+        # x -> nominal_controller -
+        #                          \
+        #                h ----------
+        #                            \
+        # o -> encoder -/-------------> u_nn -> scale -> u
 
         # Get the nominal control
         u_nominal = self.dynamics_model.u_nominal(x)
 
-        # Get the decision signal (from 0 to 1 due to sigmoid output)
-        decision = self.intervention_nn(h)
-
-        # Get the control input from the encoded observations and the barrier function
-        # value
+        # Get the encoded observations and concatenate with the barrier function
+        # and the nominal controller
         encoded_obs = self.encoder(o)
-        encoded_obs_w_h = torch.cat((encoded_obs, h), 1)
-        u_learned = self.u_nn(encoded_obs_w_h)
+        encoded_obs_w_h_u = torch.cat((encoded_obs, h, u_nominal), 1)
+
+        # Get the control input
+        u_learned = self.u_nn(encoded_obs_w_h_u)
 
         # Scale the output of the learned control function to match the range of
         # allowable control inputs
@@ -292,14 +281,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_center = (u_upper + u_lower) / 2.0
         u_learned = u_learned * u_range + u_center
 
-        # Blend the learned control with the nominal control based on the decision
-        # value
-        u = (1 - decision) * u_nominal + decision * u_learned
-
-        # Then clamp the control input based on the specified limits
-        u = torch.clamp(u, u_lower, u_upper)
-
-        return u
+        return u_learned
 
     def u(self, x: torch.Tensor) -> torch.Tensor:
         """Returns the control input at a given state. Computes the observations and
@@ -454,15 +436,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             loss: a list of tuples containing ("category_name", loss_value).
         """
         loss = []
-        eps = 0.1
 
-        # Add a term encouraging control inputs that match the nominal whenever h < 0
+        # Add a term encouraging control inputs that match the nominal
         h = self.h(o)
         u_t = self.u_(x, o, h)
         u_nominal = self.dynamics_model.u_nominal(x)
         u_norm = (u_t - u_nominal).norm(dim=-1)
-        h_negative_mask = h < -eps
-        u_norm_loss = 1e-2 * (u_norm * h_negative_mask).mean()
+        u_norm_loss = 1e-2 * u_norm.mean()
         loss.append(("||u - u_nominal||", u_norm_loss))
 
         return loss
