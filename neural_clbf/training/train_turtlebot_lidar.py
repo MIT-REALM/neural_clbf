@@ -24,8 +24,8 @@ from neural_clbf.training.utils import current_git_hash
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-batch_size = 1024
-# batch_size = 256
+# batch_size = 1024
+batch_size = 64
 controller_period = 0.1
 
 start_x = torch.tensor(
@@ -116,9 +116,9 @@ def main(args):
         # trajectory_length=100,
         # fixed_samples=10000,
         # max_points=20000,
-        trajectories_per_episode=10,
+        trajectories_per_episode=20,
         trajectory_length=100,
-        fixed_samples=1000,
+        fixed_samples=2000,
         max_points=2000,
         val_split=0.1,
         batch_size=batch_size,
@@ -152,12 +152,12 @@ def main(args):
         dynamics_model,
         data_module,
         experiment_suite=experiment_suite,
-        encoder_hidden_layers=3,
-        encoder_hidden_size=32,
-        h_hidden_layers=3,
-        h_hidden_size=32,
-        u_hidden_layers=3,
-        u_hidden_size=32,
+        encoder_hidden_layers=2,
+        encoder_hidden_size=48,
+        h_hidden_layers=2,
+        h_hidden_size=48,
+        u_hidden_layers=2,
+        u_hidden_size=48,
         h_alpha=0.1,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
