@@ -185,7 +185,7 @@ class Scene:
             qs = torch.reshape(qs, (1, -1))
 
         # Create the array to store the results, then iterate through each sample point
-        measurements = torch.zeros(qs.shape[0], 4, num_rays).type_as(qs)
+        measurements = torch.zeros(qs.shape[0], 2, num_rays).type_as(qs)
 
         # Figure out the angles to measure on
         angles = torch.linspace(field_of_view[0], field_of_view[1], num_rays)
@@ -265,30 +265,8 @@ class Scene:
                 )
                 contact_pt_agent = torch.matmul(rotation_mat, contact_offset_world)
 
-                # Now we need to get the velocity, which we can derive by hand
-                theta = q[2]
-                s_theta = torch.sin(theta)
-                c_theta = torch.cos(theta)
-                theta_dot = q[5]
-                vx = q[3]
-                vy = q[4]
-                contact_vx_agent = (
-                    -theta_dot * s_theta * contact_offset_world[0]
-                    - c_theta * vx
-                    - theta_dot * c_theta * contact_offset_world[1]
-                    + s_theta * vy
-                )
-                contact_vy_agent = (
-                    theta_dot * c_theta * contact_offset_world[0]
-                    - s_theta * vx
-                    - theta_dot * s_theta * contact_offset_world[1]
-                    - c_theta * vy
-                )
-
                 # Save the measurement
                 measurements[q_idx, :2, ray_idx] = contact_pt_agent
-                measurements[q_idx, 2, ray_idx] = contact_vx_agent
-                measurements[q_idx, 3, ray_idx] = contact_vy_agent
 
         return measurements
 
@@ -378,10 +356,8 @@ class PlanarLidarSystem(ObservableSystem):
 
     @property
     def obs_dim(self) -> int:
-        """Measures (x, y) contact point, velocity of contact point in agent frame,
-        and distance to contact point
-        """
-        return 5
+        """Measures (x, y) contact point"""
+        return 2
 
     def get_observations(self, x: torch.Tensor) -> torch.Tensor:
         """Get the vector of measurements at this point
@@ -402,12 +378,61 @@ class PlanarLidarSystem(ObservableSystem):
             noise=self.noise,
         )
 
-        # Add distance as a fifth measurement (subtract 0.5 to get distance to edge
-        # of safe zone)
-        distance = measurements[:, :2, :].norm(dim=1).unsqueeze(1) - 0.5
-        measurements = torch.cat((measurements, distance), dim=1)
-
         return measurements
+
+    def approximate_lookahead(
+        self, x: torch.Tensor, o: torch.Tensor, u: torch.Tensor, dt: float
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Given a vector of measurements, approximately project them dt time into the
+        future given control inputs u.
+
+        args:
+            o: N x self.obs_dim x self.n_obs tensor of current observations
+            u: N x self.n_controls tensor of control inputs
+            dt: lookeahead step
+
+        returns:
+            an N x self.n_dims tensor containing the predicted next state
+            an N x self.obs_dim x self.n_obs tensor containing the predicted observation
+        """
+        # We'll make two approximations in computing this approximate lookahead:
+        #   1.) We'll only simulate forward one step at dt (which will reduce the
+        #       accuracy of the forward dynamics if dt is large).
+        #   2.) We'll assume that the lidar points do not move. This is a 2-part
+        #       assumption: it implies first that we assume obstacles don't move, and
+        #       it makes the approximation that lidar rays will hit the same points in
+        #       the global frame each time (instead of moving along the surface of the
+        #       obstacle).
+
+        # Start by getting the anticipated change in state (approximated using a single
+        # timestep
+        delta_x = dt * self.closed_loop_dynamics(x, u)
+        # Use this to get the anticipated next state
+        x_next = x + delta_x
+
+        # We can also extract the planar part of the change in state and use that to
+        # update the observations. Each observation is a point in the current agent
+        # frame, and the change in state changes the agent frame. We can apply this
+        # change in frame to all points to yield the predicted next observation.
+        delta_q = self.planar_configuration(delta_x)
+
+        # Translate all points by the anticipated translation
+        translation = delta_q[:, :2]  # N x 2
+        translation = translation.unsqueeze(-1)  # N x 2 x 1
+        translation = translation.expand(o.shape)
+        o_next = o + translation
+
+        # Define a rotation matrix for the anticipated rotation and apply to all points
+        c_delta_theta = torch.cos(delta_q[:, 2]).view(-1, 1, 1)
+        s_delta_theta = torch.sin(delta_q[:, 2]).view(-1, 1, 1)
+        # We want to go from these N x 1 x 1 tensors to an N x 2 x 2 tensor of the form
+        # [cos, -sin; sin, cos].
+        first_row = torch.cat((c_delta_theta, -s_delta_theta), dim=2)
+        second_row = torch.cat((s_delta_theta, c_delta_theta), dim=2)
+        rotation_mat = torch.cat((first_row, second_row), dim=1)
+        o_next = torch.bmm(rotation_mat, o_next)
+
+        return x_next, o_next
 
     def safe_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating safe regions for this system

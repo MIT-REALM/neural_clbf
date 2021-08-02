@@ -1,6 +1,6 @@
 """Define an base class for a systems that yields observations"""
 from abc import abstractmethod, abstractproperty
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 
@@ -66,5 +66,24 @@ class ObservableSystem(ControlAffineSystem):
 
         returns:
             an N x self.obs_dim x self.n_obs tensor containing the observed data
+        """
+        pass
+
+    @abstractmethod
+    def approximate_lookahead(
+        self, x: torch.Tensor, o: torch.Tensor, u: torch.Tensor, dt: float
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Given a vector of measurements, approximately project them dt time into the
+        future given control inputs u.
+
+        args:
+            x: bs x self.n_dims tensor of state
+            o: bs x self.obs_dim x self.n_obs tensor of current observations
+            u: bs x self.n_controls tensor of control inputs
+            dt: lookeahead step
+
+        returns:
+            an N x self.n_dims tensor containing the predicted next state
+            an N x self.obs_dim x self.n_obs tensor containing the predicted observation
         """
         pass

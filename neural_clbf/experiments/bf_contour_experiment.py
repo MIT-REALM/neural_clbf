@@ -124,7 +124,7 @@ class BFContourExperiment(Experiment):
 
                 # Get the value of the BF from observations at this point
                 obs = dynamics_model.get_observations(x)
-                h = controller_under_test.h(obs)
+                h = controller_under_test.h(x, obs)
 
                 # TODO @dawsonc measure violation
 

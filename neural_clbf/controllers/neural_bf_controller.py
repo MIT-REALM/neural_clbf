@@ -33,10 +33,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
     The networks will have the following architectures:
 
     h:
-        observations -> encoder -> fully-connected layers -> h
+        observations + state -> encoder -> fully-connected layers -> h
 
-    u:
-        observations + h + state -> encoder -> fully-connected layers -> u
+    u is determined using a lookahead.
 
     In both of these, we use the same permutation-invariant encoder
     (inspired by Zengyi's approach to macbf)
@@ -57,6 +56,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_hidden_layers: int = 2,
         u_hidden_size: int = 48,
         h_alpha: float = 0.9,
+        lookahead_grid_n: int = 10,
+        lookahead_dual_penalty: float = 1e2,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: Optional[int] = None,
@@ -75,6 +76,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             u_hidden_layers: number of hidden layers to use for the policy network
             u_hidden_size: number of neurons per hidden layer in the policy network
             h_alpha: convergence rate for the BF
+            lookahead_grid_n: the number of points to search along each control
+                              dimension for the lookahead control.
+            lookahead_dual_penalty: the penalty used to dualize the barrier constraint
+                                    in the lookahead search.
             controller_period: the timestep to use in simulating forward Vdot
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the BF decrease loss
@@ -107,18 +112,22 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         assert h_alpha > 0
         assert h_alpha <= 1
         self.h_alpha = h_alpha
+        assert lookahead_grid_n > 0
+        self.lookahead_grid_n = lookahead_grid_n
+        assert lookahead_dual_penalty >= 0.0
+        self.lookahead_dual_penalty = lookahead_dual_penalty
         self.epochs_per_episode = epochs_per_episode
 
         # ----------------------------------------------------------------------------
         # Define the encoder network
         # ----------------------------------------------------------------------------
-        self.input_size = self.dynamics_model.obs_dim
+        self.o_enc_input_size = self.dynamics_model.obs_dim
         self.encoder_hidden_layers = encoder_hidden_layers
         self.encoder_hidden_size = encoder_hidden_size
         # We're going to build the network up layer by layer, starting with the input
         self.encoder_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.encoder_layers["input_linear"] = nn.Conv1d(
-            self.input_size,
+            self.o_enc_input_size,
             self.encoder_hidden_size,
             kernel_size=1,
         )
@@ -137,11 +146,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # ----------------------------------------------------------------------------
         self.h_hidden_layers = h_hidden_layers
         self.h_hidden_size = h_hidden_size
+        num_h_inputs = self.encoder_hidden_size + self.dynamics_model.n_dims
         # We're going to build the network up layer by layer, starting with the input
         self.h_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.h_layers["input_linear"] = nn.Linear(
-            self.encoder_hidden_size, self.h_hidden_size
-        )
+        self.h_layers["input_linear"] = nn.Linear(num_h_inputs, self.h_hidden_size)
         self.h_layers["input_activation"] = nn.ReLU()
         for i in range(self.h_hidden_layers):
             self.h_layers[f"layer_{i}_linear"] = nn.Linear(
@@ -150,39 +158,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             self.h_layers[f"layer_{i}_activation"] = nn.ReLU()
         self.h_layers["output_linear"] = nn.Linear(self.h_hidden_size, 1)
         self.h_nn = nn.Sequential(self.h_layers)
-
-        # ----------------------------------------------------------------------------
-        # Define the policy network, which we denote u
-        # ----------------------------------------------------------------------------
-        self.u_hidden_layers = u_hidden_layers
-        self.u_hidden_size = u_hidden_size
-        # Inputs are the encoded observations + 1 for the barrier function + state
-        num_u_inputs = self.encoder_hidden_size + 1 + self.dynamics_model.n_dims
-        # We're going to build the network up layer by layer, starting with the input
-        self.u_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.u_layers["input_linear"] = nn.Linear(
-            num_u_inputs,
-            self.u_hidden_size,
-        )
-        self.u_layers["input_activation"] = nn.ReLU()
-        for i in range(self.u_hidden_layers):
-            self.u_layers[f"layer_{i}_linear"] = nn.Linear(
-                self.u_hidden_size, self.u_hidden_size
-            )
-            self.u_layers[f"layer_{i}_activation"] = nn.ReLU()
-        self.u_layers["output_linear"] = nn.Linear(
-            self.u_hidden_size, self.dynamics_model.n_controls
-        )
-        # Use a sigmoid on the output to respect actuation bounds
-        self.u_layers["output_activation"] = nn.Sigmoid()
-        self.u_nn = nn.Sequential(self.u_layers)
-
-        # Associated with u, we also have the network that decides when to override
-        # the nominal controller, based on a simple linear+sigmoid decision rule
-        self.intervention_layers: OrderedDict[str, nn.Module] = OrderedDict()
-        self.intervention_layers["linear"] = nn.Linear(1, 1)
-        self.intervention_layers["activation"] = nn.Sigmoid()
-        self.intervention_nn = nn.Sequential(self.intervention_layers)
 
     def prepare_data(self):
         return self.datamodule.prepare_data()
@@ -203,6 +178,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """Wrapper around the dynamics model to get the observations"""
         assert isinstance(self.dynamics_model, ObservableSystem)
         return self.dynamics_model.get_observations(x)
+
+    def approximate_lookahead(
+        self, x: torch.Tensor, o: torch.Tensor, u: torch.Tensor, dt: float
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Wrapper around the dynamics model to do approximate lookeahead"""
+        assert isinstance(self.dynamics_model, ObservableSystem)
+        return self.dynamics_model.approximate_lookahead(x, o, u, dt)
 
     def encoder(self, o: torch.Tensor):
         """Encode the observations o to a fixed-size representation via a permutation-
@@ -225,10 +207,11 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         return encoded_reduced
 
-    def h(self, o: torch.Tensor):
+    def h(self, x: torch.Tensor, o: torch.Tensor):
         """Return the BF value for the observations o
 
         args:
+            o: bs x self.dynamics_model.n_dims tensor of state
             o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
                observations
         returns:
@@ -238,15 +221,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         encoded_obs = self.encoder(o)
 
         # Then get the barrier function value
-        h = self.h_nn(encoded_obs)
+        h_input = torch.cat((encoded_obs, x), 1)
+        h = self.h_nn(h_input)
 
         return h
 
     def u_(self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor):
         """Return the control input for the observations o and state x.
-
-        The state x is used only as an input to the nominal controller, not to the
-        barrier function controller.
 
         args:
             x: bs x self.dynamics_model.n_dims tensor of states, used only for
@@ -257,38 +238,76 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control values
         """
-        # The architecture of this controller is as follows.
+        batch_size = x.shape[0]
+        # The controller is a one-step lookahead controller that attempts to find a
+        # control input close to the nominal control which nevertheless satisfies the
+        # barrier function decrease condition.
         #
-        # x ----------------------------------> u_nominal -> *decision --
-        #                          \                                     \
-        #                h ----------                                     \
-        #                            \                                     \
-        # o -> encoder -/-------------> u_nn -> scale --> *(1-decision) - (+) -> u
+        # We do this by discretizing the action space and searching over the resulting
+        # grid. We use approximate lookahead dynamics to propagate the provided
+        # observations forward one step without querying the geometry model.
+        # We then select the element from the grid that is closest to the nominal
+        # control input while still satisfying the barrier function conditions.
 
         # Get the nominal control
         u_nominal = self.dynamics_model.u_nominal(x)
 
-        # Get the decision signal (from 0 to 1 due to sigmoid output)
-        decision = self.intervention_nn(h)
+        # Create the grid of controls over the action space. We can do this once
+        # and use the same grid for all batches.
+        upper_limit, lower_limit = self.dynamics_model.control_limits
+        search_grid_axes = []
+        for idx in range(self.dynamics_model.n_controls):
+            search_grid_axis = torch.linspace(
+                lower_limit[idx].item(), upper_limit[idx].item(), self.lookahead_grid_n
+            )
+            search_grid_axes.append(search_grid_axis)
 
-        # Get the encoded observations and concatenate with the barrier function
-        # and the nominal controller
-        encoded_obs = self.encoder(o)
-        encoded_obs_w_h_x = torch.cat((encoded_obs, h, x), 1)
+        # This will make an N x n_controls tensor,
+        # where N = lookahead_grid_n ^ n_controls
+        u_options = torch.cartesian_prod(*search_grid_axes).type_as(x)
 
-        # Get the control input
-        u_learned = self.u_nn(encoded_obs_w_h_x)
+        # We now want to track which element of the search grid is best for each
+        # row of the batched input. Create a tensor of costs for each option in each
+        # batch. We'll dualize the barrier function constraint with the set penalty,
+        # and we'll start by pre-computing the L2 distance to the nominal for each
+        # control input.
+        costs = torch.cdist(u_nominal, u_options)
+        costs = torch.cat((torch.zeros(batch_size, 1), costs), dim=1)
 
-        # Scale the output of the learned control function to match the range of
-        # allowable control inputs
-        u_upper, u_lower = self.dynamics_model.control_limits
-        u_range = (u_upper - u_lower) / 2.0
-        u_center = (u_upper + u_lower) / 2.0
-        u_learned = u_learned * u_range + u_center
+        # For each control option, run the approximate lookahead to get the next set
+        # of observations and compute the cost based on the barrier function constraint
+        # and closeness to the nominal control
+        for option_idx in range(u_options.shape[0] + 1):
+            # The first iteration, check the nominal control
+            if option_idx == 0:
+                u_option = u_nominal
+            else:  # otherwise, start checking the grid
+                # Reshape the control option to match the batch size
+                u_option = u_options[option_idx - 1, :].reshape(1, -1)  # 1 x n_controls
+                u_option = u_option.expand(batch_size, -1)  # batch_size x n_controls
 
-        # Blend the learned control with the nominal control based on the decision
-        # value
-        u = (1 - decision) * u_nominal + decision * u_learned
+            # Get the next state and observation from lookahead
+            x_next, o_next = self.approximate_lookahead(
+                x, o, u_option, self.controller_period
+            )
+            h_next = self.h(x_next, o_next)
+
+            # Get the violation of the barrier decrease constraint
+            dhdt = (h_next - h) / self.controller_period
+            barrier_function_violation = F.relu(dhdt + self.h_alpha * h).squeeze()
+
+            # Add the violation to the cost
+            costs[:, option_idx].add_(barrier_function_violation)
+
+        # Now find the option with the lowest cost for each batch
+        best_option_idx = torch.argmin(costs, dim=1)
+        # If the best option index is zero, we use the nominal control; otherwise,
+        # subtract one and get best option from the grid
+        dont_use_nominal = best_option_idx != 0
+        best_option_idx = best_option_idx - 1
+
+        u = u_nominal
+        u[dont_use_nominal] = u_options[best_option_idx[dont_use_nominal]]
 
         return u
 
@@ -297,7 +316,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         barrier function value at this state before computing the control.
         """
         obs = self.get_observations(x)
-        h = self.h(obs)
+        h = self.h(x, obs)
         return self.u_(x, obs, h)
 
     def forward(self, x):
@@ -336,7 +355,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
 
-        h = self.h(o)
+        h = self.h(x, o)
 
         #   2.) h < 0 in the safe region
         h_safe = h[safe_mask]
@@ -391,7 +410,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #      based on that change.
 
         # Get the barrier function at this current state
-        h_t = self.h(o)
+        h_t = self.h(x, o)
 
         # Get the control input
         u_t = self.u_(x, o, h_t)
@@ -401,7 +420,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Get the barrier function at this new state
         o_tplus1 = self.get_observations(x_tplus1)
-        h_tplus1 = self.h(o_tplus1)
+        h_tplus1 = self.h(x, o_tplus1)
 
         # The discrete-time barrier function is h(t+1) - h(t) \leq -alpha h(t)
         # which reformulates to h(t+1) - (1 - alpha) h(t) \leq 0
@@ -422,85 +441,11 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         return loss
 
-    def controller_loss(
-        self,
-        x: torch.Tensor,
-        o: torch.Tensor,
-        goal_mask: torch.Tensor,
-        safe_mask: torch.Tensor,
-        unsafe_mask: torch.Tensor,
-        accuracy: bool = False,
-    ) -> List[Tuple[str, torch.Tensor]]:
-        """
-        Evaluate the loss on the controller due to normalization
-
-        args:
-            x: the points at which to evaluate the loss,
-            o: the observations at points x
-            goal_mask: the points in x marked as part of the goal
-            safe_mask: the points in x marked safe
-            unsafe_mask: the points in x marked unsafe
-            accuracy: if True, return the accuracy (from 0 to 1) as well as the losses
-        returns:
-            loss: a list of tuples containing ("category_name", loss_value).
-        """
-        loss = []
-
-        # Add a term encouraging control inputs that match the nominal
-        h = self.h(o)
-        u_t = self.u_(x, o, h)
-        u_nominal = self.dynamics_model.u_nominal(x)
-        u_norm = (u_t - u_nominal).norm(dim=-1)
-        u_norm_loss = 1e-3 * u_norm.mean()
-        loss.append(("||u - u_nominal||", u_norm_loss))
-
-        return loss
-
-    def debug_loss(
-        self,
-        x: torch.Tensor,
-        o: torch.Tensor,
-        goal_mask: torch.Tensor,
-        safe_mask: torch.Tensor,
-        unsafe_mask: torch.Tensor,
-    ) -> List[Tuple[str, torch.Tensor]]:
-        """
-        Evaluate a debugging loss
-
-        args:
-            x: the points at which to evaluate the loss,
-            o: the observations at points x
-            goal_mask: the points in x marked as part of the goal
-            safe_mask: the points in x marked safe
-            unsafe_mask: the points in x marked unsafe
-            accuracy: if True, return the accuracy (from 0 to 1) as well as the losses
-        returns:
-            loss: a list of tuples containing ("category_name", loss_value).
-        """
-        loss = []
-
-        # This is a dummy loss testing backpropagation through forward simulation
-
-        # Get the barrier function at this current state
-        h_t = self.h(o)
-
-        # Get the control input
-        u_t = self.u_(x, o, h_t)
-
-        # Propagate the dynamics forward via a zero-order hold for one control period
-        x_tplus1 = self.dynamics_model.zero_order_hold(x, u_t, self.controller_period)
-        o_tplus1 = self.get_observations(x_tplus1)
-
-        loss.append(("Debug loss", o_tplus1.norm()))
-
-        return loss
-
     def losses(self):
         """Return a list of loss functions"""
         return [
             self.boundary_loss,
             self.descent_loss,
-            self.controller_loss,
         ]
 
     def accuracies(self):
