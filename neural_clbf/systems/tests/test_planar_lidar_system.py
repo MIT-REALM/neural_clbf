@@ -81,8 +81,8 @@ def test_scene_lidar_measurement():
     # (these should actually measure something), with some velocities
     q = torch.tensor(
         [
-            [0.7, 1.5, 0.0, 0.1, 0.1, 0.0],
-            [0.75, 1.25, -np.pi / 4, 0.1, 0.1, 0.1],
+            [0.7, 1.5, 0.0],
+            [0.75, 1.25, -np.pi / 4],
         ]
     )
     num_rays = 3
@@ -108,11 +108,22 @@ def test_scene_lidar_measurement():
     assert np.allclose(measurement1[:, 1], expect_meas_mid)
     assert np.allclose(measurement1[:, 2], expect_meas_upper)
 
-    # Measurement for the second point (only check the last ray)
-    expect_x = 0.25 * torch.cos(q[1, 2])
-    expect_y = 0.25 * torch.sin(q[1, 2])
+    # Measurement for the second point
+    # Check the first ray first (pointing down)
+    expect_x = 0.25 * np.cos(field_of_view[0])
+    expect_y = 0.25 * np.sin(field_of_view[0])
     expect_meas = torch.tensor([expect_x, expect_y])
-    assert np.allclose(measurement2[:, -1], expect_meas)
+    assert np.allclose(measurement2[:, 0], expect_meas)
+    # Then the second ray second (pointing straight)
+    expect_x = 0.25 * np.sqrt(2)
+    expect_y = 0.0
+    expect_meas = torch.tensor([expect_x, expect_y])
+    assert np.allclose(measurement2[:, 1], expect_meas)
+    # And the third ray third (pointing up)
+    expect_x = 0.25 * np.cos(field_of_view[1])
+    expect_y = 0.25 * np.sin(field_of_view[1])
+    expect_meas = torch.tensor([expect_x, expect_y])
+    assert np.allclose(measurement2[:, 2], expect_meas)
 
 
 def plot_scene_lidar_measurement():
@@ -122,16 +133,16 @@ def plot_scene_lidar_measurement():
     scene = Scene(obstacles)
 
     # Get some lidar measurement right up next to the blocks
-    # (these should actually measure something), with some velocities
+    # (these should actually measure something)
     q = torch.tensor(
         [
-            [0.7, 1.5, 0.0, 0.0, 0.0, 0.0],
+            [0.7, 1.5, -1.0],
         ]
     )
-    num_rays = 32
-    field_of_view = (-np.pi, np.pi)
+    num_rays = 10
+    field_of_view = (-np.pi / 4, np.pi / 4)
     max_distance = 1.0
-    measurement, _ = scene.lidar_measurement(q, num_rays, field_of_view, max_distance)
+    measurement = scene.lidar_measurement(q, num_rays, field_of_view, max_distance)
 
     fig, ax = plt.subplots()
     scene.plot(ax)
@@ -139,10 +150,17 @@ def plot_scene_lidar_measurement():
 
     ax.plot(q[:, 0], q[:, 1], "ko")
 
-    lidar_pts = torch.zeros(num_rays, 2)
-    lidar_pts[:, 0] = measurement[0, 0, :] + q[0, 0]
-    lidar_pts[:, 1] = measurement[0, 1, :] + q[0, 1]
-    ax.plot(lidar_pts[:, 0], lidar_pts[:, 1], "k-o")
+    lidar_pts = measurement[0, :, :]
+    rotation_mat = torch.tensor(
+        [
+            [torch.cos(q[0, 2]), -torch.sin(q[0, 2])],
+            [torch.sin(q[0, 2]), torch.cos(q[0, 2])],
+        ]
+    )
+    lidar_pts = rotation_mat @ lidar_pts
+    lidar_pts[0, :] += q[0, 0]
+    lidar_pts[1, :] += q[0, 1]
+    ax.plot(lidar_pts[0, :], lidar_pts[1, :], "k-o")
 
     plt.show()
 

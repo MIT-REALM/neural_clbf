@@ -259,8 +259,8 @@ class Scene:
                 # Rotate the point by -theta to bring it into the agent frame
                 rotation_mat = torch.tensor(
                     [
-                        [torch.cos(q[2]), -torch.sin(q[2])],
-                        [torch.sin(q[2]), torch.cos(q[2])],
+                        [torch.cos(q[2]), torch.sin(q[2])],
+                        [-torch.sin(q[2]), torch.cos(q[2])],
                     ]
                 )
                 contact_pt_agent = torch.matmul(rotation_mat, contact_offset_world)
@@ -415,19 +415,31 @@ class PlanarLidarSystem(ObservableSystem):
         # change in frame to all points to yield the predicted next observation.
         delta_q = self.planar_configuration(delta_x)
 
+        # The lidar points are expressed in the robot frame, so we need to convert
+        # the change in planar configuration delta_q into the robot frame as well.
+        # Since delta_x is a change, we only need to rotate the x and y change into
+        # the current agent frame.
+        q = self.planar_configuration(x)
+        c_theta = torch.cos(q[:, 2]).view(-1, 1, 1)
+        s_theta = torch.sin(q[:, 2]).view(-1, 1, 1)
+        first_row = torch.cat((c_theta, s_theta), dim=2)
+        second_row = torch.cat((-s_theta, c_theta), dim=2)
+        rotation_mat = torch.cat((first_row, second_row), dim=1)
+        delta_q[:, :2] = torch.bmm(rotation_mat, delta_q[:, :2].unsqueeze(-1)).squeeze()
+
         # Translate all points by the anticipated translation
         translation = delta_q[:, :2]  # N x 2
         translation = translation.unsqueeze(-1)  # N x 2 x 1
         translation = translation.expand(o.shape)
-        o_next = o + translation
+        o_next = o - translation
 
         # Define a rotation matrix for the anticipated rotation and apply to all points
         c_delta_theta = torch.cos(delta_q[:, 2]).view(-1, 1, 1)
         s_delta_theta = torch.sin(delta_q[:, 2]).view(-1, 1, 1)
         # We want to go from these N x 1 x 1 tensors to an N x 2 x 2 tensor of the form
         # [cos, -sin; sin, cos].
-        first_row = torch.cat((c_delta_theta, -s_delta_theta), dim=2)
-        second_row = torch.cat((s_delta_theta, c_delta_theta), dim=2)
+        first_row = torch.cat((c_delta_theta, s_delta_theta), dim=2)
+        second_row = torch.cat((-s_delta_theta, c_delta_theta), dim=2)
         rotation_mat = torch.cat((first_row, second_row), dim=1)
         o_next = torch.bmm(rotation_mat, o_next)
 

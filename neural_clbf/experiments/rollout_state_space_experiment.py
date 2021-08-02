@@ -258,6 +258,7 @@ class RolloutStateSpaceExperiment(Experiment):
                 style="Parameters",
                 hue="Simulation",
                 data=results_df,
+                markers=True,
             )
             h_ax.set_ylabel("$h$")
             h_ax.set_xlabel("t")
@@ -267,24 +268,24 @@ class RolloutStateSpaceExperiment(Experiment):
             # Plot a reference line at h = 0
             h_ax.plot([0, results_df["t"].max()], [0, 0], color="k")
 
-            # Also plot the derivatives on a second y axis
-            h_ax_right = h_ax.twinx()
+            # # Also plot the derivatives on a second y axis
+            # h_ax_right = h_ax.twinx()
 
-            # Get the derivatives for each simulation
-            for sim_index in results_df["Simulation"].unique():
-                sim_mask = results_df["Simulation"] == sim_index
-                delta_h = results_df[sim_mask]["h"].diff()[1:]
-                dhdt = delta_h.to_numpy() / controller_under_test.dynamics_model.dt
-                alpha = controller_under_test.h_alpha  # type: ignore
-                h_violation = dhdt + alpha * results_df[sim_mask]["h"][:-1].to_numpy()
+            # # Get the derivatives for each simulation
+            # for sim_index in results_df["Simulation"].unique():
+            #     sim_mask = results_df["Simulation"] == sim_index
+            #     delta_h = results_df[sim_mask]["h"].diff()[1:]
+            #     dhdt = delta_h.to_numpy() / controller_under_test.dynamics_model.dt
+            #     alpha = controller_under_test.h_alpha  # type: ignore
+            #     h_violation = dhdt + alpha * results_df[sim_mask]["h"][:-1].to_numpy()
 
-                h_ax_right.plot(
-                    results_df[sim_mask]["t"][:-1].to_numpy(),
-                    h_violation,
-                    linestyle=":",
-                )
-                h_ax_right.set_ylabel("$h$ violation")
-                h_ax_right.set_ylim(-1.0, 1.0)
+            #     h_ax_right.plot(
+            #         results_df[sim_mask]["t"][:-1].to_numpy(),
+            #         h_violation,
+            #         linestyle=":",
+            #     )
+            #     h_ax_right.set_ylabel("$h$ violation")
+            #     h_ax_right.set_ylim(-1.0, 1.0)
 
         # Plot the lyapunov function if applicable
         if "V" in results_df:

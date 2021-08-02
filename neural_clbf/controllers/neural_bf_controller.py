@@ -257,14 +257,15 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             search_grid_axis = torch.linspace(
                 lower_limit[idx].item(), upper_limit[idx].item(), self.lookahead_grid_n
             )
+            # Add the option to not do anything
+            search_grid_axis = torch.cat(
+                (search_grid_axis, self.dynamics_model.u_eq[:, idx])
+            )
             search_grid_axes.append(search_grid_axis)
 
         # This will make an N x n_controls tensor,
         # where N = lookahead_grid_n ^ n_controls
         u_options = torch.cartesian_prod(*search_grid_axes).type_as(x)
-
-        # Add the option to not do anything
-        u_options = torch.cat((u_options, self.dynamics_model.u_eq), dim=0)
 
         # We now want to track which element of the search grid is best for each
         # row of the batched input. Create a tensor of costs for each option in each
