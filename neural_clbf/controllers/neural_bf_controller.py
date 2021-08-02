@@ -263,6 +263,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # where N = lookahead_grid_n ^ n_controls
         u_options = torch.cartesian_prod(*search_grid_axes).type_as(x)
 
+        # Add the option to not do anything
+        u_options = torch.cat((u_options, self.dynamics_model.u_eq), dim=0)
+
         # We now want to track which element of the search grid is best for each
         # row of the batched input. Create a tensor of costs for each option in each
         # batch. We'll dualize the barrier function constraint with the set penalty,
