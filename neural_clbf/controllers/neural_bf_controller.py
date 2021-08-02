@@ -1,13 +1,14 @@
 import itertools
-from typing import Tuple, List, Optional
+from typing import cast, Tuple, List, Optional
 from collections import OrderedDict
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
-from neural_clbf.systems import ObservableSystem
+from neural_clbf.systems import ObservableSystem, PlanarLidarSystem
 from neural_clbf.controllers.controller import Controller
 from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
 from neural_clbf.experiments import ExperimentSuite
@@ -60,6 +61,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: Optional[int] = None,
         validation_dynamics_model: Optional[ObservableSystem] = None,
+        debug_mode: bool = False,
     ):
         """Initialize the controller.
 
@@ -83,6 +85,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
                                 epochs. If none, no new data will be gathered.f
             validation_dynamics_model: optionally provide a dynamics model to use during
                                        validation
+            debug_mode: if True, print and plot some debug information. Defaults false
         """
         super(NeuralObsBFController, self).__init__(
             dynamics_model=dynamics_model,
@@ -113,6 +116,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         assert lookahead_dual_penalty >= 0.0
         self.lookahead_dual_penalty = lookahead_dual_penalty
         self.epochs_per_episode = epochs_per_episode
+        self.debug_mode = debug_mode
 
         # ----------------------------------------------------------------------------
         # Define the encoder network
@@ -217,9 +221,11 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         encoded_obs = self.encoder(o)
 
         # Then get the barrier function value
-        # h_input = torch.cat((encoded_obs, x), 1)
-        h_input = encoded_obs
-        h = self.h_nn(h_input)
+        h = self.h_nn(encoded_obs)
+
+        # Add the learned term as a correction to the minimum distance
+        min_dist, _ = o.norm(dim=1).min(dim=-1)
+        h += 0.3 - min_dist
 
         return h
 
@@ -255,12 +261,16 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         search_grid_axes = []
         for idx in range(self.dynamics_model.n_controls):
             search_grid_axis = torch.linspace(
-                lower_limit[idx].item(), upper_limit[idx].item(), self.lookahead_grid_n
+                lower_limit[idx].item() * 2,
+                upper_limit[idx].item() * 2,
+                self.lookahead_grid_n,
             )
             # Add the option to not do anything
             search_grid_axis = torch.cat(
                 (search_grid_axis, self.dynamics_model.u_eq[:, idx])
             )
+            if idx == 0:
+                search_grid_axis = torch.tensor([0.0])
             search_grid_axes.append(search_grid_axis)
 
         # This will make an N x n_controls tensor,
@@ -270,22 +280,17 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # We now want to track which element of the search grid is best for each
         # row of the batched input. Create a tensor of costs for each option in each
         # batch. We'll dualize the barrier function constraint with the set penalty,
-        # and we'll start by pre-computing the L2 distance to the nominal for each
-        # control input.
-        costs = torch.cdist(u_nominal, u_options)
-        costs = torch.cat((torch.zeros(batch_size, 1), costs), dim=1)
+        # and we'll start by pre-computing the L2 norm of each option.
+        costs = u_options.norm(dim=-1).reshape(1, -1).expand(batch_size, -1)
 
         # For each control option, run the approximate lookahead to get the next set
         # of observations and compute the cost based on the barrier function constraint
         # and closeness to the nominal control
-        for option_idx in range(u_options.shape[0] + 1):
-            # The first iteration, check the nominal control
-            if option_idx == 0:
-                u_option = u_nominal
-            else:  # otherwise, start checking the grid
-                # Reshape the control option to match the batch size
-                u_option = u_options[option_idx - 1, :].reshape(1, -1)  # 1 x n_controls
-                u_option = u_option.expand(batch_size, -1)  # batch_size x n_controls
+        for option_idx in range(u_options.shape[0]):
+            # Reshape the control option to match the batch size
+            u_option = u_options[option_idx, :].reshape(1, -1)  # 1 x n_controls
+            u_option = u_option.expand(batch_size, -1)  # batch_size x n_controls
+            u_option = u_nominal + u_option
 
             # Get the next state and observation from lookahead
             x_next, o_next = self.approximate_lookahead(
@@ -302,15 +307,58 @@ class NeuralObsBFController(pl.LightningModule, Controller):
                 self.lookahead_dual_penalty * barrier_function_violation
             )
 
+            if self.debug_mode:
+                print("=============")
+                print(f"x: {x}")
+                print(f"u_option: {u_option}")
+                print(f"x_next: {x_next}")
+                print(f"dhdt = {dhdt}")
+                print(f"bf violation = {barrier_function_violation}")
+
+                fig, ax = plt.subplots()
+                dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
+                dynamics_model.scene.plot(ax)
+                ax.set_aspect("equal")
+
+                ax.plot(x[:, 0], x[:, 1], "ko")
+
+                lidar_pts = o[0, :, :]
+                rotation_mat = torch.tensor(
+                    [
+                        [torch.cos(x[0, 2]), -torch.sin(x[0, 2])],
+                        [torch.sin(x[0, 2]), torch.cos(x[0, 2])],
+                    ]
+                )
+                lidar_pts = rotation_mat @ lidar_pts
+                lidar_pts[0, :] += x[0, 0]
+                lidar_pts[1, :] += x[0, 1]
+                ax.plot(lidar_pts[0, :], lidar_pts[1, :], "k-o")
+
+                ax.plot(x_next[:, 0], x_next[:, 1], "ro")
+
+                lidar_pts = o_next[0, :, :]
+                rotation_mat = torch.tensor(
+                    [
+                        [torch.cos(x_next[0, 2]), -torch.sin(x_next[0, 2])],
+                        [torch.sin(x_next[0, 2]), torch.cos(x_next[0, 2])],
+                    ]
+                )
+                lidar_pts = rotation_mat @ lidar_pts
+                lidar_pts[0, :] += x_next[0, 0]
+                lidar_pts[1, :] += x_next[0, 1]
+                ax.plot(lidar_pts[0, :], lidar_pts[1, :], "r-o")
+
+                mng = plt.get_current_fig_manager()
+                mng.resize(*mng.window.maxsize())
+                plt.show()
+
         # Now find the option with the lowest cost for each batch
         best_option_idx = torch.argmin(costs, dim=1)
-        # If the best option index is zero, we use the nominal control; otherwise,
-        # subtract one and get best option from the grid
-        dont_use_nominal = best_option_idx != 0
-        best_option_idx = best_option_idx - 1
 
-        u = u_nominal
-        u[dont_use_nominal] = u_options[best_option_idx[dont_use_nominal]]
+        u = u_nominal + u_options[best_option_idx]
+
+        # Clamp to make sure we don't violate any control limits
+        u = torch.clamp(u, lower_limit, upper_limit)
 
         return u
 
