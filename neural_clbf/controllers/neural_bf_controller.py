@@ -142,7 +142,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # ----------------------------------------------------------------------------
         self.h_hidden_layers = h_hidden_layers
         self.h_hidden_size = h_hidden_size
-        num_h_inputs = self.encoder_hidden_size + self.dynamics_model.n_dims
+        num_h_inputs = self.encoder_hidden_size
         # We're going to build the network up layer by layer, starting with the input
         self.h_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.h_layers["input_linear"] = nn.Linear(num_h_inputs, self.h_hidden_size)
@@ -217,7 +217,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         encoded_obs = self.encoder(o)
 
         # Then get the barrier function value
-        h_input = torch.cat((encoded_obs, x), 1)
+        # h_input = torch.cat((encoded_obs, x), 1)
+        h_input = encoded_obs
         h = self.h_nn(h_input)
 
         return h
