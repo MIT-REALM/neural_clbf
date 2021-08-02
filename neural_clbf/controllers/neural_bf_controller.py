@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
-from neural_clbf.systems import ObservableSystem, PlanarLidarSystem
+from neural_clbf.systems import ObservableSystem, PlanarLidarSystem  # noqa
 from neural_clbf.controllers.controller import Controller
 from neural_clbf.datamodules.episodic_datamodule import EpisodicDataModule
 from neural_clbf.experiments import ExperimentSuite
@@ -225,6 +225,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Add the learned term as a correction to the minimum distance
         min_dist, _ = o.norm(dim=1).min(dim=-1)
+        min_dist = min_dist.reshape(-1, 1)
         h += 0.3 - min_dist
 
         return h
@@ -281,7 +282,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # row of the batched input. Create a tensor of costs for each option in each
         # batch. We'll dualize the barrier function constraint with the set penalty,
         # and we'll start by pre-computing the L2 norm of each option.
-        costs = u_options.norm(dim=-1).reshape(1, -1).expand(batch_size, -1)
+        costs = u_options.norm(dim=-1).reshape(1, -1).repeat(batch_size, 1)
 
         # For each control option, run the approximate lookahead to get the next set
         # of observations and compute the cost based on the barrier function constraint
