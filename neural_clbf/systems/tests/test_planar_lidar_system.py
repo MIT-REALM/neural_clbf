@@ -74,7 +74,7 @@ def test_scene_lidar_measurement():
     # Check that the measurements are the proper shape
     assert measurement.ndim == 3
     assert measurement.shape[0] == 1  # one point queried
-    assert measurement.shape[1] == 4  # x, y, xdot, ydot are measured
+    assert measurement.shape[1] == 2  # x, y are measured
     assert measurement.shape[2] == num_rays  # number of measurements
 
     # Get some lidar measurement right up next to the blocks
@@ -90,7 +90,7 @@ def test_scene_lidar_measurement():
     max_distance = 10
     measurement = scene.lidar_measurement(q, num_rays, field_of_view, max_distance)
     assert measurement.ndim == 3
-    assert measurement.shape == (2, 4, num_rays)
+    assert measurement.shape == (2, 2, num_rays)
 
     # Check each measurement individually
     measurement1 = measurement[0]
@@ -101,11 +101,9 @@ def test_scene_lidar_measurement():
     expect_y_lower = -0.3
     expect_y_mid = 0.0
     expect_y_upper = 0.3
-    expect_vx = -0.1
-    expect_vy = -0.1
-    expect_meas_upper = torch.tensor([expect_x, expect_y_upper, expect_vx, expect_vy])
-    expect_meas_mid = torch.tensor([expect_x, expect_y_mid, expect_vx, expect_vy])
-    expect_meas_lower = torch.tensor([expect_x, expect_y_lower, expect_vx, expect_vy])
+    expect_meas_upper = torch.tensor([expect_x, expect_y_upper])
+    expect_meas_mid = torch.tensor([expect_x, expect_y_mid])
+    expect_meas_lower = torch.tensor([expect_x, expect_y_lower])
     assert np.allclose(measurement1[:, 0], expect_meas_lower)
     assert np.allclose(measurement1[:, 1], expect_meas_mid)
     assert np.allclose(measurement1[:, 2], expect_meas_upper)
@@ -113,17 +111,7 @@ def test_scene_lidar_measurement():
     # Measurement for the second point (only check the last ray)
     expect_x = 0.25 * torch.cos(q[1, 2])
     expect_y = 0.25 * torch.sin(q[1, 2])
-    expect_vx = (
-        -0.1 * torch.sin(q[1, 2]) * 0.25
-        - torch.cos(q[1, 2]) * 0.1
-        + torch.sin(q[1, 2]) * 0.1
-    )
-    expect_vy = (
-        0.1 * torch.cos(q[1, 2]) * 0.25
-        - torch.sin(q[1, 2]) * 0.1
-        - torch.cos(q[1, 2]) * 0.1
-    )
-    expect_meas = torch.tensor([expect_x, expect_y, expect_vx, expect_vy])
+    expect_meas = torch.tensor([expect_x, expect_y])
     assert np.allclose(measurement2[:, -1], expect_meas)
 
 

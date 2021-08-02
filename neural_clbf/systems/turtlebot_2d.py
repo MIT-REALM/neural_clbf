@@ -202,12 +202,8 @@ class TurtleBot2D(PlanarLidarSystem):
 
     def planar_configuration(self, x: torch.Tensor) -> torch.Tensor:
         """Return the x, y, theta configuration of this system at the given states."""
-        # This system has constant heading at theta = 0.
-        thetas = torch.zeros(x.shape[0], 1).type_as(x)
-        # Set velocities at zero for now
-        velocities = torch.zeros(x.shape[0], 3).type_as(x)
-        q = torch.cat((x, thetas, velocities), dim=-1)
-        return q
+        # The state is just the planar configuration
+        return x
 
     def u_nominal(
         self, x: torch.Tensor, params: Optional[Scenario] = None
