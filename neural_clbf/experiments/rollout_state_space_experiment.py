@@ -1,6 +1,6 @@
 """A mock experiment for use in testing"""
 import random
-from typing import List, Tuple, Optional, TYPE_CHECKING
+from typing import cast, List, Tuple, Optional, TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
@@ -13,7 +13,8 @@ from neural_clbf.experiments import Experiment
 from neural_clbf.systems.utils import ScenarioList
 
 if TYPE_CHECKING:
-    from neural_clbf.controllers import Controller  # noqa
+    from neural_clbf.controllers import Controller, NeuralObsBFController  # noqa
+    from neural_clbf.systems import ObservableSystem  # noqa
 
 
 class RolloutStateSpaceExperiment(Experiment):
@@ -136,9 +137,14 @@ class RolloutStateSpaceExperiment(Experiment):
             if hasattr(controller_under_test, "h") and hasattr(
                 controller_under_test.dynamics_model, "get_observations"
             ):
-                dynamics_model = controller_under_test.dynamics_model
-                obs = dynamics_model.get_observations(x_current)  # type: ignore
-                h = controller_under_test.h(obs)  # type: ignore
+                controller_under_test = cast(
+                    "NeuralObsBFController", controller_under_test
+                )
+                dynamics_model = cast(
+                    "ObservableSystem", controller_under_test.dynamics_model
+                )
+                obs = dynamics_model.get_observations(x_current)
+                h = controller_under_test.h(x_current, obs)
 
             # Get the Lyapunov function if applicable
             V: Optional[torch.Tensor] = None
