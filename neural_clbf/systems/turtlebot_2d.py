@@ -169,34 +169,20 @@ class TurtleBot2D(PlanarLidarSystem):
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
         g = g.type_as(x)
 
-        # Extract the needed parameters
-        R, L = params["R"], params["L"]
-        # and state variables
+        # Extract state variables
         theta = x[:, TurtleBot2D.THETA]
 
-        # Tensor for wheel velocities
-        v = torch.zeros((2, 2))
-        v = v.type_as(x)
-
-        # Building tensor v
-        v[0, 0] = 1 / R
-        v[1, 0] = 1 / R
-        v[0, 1] = L / (2 * R)
-        v[1, 1] = -L / (2 * R)
-
         # Effect on x
-        g[:, TurtleBot2D.X, TurtleBot2D.V] = R / 2 * torch.cos(theta)
-        g[:, TurtleBot2D.X, TurtleBot2D.THETA_DOT] = R / 2 * torch.cos(theta)
+        g[:, TurtleBot2D.X, TurtleBot2D.V] = torch.cos(theta)
+        g[:, TurtleBot2D.X, TurtleBot2D.THETA_DOT] = 0.0
 
         # Effect on y
-        g[:, TurtleBot2D.Y, TurtleBot2D.V] = R / 2 * torch.sin(theta)
-        g[:, TurtleBot2D.Y, TurtleBot2D.THETA_DOT] = R / 2 * torch.sin(theta)
+        g[:, TurtleBot2D.Y, TurtleBot2D.V] = torch.sin(theta)
+        g[:, TurtleBot2D.Y, TurtleBot2D.THETA_DOT] = 0.0
 
         # Effect on theta
-        g[:, TurtleBot2D.THETA, TurtleBot2D.V] = -R / (2 * L)
-        g[:, TurtleBot2D.THETA, TurtleBot2D.THETA_DOT] = R / (2 * L)
-
-        g = g.matmul(v)
+        g[:, TurtleBot2D.THETA, TurtleBot2D.V] = 0.0
+        g[:, TurtleBot2D.THETA, TurtleBot2D.THETA_DOT] = 1.0
 
         return g
 
