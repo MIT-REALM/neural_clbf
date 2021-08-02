@@ -147,8 +147,6 @@ def main(args):
         encoder_hidden_size=48,
         h_hidden_layers=2,
         h_hidden_size=48,
-        u_hidden_layers=2,
-        u_hidden_size=48,
         h_alpha=0.1,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
