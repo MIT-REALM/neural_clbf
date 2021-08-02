@@ -270,8 +270,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             search_grid_axis = torch.cat(
                 (search_grid_axis, self.dynamics_model.u_eq[:, idx])
             )
-            if idx == 0:
-                search_grid_axis = torch.tensor([0.0])
             search_grid_axes.append(search_grid_axis)
 
         # This will make an N x n_controls tensor,
