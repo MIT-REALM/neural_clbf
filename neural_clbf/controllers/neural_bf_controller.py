@@ -53,8 +53,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         encoder_hidden_size: int = 48,
         h_hidden_layers: int = 2,
         h_hidden_size: int = 48,
-        u_hidden_layers: int = 2,
-        u_hidden_size: int = 48,
         h_alpha: float = 0.9,
         lookahead_grid_n: int = 10,
         lookahead_dual_penalty: float = 1e2,
@@ -73,8 +71,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             encoder_hidden_size: number of neurons per hidden layer in the encoder
             h_hidden_layers: number of hidden layers to use for the BF network
             h_hidden_size: number of neurons per hidden layer in the BF network
-            u_hidden_layers: number of hidden layers to use for the policy network
-            u_hidden_size: number of neurons per hidden layer in the policy network
             h_alpha: convergence rate for the BF
             lookahead_grid_n: the number of points to search along each control
                               dimension for the lookahead control.

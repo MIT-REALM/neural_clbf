@@ -404,11 +404,10 @@ class PlanarLidarSystem(ObservableSystem):
         #       the global frame each time (instead of moving along the surface of the
         #       obstacle).
 
-        # Start by getting the anticipated change in state (approximated using a single
-        # timestep
-        delta_x = dt * self.closed_loop_dynamics(x, u)
+        # Start by getting the anticipated change in state
+        x_next = self.zero_order_hold(x, u, dt)
         # Use this to get the anticipated next state
-        x_next = x + delta_x
+        delta_x = x_next - x
 
         # We can also extract the planar part of the change in state and use that to
         # update the observations. Each observation is a point in the current agent
