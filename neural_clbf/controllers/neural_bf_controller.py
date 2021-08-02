@@ -297,7 +297,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             barrier_function_violation = F.relu(dhdt + self.h_alpha * h).squeeze()
 
             # Add the violation to the cost
-            costs[:, option_idx].add_(barrier_function_violation)
+            costs[:, option_idx].add_(
+                self.lookahead_dual_penalty * barrier_function_violation
+            )
 
         # Now find the option with the lowest cost for each batch
         best_option_idx = torch.argmin(costs, dim=1)
