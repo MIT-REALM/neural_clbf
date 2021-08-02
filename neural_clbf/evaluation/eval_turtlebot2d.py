@@ -16,23 +16,23 @@ def eval_and_plot_linear_satellite():
     rollout_experiment = neural_controller.experiment_suite.experiments[1]
 
     # Modify parameters
-    rollout_experiment.t_sim = 5
+    rollout_experiment.t_sim = 2
     rollout_experiment.start_x = torch.tensor(
         [
             # [4.5, 2.5, np.pi / 2],
             [-4.5, 2.5, np.pi / 2],
             # [-3.5, 1.75, -np.pi / 4],
-            # [-3.25, 1.75, 0.0],
+            # [-3.35, 1.1, 0.0],
             # [-4.5, -2.5, -np.pi / 2],
             # [4.5, -2.5, -np.pi / 2],
         ]
     )
+    neural_controller.lookahead_dual_penalty = 1e3
+    neural_controller.lookahead_grid_n = 10
     neural_controller.controller_period = 0.1
     neural_controller.h_alpha = 0.9
-    neural_controller.lookahead_dual_penalty = 200.0
-    neural_controller.lookahead_grid_n = 3
-    neural_controller.dynamics_model.field_of_view = (-np.pi, np.pi)
-    neural_controller.dynamics_model.num_rays = 4
+    neural_controller.dynamics_model.num_rays = 32
+    neural_controller.dynamics_model.dt = 0.01
 
     # Modify scene
     scene = Scene([])

@@ -46,7 +46,7 @@ position_range = (-4.0, 4.0)
 rotation_range = (-np.pi, np.pi)
 
 # Lidar parameters
-num_rays = 10
+num_rays = 32
 field_of_view = (-np.pi, np.pi)
 max_distance = 2 * room_size
 
@@ -154,7 +154,7 @@ def main(args):
         h_hidden_size=48,
         h_alpha=0.9,
         lookahead_grid_n=10,
-        lookahead_dual_penalty=200.0,
+        lookahead_dual_penalty=1e3,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=10,
