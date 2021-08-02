@@ -1,6 +1,7 @@
 """Test the TurtleBot3 dynamics"""
 import pytest
 import torch
+import numpy as np
 
 from neural_clbf.systems.turtlebot import TurtleBot
 
@@ -20,8 +21,10 @@ def test_turtlebot_init():
 
     # Check control limits
     upper_lim, lower_lim = turtlebot.control_limits
-    expected_upper = 1000 * torch.ones(2)
-    expected_lower = -1000 * (torch.ones(2))
+    expected_upper = torch.ones(2)
+    expected_upper[0] = 1000.0
+    expected_upper[1] = 4.0 * np.pi
+    expected_lower = -1 * expected_upper
     assert torch.allclose(upper_lim, expected_upper, atol=0.1)
     assert torch.allclose(lower_lim, expected_lower, atol=0.1)
 
@@ -68,7 +71,7 @@ def test_turtlebot_dynamics():
     u[0, TurtleBot.V] += 1.0
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     assert xdot[0, TurtleBot.X] > 0.0
-    assert xdot[0, TurtleBot.Y] > 0.0
+    assert xdot[0, TurtleBot.Y] == 0.0
     # all other columns should be zero
     xdot[0, TurtleBot.X] = 0.0
     xdot[0, TurtleBot.Y] = 0.0
@@ -80,7 +83,7 @@ def test_turtlebot_dynamics():
     u[0, TurtleBot.V] -= 1.0
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     assert xdot[0, TurtleBot.X] < 0.0
-    assert xdot[0, TurtleBot.Y] < 0.0
+    assert xdot[0, TurtleBot.Y] == 0.0
     # all other columns should be zero
     xdot[0, TurtleBot.X] = 0.0
     xdot[0, TurtleBot.Y] = 0.0
@@ -89,21 +92,22 @@ def test_turtlebot_dynamics():
     # If angular velocity is positive and linear velocity is zero,
     # then we should experience positive theta orientation
     u = u_eq.clone()
-    u[0, TurtleBot.THETA_DOT] += 2.0
+    u[0, TurtleBot.THETA_DOT] += 1.0
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
-    assert xdot[0, TurtleBot.THETA] > 0
-    # x and y position should still be zero
-    xdot[0, TurtleBot.THETA] = 0
-    assert turtlebot.allclose(xdot, torch.zeros((1, turtlebot.n_dims)))
+    # x and y position should be zero
+    assert xdot[0, TurtleBot.X] == 0.0
+    assert xdot[0, TurtleBot.Y] == 0.0
+    # theta should be negative
+    assert xdot[0, TurtleBot.THETA] < 0.0
 
     # If both angular velocity and linear velocity are increased, we should
-    # experience positive change in x and y position and orientation angle
+    # experience positive change in x and y position and
+    # decrease in orientation angle
     u = u_eq.clone()
-    u[0, TurtleBot.V] += 1
-    u[0, TurtleBot.THETA_DOT] += 1
+    u[0, TurtleBot.V] += 1.0
+    u[0, TurtleBot.THETA_DOT] += 1.0
 
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     assert xdot[0, TurtleBot.X] > 0.0
-    assert xdot[0, TurtleBot.Y] > 0.0
-    assert xdot[0, TurtleBot.THETA] > 0.0
-    assert turtlebot.n_dims == 3
+    assert xdot[0, TurtleBot.Y] == 0.0
+    assert xdot[0, TurtleBot.THETA] < 0.0
