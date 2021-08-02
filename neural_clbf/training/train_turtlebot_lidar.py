@@ -153,6 +153,7 @@ def main(args):
         h_hidden_layers=2,
         h_hidden_size=48,
         h_alpha=0.9,
+        lookahead_dual_penalty=50,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=10,

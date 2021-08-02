@@ -225,16 +225,27 @@ class TurtleBot2D(PlanarLidarSystem):
         # In addition to setting the velocity towards the origin, we also need to steer
         # towards the origin. We can do this via P control on the angle between the
         # turtlebot and the vector to the origin.
-        omega_scaling = 10.0
+        #
+        # However, this angle becomes ill-defined as the bot approaches the origin, so
+        # so we switch this term off if the bot is too close (and instead just control
+        # theta to zero)
+        phi_control_on = bot_to_origin.norm(dim=-1) >= 0.2
+        phi_control_on = phi_control_on.reshape(-1)
+        omega_scaling = 5.0
         angle_from_origin_to_bot = torch.atan2(x[:, TurtleBot2D.Y], x[:, TurtleBot2D.X])
         phi = theta - angle_from_origin_to_bot
         # First, wrap the angle error into [-pi, pi]
         phi = torch.atan2(torch.sin(phi), torch.cos(phi))
         # Now decrement any errors > pi/2 by pi and increment any errors < -pi / 2 by pi
-        # Then P controlling the error to zero will
+        # Then P controlling the error to zero will drive the bot to point towards the
+        # origin
         phi[phi > np.pi / 2.0] -= np.pi
         phi[phi < -np.pi / 2.0] += np.pi
-        u[:, TurtleBot2D.THETA_DOT] = omega_scaling * phi
+
+        # Only apply this P control when the bot is far enough from the origin;
+        # default to P control on theta
+        u[:, TurtleBot2D.THETA_DOT] = -omega_scaling * theta
+        u[phi_control_on, TurtleBot2D.THETA_DOT] = -omega_scaling * phi[phi_control_on]
 
         # Clamp given the control limits
         u_upper, u_lower = self.control_limits
