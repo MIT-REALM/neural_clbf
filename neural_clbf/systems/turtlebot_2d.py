@@ -127,8 +127,11 @@ class TurtleBot2D(PlanarLidarSystem):
         # These are relaxed for now, but eventually they should be measured on hardware
         upper_limit = torch.ones(self.n_controls)
         upper_limit[TurtleBot2D.V] = 2.0
-        upper_limit[TurtleBot2D.THETA_DOT] = 3.0 * np.pi
-        lower_limit = -1.0 * upper_limit
+        upper_limit[TurtleBot2D.THETA_DOT] = 4.0 * np.pi
+
+        lower_limit = torch.ones(self.n_controls)
+        lower_limit[TurtleBot2D.V] = 0.0
+        lower_limit[TurtleBot2D.THETA_DOT] = -4.0 * np.pi
 
         return (upper_limit, lower_limit)
 

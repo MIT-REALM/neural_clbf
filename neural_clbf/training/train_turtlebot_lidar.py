@@ -26,7 +26,7 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 # batch_size = 1024
 batch_size = 64
-controller_period = 0.1
+controller_period = 0.2
 
 start_x = torch.tensor(
     [
@@ -40,8 +40,8 @@ simulation_dt = 0.01
 
 # Scene parameters
 room_size = 10.0
-num_obstacles = 10
-box_size_range = (1.0, 2.0)
+num_obstacles = 8
+box_size_range = (0.75, 1.75)
 position_range = (-4.0, 4.0)
 rotation_range = (-np.pi, np.pi)
 
@@ -152,9 +152,9 @@ def main(args):
         encoder_hidden_size=48,
         h_hidden_layers=2,
         h_hidden_size=48,
-        h_alpha=0.8,
-        lookahead_grid_n=10,
-        lookahead_dual_penalty=5e2,
+        h_alpha=0.6,
+        lookahead_dual_penalty=1e3,
+        lookahead_grid_n=5,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=10,

@@ -226,7 +226,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Add the learned term as a correction to the minimum distance
         min_dist, _ = o.norm(dim=1).min(dim=-1)
         min_dist = min_dist.reshape(-1, 1)
-        h += self.dynamics_model.r - min_dist  # type: ignore
+        h -= min_dist
 
         return h
 
@@ -265,8 +265,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         search_grid_axes = []
         for idx in range(self.dynamics_model.n_controls):
             search_grid_axis = torch.linspace(
-                lower_limit[idx].item() * 0.75,
-                upper_limit[idx].item() * 0.75,
+                lower_limit[idx].item() * 0.5,
+                upper_limit[idx].item() * 0.5,
                 self.lookahead_grid_n,
             )
             # Add the option to not do anything
@@ -290,7 +290,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         )
         h_next = self.h(x_next, o_next)
         no_action_cost = no_action_cost + F.relu(h_next - (1 - self.h_alpha) * h)
-        no_action_cost = no_action_cost.squeeze()
+        no_action_cost = no_action_cost.reshape(-1)
 
         # For each control option, run the approximate lookahead to get the next set
         # of observations and compute the cost based on the barrier function constraint
@@ -308,8 +308,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             h_next = self.h(x_next, o_next)
 
             # Get the violation of the barrier decrease constraint
-            barrier_function_violation = F.relu(
-                h_next - (1 - self.h_alpha) * h
+            barrier_function_violation = F.leaky_relu(
+                h_next - (1 - self.h_alpha) * h, negative_slope=0.1
             ).squeeze()
 
             # Add the violation to the cost
@@ -317,12 +317,15 @@ class NeuralObsBFController(pl.LightningModule, Controller):
                 self.lookahead_dual_penalty * barrier_function_violation
             )
 
-            if self.debug_mode:
+            if self.debug_mode:  # or (h > 0).any():
                 print("=============")
                 print(f"x: {x}")
+                print(f"h: {h}")
                 print(f"u_option: {u_option}")
                 print(f"x_next: {x_next}")
+                print(f"h_next: {h_next}")
                 print(f"bf violation = {barrier_function_violation}")
+                print(f"cost = {costs[:, option_idx]}")
 
                 fig, ax = plt.subplots()
                 dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)

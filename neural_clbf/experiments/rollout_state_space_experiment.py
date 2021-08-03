@@ -267,8 +267,7 @@ class RolloutStateSpaceExperiment(Experiment):
             # Plot a reference line at h = 0
             h_ax.plot([0, results_df["t"].max()], [0, 0], color="k")
 
-            # Also plot the derivatives on a second y axis
-            h_ax_right = h_ax.twinx()
+            # Also plot the derivatives
 
             # Get the derivatives for each simulation
             for sim_index in results_df["Simulation"].unique():
@@ -278,13 +277,12 @@ class RolloutStateSpaceExperiment(Experiment):
                 alpha = controller_under_test.h_alpha  # type: ignore
                 h_violation = h_next - (1 - alpha) * h_now
 
-                h_ax_right.plot(
+                h_ax.plot(
                     results_df[sim_mask]["t"][:-1].to_numpy(),
                     h_violation,
                     linestyle=":",
                 )
-                h_ax_right.set_ylabel("$h$ violation")
-                # h_ax_right.set_ylim(-0.1, 0.1)
+                h_ax.set_ylabel("$h$ violation")
 
         # Plot the lyapunov function if applicable
         if "V" in results_df:
