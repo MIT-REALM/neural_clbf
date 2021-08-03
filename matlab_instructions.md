@@ -20,7 +20,7 @@ Get the path where python is installed by running `which python`
 
 Launch MATLAB, then run the following in the MATLAB prompt
 ```
-pe = pyenv("Version","/home/cbd/anaconda3/envs/neural_control/bin/python", "ExecutionMode", "OutOfProcess")
+pe = pyenv("Version","<path to python>", "ExecutionMode", "OutOfProcess")
 ```
 
 Verify that MATLAB has found Python by running `py.list`. You should see an output of `Python list with no properties. []`. Next try running 
