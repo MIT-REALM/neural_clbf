@@ -261,12 +261,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Create the grid of controls over the action space. We can do this once
         # and use the same grid for all batches.
-        upper_limit, lower_limit = self.dynamics_model.control_limits
+        upper_lim, lower_lim = self.dynamics_model.intervention_limits
         search_grid_axes = []
         for idx in range(self.dynamics_model.n_controls):
             search_grid_axis = torch.linspace(
-                lower_limit[idx].item() * 0.5,
-                upper_limit[idx].item() * 0.5,
+                lower_lim[idx].item(),
+                upper_lim[idx].item(),
                 self.lookahead_grid_n,
             )
             # Add the option to not do anything
@@ -375,6 +375,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         best_option_cost[better_do_nothing] = no_action_cost[better_do_nothing]
 
         # Clamp to make sure we don't violate any control limits
+        upper_limit, lower_limit = self.dynamics_model.control_limits
         u = torch.clamp(u, lower_limit, upper_limit)
 
         return u, best_option_cost

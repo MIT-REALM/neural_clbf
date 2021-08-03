@@ -135,6 +135,22 @@ class TurtleBot2D(PlanarLidarSystem):
 
         return (upper_limit, lower_limit)
 
+    @property
+    def intervention_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the range of allowable changes to
+        control for this system
+        """
+        upper_limit = torch.ones(self.n_controls)
+        upper_limit[TurtleBot2D.V] = 1.0
+        upper_limit[TurtleBot2D.THETA_DOT] = 2.0 * np.pi
+
+        lower_limit = torch.ones(self.n_controls)
+        lower_limit[TurtleBot2D.V] = -1.0
+        lower_limit[TurtleBot2D.THETA_DOT] = -2.0 * np.pi
+
+        return (upper_limit, lower_limit)
+
     def _f(self, x: torch.Tensor, params: Scenario):
         """
         Return the control-independent part of the control-affine dynamics.
