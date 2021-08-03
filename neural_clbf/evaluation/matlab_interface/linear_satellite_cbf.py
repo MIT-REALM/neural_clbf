@@ -380,15 +380,17 @@ def cbf_qp_filter(x, u_ref, relaxation_penalty):
         an N x 3 numpy array of filtered controls
     """
     # Convert inputs to torch tensors
-    x_tensor = torch.tensor(x).type_as(sat_cbf.V_nn[0].weight)
+    n_dims = sat_cbf.dynamics_model.n_dims
+    n_controls = sat_cbf.dynamics_model.n_controls
+    x_tensor = torch.tensor(x).type_as(sat_cbf.V_nn[0].weight).reshape(-1, n_dims)
     u_ref_tensor = torch.tensor(u_ref).type_as(sat_cbf.V_nn[0].weight)
+    u_ref_tensor = u_ref_tensor.reshape(-1, n_controls)
 
     # Check input size
     N = x_tensor.shape[0]
-    assert x_tensor.shape[0] == N
-    assert x_tensor.shape[1] == sat_cbf.dynamics_model.n_dims
-    assert u_ref_tensor.shape[0] == N
-    assert u_ref_tensor.shape[1] == sat_cbf.dynamics_model.n_controls
+    assert x_tensor.shape[1] == n_dims, "x must have 6 columns"
+    assert u_ref_tensor.shape[0] == N, "u_ref must have the same #rows as x"
+    assert u_ref_tensor.shape[1] == n_controls, "u_ref must have 3 columns"
 
     # Solve the CBF QP (this function refers to a CLF because CBFs subclass CLFs in
     # our implementation). We don't need the second return tensor.
@@ -398,4 +400,5 @@ def cbf_qp_filter(x, u_ref, relaxation_penalty):
 
     # Return the filtered tensor converted to a numpy array
     u_filtered_np = u_filtered_tensor.numpy()
-    return u_filtered_np
+    r = r.numpy()
+    return u_filtered_np, r
