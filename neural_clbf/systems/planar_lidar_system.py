@@ -414,9 +414,9 @@ class PlanarLidarSystem(ObservableSystem):
         # Use this to get the anticipated next state
         delta_x = x_next - x
 
-        # DEBUG what happens if we just get the observation at the next state?
-        o_next = self.get_observations(x_next)
-        return x_next, o_next
+        # # DEBUG what happens if we just get the observation at the next state?
+        # o_next = self.get_observations(x_next)
+        # return x_next, o_next
 
         # We can also extract the planar part of the change in state and use that to
         # update the observations. Each observation is a point in the current agent
@@ -451,6 +451,21 @@ class PlanarLidarSystem(ObservableSystem):
         second_row = torch.cat((-s_delta_theta, c_delta_theta), dim=2)
         rotation_mat = torch.cat((first_row, second_row), dim=1)
         o_next = torch.bmm(rotation_mat, o_next)
+
+        # Check if a collision is likely to occur (i.e. if the polygon defined by o_next
+        # does not contain the origin). We can check this by checking if the greatest
+        # angle between two points is greater than pi when measured clockwise around
+        # the origin.
+        angles = torch.atan2(o_next[:, 1, :], o_next[:, 0, :])
+        angle_diff = torch.diff(angles, dim=-1, append=angles[:, 0].reshape(-1, 1))
+
+        # Mod 2pi, with some slack for numerical error
+        angle_diff[angle_diff > np.pi] -= 2 * np.pi
+        angle_diff[angle_diff < -np.pi] += 2 * np.pi
+        max_angle_diff, _ = torch.max(angle_diff, dim=-1)
+        in_collision = angle_diff.sum(dim=-1) < 1e-4
+        # import pdb; pdb.set_trace()
+        o_next[in_collision, :, :] = o_next[in_collision, :, :] * 0.0
 
         return x_next, o_next
 

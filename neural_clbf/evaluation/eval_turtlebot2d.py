@@ -21,10 +21,11 @@ def eval_and_plot_linear_satellite():
     rollout_experiment.t_sim = 5
     rollout_experiment.start_x = torch.tensor(
         [
-            # [4.5, 2.5, np.pi / 2],
-            # [-4.5, 2.5, np.pi / 2],
+            # [4.5, 2.5, -np.pi / 2],
+            # [-4.5, 2.5, -np.pi / 2],
             [-4.5, -2.5, np.pi / 2],
-            # [4.5, -2.5, -np.pi / 2],
+            # [-2.7842, -0.8579,  0.2989],
+            # [4.5, -2.5, np.pi / 2],
         ]
     )
     neural_controller.lookahead_dual_penalty = 1e3

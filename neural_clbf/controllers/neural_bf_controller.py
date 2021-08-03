@@ -226,7 +226,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Add the learned term as a correction to the minimum distance
         min_dist, _ = o.norm(dim=1).min(dim=-1)
         min_dist = min_dist.reshape(-1, 1)
-        h -= min_dist
+        h += 0.1 - min_dist
 
         return h
 
@@ -471,6 +471,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
+        eps = 1e-1
 
         # We'll encourage satisfying the BF conditions by...
         #
@@ -485,7 +486,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_t, u_cost = self.u_(x, o, h_t)
 
         # Penalize the cost
-        barrier_loss = u_cost.mean()
+        barrier_loss = F.relu(eps + u_cost).mean()
         loss.append(("Barrier descent loss", barrier_loss))
 
         # # Propagate the dynamics forward via a zero-order hold for one control period
