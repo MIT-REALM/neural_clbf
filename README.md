@@ -32,13 +32,9 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-Next, navigate to any file and run it.   
+Next, make sure everything is installed correctly
 ```bash
-# module folder
-cd neural_clbf
-
-# run module
-python TODO.py  # TODO @dawsonc fix this  
+pytest .
 ```
 
 Training:
