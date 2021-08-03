@@ -359,6 +359,11 @@ class PlanarLidarSystem(ObservableSystem):
         """Measures (x, y) contact point"""
         return 2
 
+    @property
+    def r(self) -> float:
+        """Radius of robot"""
+        return 0.2
+
     def get_observations(self, x: torch.Tensor) -> torch.Tensor:
         """Get the vector of measurements at this point
 
@@ -453,7 +458,7 @@ class PlanarLidarSystem(ObservableSystem):
         """
         # A state is safe if the closest lidar point is at least some distance away
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
-        min_safe_ray_length = 0.75
+        min_safe_ray_length = 0.5
 
         measurements = self.get_observations(x)
 
@@ -472,7 +477,7 @@ class PlanarLidarSystem(ObservableSystem):
         """
         # A state is safe if the closest lidar point too close
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
-        min_safe_ray_length = 0.25
+        min_safe_ray_length = 0.2
 
         measurements = self.get_observations(x)
 
