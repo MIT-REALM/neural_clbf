@@ -303,8 +303,6 @@ class SatelliteCBF(nn.Module):
             model.optimize()
 
             if model.status != GRB.OPTIMAL:
-                print("askjhadslhakjh")
-                print(model.status)
                 # Make the relaxations nan if the problem was infeasible, as a signal
                 # that something has gone wrong
                 for i in range(n_scenarios):
@@ -313,10 +311,8 @@ class SatelliteCBF(nn.Module):
 
             # Extract the results
             for i in range(n_controls):
-                print(f"u[{i}] = {u[i].x}")
                 u_result[batch_idx, i] = torch.tensor(u[i].x)
             for i in range(n_scenarios):
-                print(f"r[{i}] = {r[i].x}")
                 r_result[batch_idx, i] = torch.tensor(r[i].x)
 
         return u_result.type_as(x), r_result.type_as(x)
@@ -358,9 +354,6 @@ class SatelliteCBF(nn.Module):
         assert relaxation_penalty >= 0
 
         # Solve
-        print(V)
-        print(Lf_V)
-        print(Lg_V)
         return self._solve_CLF_QP_gurobi(x, u_ref, V, Lf_V, Lg_V, relaxation_penalty)
 
     def forward(self, x):
@@ -390,9 +383,6 @@ def cbf_qp_filter(x, u_ref, relaxation_penalty):
     x_tensor = torch.tensor(x).type_as(sat_cbf.V_nn[0].weight)
     u_ref_tensor = torch.tensor(u_ref).type_as(sat_cbf.V_nn[0].weight)
 
-    print(sat_cbf.V(x_tensor))
-    return x_tensor
-
     # Check input size
     N = x_tensor.shape[0]
     assert x_tensor.shape[0] == N
@@ -405,8 +395,6 @@ def cbf_qp_filter(x, u_ref, relaxation_penalty):
     u_filtered_tensor, r = sat_cbf.solve_CLF_QP(
         x_tensor, u_ref_tensor, relaxation_penalty
     )
-    print(u_filtered_tensor)
-    print(r)
 
     # Return the filtered tensor converted to a numpy array
     u_filtered_np = u_filtered_tensor.numpy()
