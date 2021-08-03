@@ -30,10 +30,10 @@ controller_period = 0.2
 
 start_x = torch.tensor(
     [
-        [4.5, 2.5, np.pi / 2],
-        [-4.5, 2.5, np.pi / 2],
-        [-4.5, -2.5, -np.pi / 2],
-        [4.5, -2.5, -np.pi / 2],
+        [4.5, 2.5, -np.pi / 2],
+        [-4.5, 2.5, -np.pi / 2],
+        [-4.5, -2.5, np.pi / 2],
+        [4.5, -2.5, np.pi / 2],
     ]
 )
 simulation_dt = 0.01

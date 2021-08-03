@@ -195,6 +195,16 @@ class ControlAffineSystem(ABC):
         """
         pass
 
+    @property
+    def intervention_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the range of allowable changes to
+        control for this system
+        """
+        upper_limit, lower_limit = self.control_limits
+
+        return (upper_limit, lower_limit)
+
     def out_of_bounds_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating whether rows are outside the state limits
         for this system

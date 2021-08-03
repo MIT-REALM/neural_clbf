@@ -1,8 +1,10 @@
 import numpy as np
+
 # from shapely.geometry import box
 import torch
 
 from neural_clbf.controllers import NeuralObsBFController
+
 # from neural_clbf.systems.planar_lidar_system import Scene
 
 
