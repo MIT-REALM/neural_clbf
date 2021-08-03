@@ -52,7 +52,11 @@ class TurtleBot(ControlAffineSystem):
             ValueError if nominal_params are not valid for this system
         """
         super().__init__(
-            nominal_params, dt=dt, controller_dt=controller_dt, scenarios=scenarios
+            nominal_params,
+            dt=dt,
+            controller_dt=controller_dt,
+            scenarios=scenarios,
+            use_linearized_controller=False,
         )
 
     def validate_params(self, params: Scenario) -> bool:
@@ -111,8 +115,10 @@ class TurtleBot(ControlAffineSystem):
         # define upper and lower limits based around the nominal equilibrium input
         # TODO @bethlow these are relaxed for now, but eventually
         # these values should be measured on the hardware.
-        upper_limit = torch.tensor([100 * 10.0])
-        lower_limit = -torch.tensor([100 * 10.0])
+        upper_limit = torch.ones(self.n_controls)
+        upper_limit[TurtleBot.V] = 100 * 10.0
+        upper_limit[TurtleBot.THETA_DOT] = 4.0 * np.pi
+        lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
 
@@ -212,3 +218,31 @@ class TurtleBot(ControlAffineSystem):
         g = g.matmul(v)
 
         return g
+
+    def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Return u_nominal using feedback law, overriding the typical LQR approximation
+        due to nonlinear turtlebot system
+        args:
+            x: bs x self.n_dims tensor of state
+        returns:
+            u_nominal: bs x self.n_controls tensor of the nominal controls
+
+        """
+        # Compute nominal control from feedback and equilibrium control
+        # v = -(x + y + theta)
+        # omega = -(x + y theta)
+        self.P = torch.eye(3, 3)
+        self.K = torch.ones(self.n_controls, self.n_dims)
+
+        K = self.K.type_as(x)
+        goal = self.goal_point.squeeze().type_as(x)
+        u_nominal = -(K @ (x - goal).T).T
+
+        # Adjust for the equilibrium setpoint
+        u = u_nominal + self.u_eq.type_as(x)
+        # Clamp given the control limits
+        upper_u_lim, lower_u_lim = self.control_limits
+        u = torch.clamp(u,upper_u_lim, lower_u_lim)
+
+        return u
