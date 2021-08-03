@@ -226,11 +226,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Add the learned term as a correction to the minimum distance
         min_dist, _ = o.norm(dim=1).min(dim=-1)
         min_dist = min_dist.reshape(-1, 1)
-        h += 0.3 - min_dist
+        h += self.dynamics_model.r - min_dist  # type: ignore
 
         return h
 
-    def u_(self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor):
+    def u_(
+        self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return the control input for the observations o and state x.
 
         args:
@@ -241,6 +243,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             h: bs x 1 tensor of barrier function values
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control values
+            cost: bs tensor of cost for each control action
         """
         batch_size = x.shape[0]
         # The controller is a one-step lookahead controller that attempts to find a
@@ -262,14 +265,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         search_grid_axes = []
         for idx in range(self.dynamics_model.n_controls):
             search_grid_axis = torch.linspace(
-                lower_limit[idx].item() * 2,
-                upper_limit[idx].item() * 2,
+                lower_limit[idx].item() * 0.75,
+                upper_limit[idx].item() * 0.75,
                 self.lookahead_grid_n,
             )
             # Add the option to not do anything
-            search_grid_axis = torch.cat(
-                (search_grid_axis, self.dynamics_model.u_eq[:, idx])
-            )
+            search_grid_axis = torch.cat((search_grid_axis, torch.tensor([0.0])))
             search_grid_axes.append(search_grid_axis)
 
         # This will make an N x n_controls tensor,
@@ -281,6 +282,15 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # batch. We'll dualize the barrier function constraint with the set penalty,
         # and we'll start by pre-computing the L2 norm of each option.
         costs = u_options.norm(dim=-1).reshape(1, -1).repeat(batch_size, 1)
+        # Also compute the cost of doing nothing
+        no_action_cost = u_nominal.norm(dim=-1).reshape(-1, 1)
+        no_action = self.dynamics_model.u_eq.expand(batch_size, -1)
+        x_next, o_next = self.approximate_lookahead(
+            x, o, no_action, self.controller_period
+        )
+        h_next = self.h(x_next, o_next)
+        no_action_cost = no_action_cost + F.relu(h_next - (1 - self.h_alpha) * h)
+        no_action_cost = no_action_cost.squeeze()
 
         # For each control option, run the approximate lookahead to get the next set
         # of observations and compute the cost based on the barrier function constraint
@@ -298,8 +308,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             h_next = self.h(x_next, o_next)
 
             # Get the violation of the barrier decrease constraint
-            dhdt = (h_next - h) / self.controller_period
-            barrier_function_violation = F.relu(dhdt + self.h_alpha * h).squeeze()
+            barrier_function_violation = F.relu(
+                h_next - (1 - self.h_alpha) * h
+            ).squeeze()
 
             # Add the violation to the cost
             costs[:, option_idx].add_(
@@ -311,7 +322,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
                 print(f"x: {x}")
                 print(f"u_option: {u_option}")
                 print(f"x_next: {x_next}")
-                print(f"dhdt = {dhdt}")
                 print(f"bf violation = {barrier_function_violation}")
 
                 fig, ax = plt.subplots()
@@ -352,14 +362,19 @@ class NeuralObsBFController(pl.LightningModule, Controller):
                 plt.show()
 
         # Now find the option with the lowest cost for each batch
-        best_option_idx = torch.argmin(costs, dim=1)
+        best_option_cost, best_option_idx = torch.min(costs, dim=1)
 
         u = u_nominal + u_options[best_option_idx]
+
+        # Substitute no action if that's better
+        better_do_nothing = no_action_cost < best_option_cost
+        u[better_do_nothing] = no_action[better_do_nothing]
+        best_option_cost[better_do_nothing] = no_action_cost[better_do_nothing]
 
         # Clamp to make sure we don't violate any control limits
         u = torch.clamp(u, lower_limit, upper_limit)
 
-        return u
+        return u, best_option_cost
 
     def u(self, x: torch.Tensor) -> torch.Tensor:
         """Returns the control input at a given state. Computes the observations and
@@ -367,7 +382,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """
         obs = self.get_observations(x)
         h = self.h(x, obs)
-        return self.u_(x, obs, h)
+        u, _ = self.u_(x, obs, h)
+        return u
 
     def forward(self, x):
         """Determine the control input for a given state using a QP
@@ -451,7 +467,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """
         # Compute loss to encourage satisfaction of the following conditions...
         loss = []
-        eps = 1e-2
 
         # We'll encourage satisfying the BF conditions by...
         #
@@ -463,31 +478,31 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         h_t = self.h(x, o)
 
         # Get the control input
-        u_t = self.u_(x, o, h_t)
+        u_t, u_cost = self.u_(x, o, h_t)
 
-        # Propagate the dynamics forward via a zero-order hold for one control period
-        x_tplus1 = self.dynamics_model.zero_order_hold(x, u_t, self.controller_period)
-
-        # Get the barrier function at this new state
-        o_tplus1 = self.get_observations(x_tplus1)
-        h_tplus1 = self.h(x, o_tplus1)
-
-        # The discrete-time barrier function is h(t+1) - h(t) \leq -alpha h(t)
-        # which reformulates to h(t+1) - (1 - alpha) h(t) \leq 0
-        # However, the gradient of loss wrt u becomes very small here (since it scales
-        # with the controller period), so approximating the continuous time condition
-        # works a bit better:
-        #       dh/dt \leq -alpha h ---> (h(t+1) - h(t)) / dt \leq -alpha h(t)
-        dhdt = (h_tplus1 - h_t) / self.controller_period
-        barrier_function_violation = dhdt + self.h_alpha * h_t
-        barrier_function_violation = F.relu(eps + barrier_function_violation)
-        barrier_loss = 1e1 * barrier_function_violation.mean()
-        barrier_acc = (barrier_function_violation <= eps).sum() / x.shape[0]
-
+        # Penalize the cost
+        barrier_loss = u_cost.mean()
         loss.append(("Barrier descent loss", barrier_loss))
 
-        if accuracy:
-            loss.append(("Barrier descent accuracy", barrier_acc))
+        # # Propagate the dynamics forward via a zero-order hold for one control period
+        # x_tplus1 = self.dynamics_model.zero_order_hold(x, u_t, self.controller_period)
+
+        # # Get the barrier function at this new state
+        # o_tplus1 = self.get_observations(x_tplus1)
+        # h_tplus1 = self.h(x, o_tplus1)
+
+        # # The discrete-time barrier function is h(t+1) - h(t) \leq -alpha h(t)
+        # # which reformulates to h(t+1) - (1 - alpha) h(t) \leq 0
+        # dhdt = (h_tplus1 - h_t) / self.controller_period
+        # barrier_function_violation = dhdt + (1 - self.h_alpha) * h_t
+        # barrier_function_violation = F.relu(eps + barrier_function_violation)
+        # barrier_loss = 1e1 * barrier_function_violation.mean()
+        # barrier_acc = (barrier_function_violation <= eps).sum() / x.shape[0]
+
+        # loss.append(("Barrier descent loss", barrier_loss))
+
+        # if accuracy:
+        #     loss.append(("Barrier descent accuracy", barrier_acc))
 
         return loss
 
@@ -502,7 +517,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """Return a list of loss+accuracy functions"""
         return [
             self.boundary_loss,
-            self.descent_loss,
         ]
 
     def training_step(self, batch, batch_idx):
