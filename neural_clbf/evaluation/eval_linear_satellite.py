@@ -59,6 +59,6 @@ def verify_linear_satellite():
 
 
 if __name__ == "__main__":
-    # eval_linear_satellite()
+    eval_linear_satellite()
     # plot_linear_satellite()
-    verify_linear_satellite()
+    # verify_linear_satellite()

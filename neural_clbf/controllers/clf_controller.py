@@ -235,7 +235,7 @@ class CLFController(Controller):
 
         n_controls = self.dynamics_model.n_controls
         n_scenarios = self.n_scenarios
-        allow_relaxation = relaxation_penalty == float("inf")
+        allow_relaxation = not (relaxation_penalty == float("inf"))
 
         # Solve a QP for each row in x
         bs = x.shape[0]
@@ -348,7 +348,10 @@ class CLFController(Controller):
         return u_result.type_as(x), r_result.type_as(x)
 
     def solve_CLF_QP(
-        self, x, relaxation_penalty: Optional[float] = None
+        self,
+        x,
+        relaxation_penalty: Optional[float] = None,
+        u_ref: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Determine the control input for a given state using a QP
 
@@ -356,6 +359,10 @@ class CLFController(Controller):
             x: bs x self.dynamics_model.n_dims tensor of state
             relaxation_penalty: the penalty to use for CLF relaxation, defaults to
                                 self.clf_relaxation_penalty
+            u_ref: allows the user to supply a custom reference input, which will
+                   bypass the self.u_reference function. If provided, must have
+                   dimensions bs x self.dynamics_model.n_controls. If not provided,
+                   default to calling self.u_reference.
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control inputs
             relaxation: bs x 1 tensor of how much the CLF had to be relaxed in each
@@ -366,7 +373,14 @@ class CLFController(Controller):
         Lf_V, Lg_V = self.V_lie_derivatives(x)
 
         # Get the reference control input as well
-        u_ref = self.u_reference(x)
+        if u_ref is not None:
+            err_message = f"u_ref must have {x.shape[0]} rows, but got {u_ref.shape[0]}"
+            assert u_ref.shape[0] == x.shape[0], err_message
+            err_message = f"u_ref must have {self.dynamics_model.n_controls} cols,"
+            err_message += f" but got {u_ref.shape[1]}"
+            assert u_ref.shape[1] == self.dynamics_model.n_controls, err_message
+        else:
+            u_ref = self.u_reference(x)
 
         # Apply default penalty if needed
         if relaxation_penalty is None:
