@@ -211,7 +211,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """Return the BF value for the observations o
 
         args:
-            o: bs x self.dynamics_model.n_dims tensor of state
+            x: bs x self.dynamics_model.n_dims tensor of state
             o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
                observations
         returns:
