@@ -300,7 +300,7 @@ class RolloutStateSpaceExperiment(Experiment):
             V_ax.legend([], [], frameon=False)
 
             # Plot a reference line at h = 0
-            h_ax.plot([0, results_df.t.max()], [0, 0], color="k")
+            V_ax.plot([0, results_df.t.max()], [0, 0], color="k")
 
         fig_handle = ("Rollout (state space)", fig)
 
