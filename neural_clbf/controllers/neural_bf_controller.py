@@ -36,10 +36,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
     h:
         observations + state -> encoder -> fully-connected layers -> h
 
-    u is determined using a lookahead.
-
-    In both of these, we use the same permutation-invariant encoder
-    (inspired by Zengyi's approach to macbf)
+    u is determined using a lookahead with a hand-designed lyapunov function (LF)
 
     encoder:
         observations -> fully-connected layers -> zero invalid elements -> max_pool -> e
@@ -55,8 +52,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         h_hidden_layers: int = 2,
         h_hidden_size: int = 48,
         h_alpha: float = 0.9,
+        V_lambda: float = 0.0,
         lookahead_grid_n: int = 10,
         lookahead_dual_penalty: float = 1e2,
+        V_goal_tolerance: float = 0.7,
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
         epochs_per_episode: Optional[int] = None,
@@ -74,6 +73,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             h_hidden_layers: number of hidden layers to use for the BF network
             h_hidden_size: number of neurons per hidden layer in the BF network
             h_alpha: convergence rate for the BF
+            V_lambda: convergence rate for the LF
             lookahead_grid_n: the number of points to search along each control
                               dimension for the lookahead control.
             lookahead_dual_penalty: the penalty used to dualize the barrier constraint
@@ -111,12 +111,16 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         assert h_alpha > 0
         assert h_alpha <= 1
         self.h_alpha = h_alpha
+        assert V_lambda >= 0
+        assert V_lambda <= 1
+        self.V_lambda = V_lambda
         assert lookahead_grid_n > 0
         self.lookahead_grid_n = lookahead_grid_n
         assert lookahead_dual_penalty >= 0.0
         self.lookahead_dual_penalty = lookahead_dual_penalty
         self.epochs_per_episode = epochs_per_episode
-        self.debug_mode = debug_mode
+        self.debug_mode_exploratory = debug_mode
+        self.debug_mode_goal_seeking = debug_mode
 
         # ----------------------------------------------------------------------------
         # Define the encoder network
@@ -226,18 +230,78 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Add the learned term as a correction to the minimum distance
         min_dist, _ = o.norm(dim=1).min(dim=-1)
         min_dist = min_dist.reshape(-1, 1)
-        h += 0.1 - min_dist
+        h += 0.2 - min_dist
 
         return h
+
+    def V(self, x: torch.Tensor):
+        """Return the LF value for state x
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of state
+        returns:
+            V: bs x 1 tensor of BF values
+        """
+        # Use a very simple Lyapunov function for now (hand-designed for turtlebot)
+        distance_squared = (x[:, :2] ** 2).sum(dim=-1).reshape(-1, 1)
+
+        # Phi is the angle from the current heading towards the origin
+        angle_from_bot_to_origin = torch.atan2(-x[:, 1], -x[:, 0])
+        theta = x[:, 2]
+        phi = angle_from_bot_to_origin - theta
+        # First, wrap the angle error into [-pi, pi]
+        phi = torch.atan2(torch.sin(phi), torch.cos(phi))
+        phi = phi.reshape(-1, 1)
+
+        V = 1.0 * distance_squared + 0.5 * (1 - torch.cos(phi))
+
+        return V
+
+    GOAL_SEEKING_MODE = 0
+    EXPLORATORY_MODE = 1
+
+    def reset_controller(self, x):
+        """Initialize the state-machine controller at states x.
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of states
+        """
+        batch_size = x.shape[0]
+
+        # This tensor indicates which mode each row of x is in
+        self.controller_mode = torch.zeros(batch_size, dtype=torch.int).type_as(x)
+        self.controller_mode += self.GOAL_SEEKING_MODE
+        self.last_controller_mode = self.controller_mode.clone().detach()
+
+        # Store the LF and BF at each hit point
+        self.hit_points_V = torch.zeros(batch_size, 1).type_as(x)
+        self.hit_points_h = torch.zeros(batch_size, 1).type_as(x)
+
+        # This tensor stores number of steps spent in the exploratory mode
+        self.num_exploratory_steps = torch.zeros(batch_size, 1).type_as(x)
+        self.num_exploratory_steps.requires_grad = False
+
+        # Also store the previous control input to avoid being too jerky during the
+        # exploratory phase
+        self.u_prev = torch.zeros(batch_size, self.dynamics_model.n_controls).type_as(x)
+
+    def switch_modes(self, destination_mode, switch_flags):
+        """Switch modes as needed
+
+        args:
+            destination_mode: an int representing the mode to switch to
+            switch_flags: a self.controller_mode.shape[0] boolean tensor that is true
+                          for every row that should switch modes to destination_mode
+        """
+        self.controller_mode[switch_flags] = destination_mode
 
     def u_(
         self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Return the control input for the observations o and state x.
+        """Return the control input for the observations o and state x
 
         args:
-            x: bs x self.dynamics_model.n_dims tensor of states, used only for
-               evaluating the nominal controller
+            x: bs x self.dynamics_model.n_dims tensor of states
             o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
                observations
             h: bs x 1 tensor of barrier function values
@@ -245,23 +309,87 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             u: bs x self.dynamics_model.n_controls tensor of control values
             cost: bs tensor of cost for each control action
         """
+        # Make sure the input size hasn't changed
+        batch_size = x.shape[0]
+        assert batch_size == self.controller_mode.shape[0], "Batch size changed!"
+
+        # Get the controller mode for each batch
+        goal_seeking = self.controller_mode == self.GOAL_SEEKING_MODE
+        exploratory = self.controller_mode == self.EXPLORATORY_MODE
+
+        # Update the number of steps in the exploratory mode
+        self.num_exploratory_steps[exploratory] += 1.0
+
+        # Get control inputs for the goal seeking and exploratory modes,
+        # and at the same time see if any need to switch modes
+        u_goal_seeking, gs_cost, switch_to_exploratory = self.u_goal_seeking(x, o, h)
+        u_exploratory, exp_cost, switch_to_goal_seeking = self.u_exploratory(x, o, h)
+
+        # Collate the control inputs and costs
+        u = torch.zeros_like(u_goal_seeking).type_as(x)
+        costs = torch.zeros_like(gs_cost).type_as(x)
+        u[goal_seeking] = u_goal_seeking[goal_seeking]
+        u[exploratory] = u_exploratory[exploratory]
+        costs[goal_seeking] = gs_cost[goal_seeking]
+        costs[exploratory] = exp_cost[exploratory]
+
+        # Switch modes as needed
+        self.switch_modes(self.GOAL_SEEKING_MODE, switch_to_goal_seeking)
+        self.switch_modes(self.EXPLORATORY_MODE, switch_to_exploratory)
+
+        if (self.last_controller_mode != self.controller_mode).any():
+            print(self.controller_mode)
+        self.last_controller_mode = self.controller_mode.clone().detach()
+
+        # Save the control as the previous control
+        self.u_prev = u
+
+        # Return the correct control
+        return u, costs
+
+    def u_goal_seeking(
+        self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return the control input for the observations o and state x in the goal
+        seeking mode.
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of states
+            o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
+               observations
+            h: bs x 1 tensor of barrier function values
+        returns:
+            u: bs x self.dynamics_model.n_controls tensor of control values
+            cost: bs tensor of cost for each control action
+            switch_to_exploratory: bs tensor of booleans indicating which rows should
+                                   switch controller modes to exploratory
+        """
         batch_size = x.shape[0]
         # The controller is a one-step lookahead controller that attempts to find a
-        # control input close to the nominal control which nevertheless satisfies the
+        # control input that decreases the Lyapunov function and satisfies the
         # barrier function decrease condition.
         #
         # We do this by discretizing the action space and searching over the resulting
         # grid. We use approximate lookahead dynamics to propagate the provided
         # observations forward one step without querying the geometry model.
-        # We then select the element from the grid that is closest to the nominal
-        # control input while still satisfying the barrier function conditions.
+        #
+        # We then select the control input that minimizes
+        #
+        #       Q * (V_{t+1} - (1 - lambda) V_t) + R ||u||^2
+        # s.t.
+        #
+        #       h_{t+1} - (1 - alpha) h_t <= 0
+        #
+        # where the constraint is relaxed to a cost with a large penalty
+        Q = 1.0
+        R = 0.01
 
-        # Get the nominal control
-        u_nominal = self.dynamics_model.u_nominal(x)
+        # Get the LF value at the current state
+        V = self.V(x)
 
         # Create the grid of controls over the action space. We can do this once
         # and use the same grid for all batches.
-        upper_lim, lower_lim = self.dynamics_model.intervention_limits
+        upper_lim, lower_lim = self.dynamics_model.control_limits
         search_grid_axes = []
         for idx in range(self.dynamics_model.n_controls):
             search_grid_axis = torch.linspace(
@@ -276,55 +404,65 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # This will make an N x n_controls tensor,
         # where N = lookahead_grid_n ^ n_controls
         u_options = torch.cartesian_prod(*search_grid_axes).type_as(x)
+        u_options = torch.unique(u_options, dim=0)
+        if self.debug_mode_goal_seeking and torch.allclose(
+            self.controller_mode, torch.zeros_like(self.controller_mode)
+        ):
+            print("u axes")
+            for u_ax in search_grid_axes:
+                print(f"\t{u_ax.T}")
+            print("u options")
+            print(u_options.T)
 
         # We now want to track which element of the search grid is best for each
         # row of the batched input. Create a tensor of costs for each option in each
         # batch. We'll dualize the barrier function constraint with the set penalty,
-        # and we'll start by pre-computing the L2 norm of each option.
-        costs = u_options.norm(dim=-1).reshape(1, -1).repeat(batch_size, 1)
-        # Also compute the cost of doing nothing
-        no_action_cost = u_nominal.norm(dim=-1).reshape(-1, 1)
-        no_action = self.dynamics_model.u_eq.expand(batch_size, -1)
-        x_next, o_next = self.approximate_lookahead(
-            x, o, no_action, self.controller_period
-        )
-        h_next = self.h(x_next, o_next)
-        no_action_cost = no_action_cost + F.relu(h_next - (1 - self.h_alpha) * h)
-        no_action_cost = no_action_cost.reshape(-1)
+        # and we'll start by pre-computing the L2 norm of each option, scaled by R
+        costs = R * u_options.norm(dim=-1).reshape(1, -1).repeat(batch_size, 1)
 
         # For each control option, run the approximate lookahead to get the next set
-        # of observations and compute the cost based on the barrier function constraint
-        # and closeness to the nominal control
+        # of observations and compute the cost based on the changes in LF and BF
         for option_idx in range(u_options.shape[0]):
             # Reshape the control option to match the batch size
             u_option = u_options[option_idx, :].reshape(1, -1)  # 1 x n_controls
             u_option = u_option.expand(batch_size, -1)  # batch_size x n_controls
-            u_option = u_nominal + u_option
 
             # Get the next state and observation from lookahead
             x_next, o_next = self.approximate_lookahead(
                 x, o, u_option, self.controller_period
             )
+
+            # Get the next values of the LF and BF
             h_next = self.h(x_next, o_next)
+            V_next = self.V(x_next)
 
             # Get the violation of the barrier decrease constraint
             barrier_function_violation = F.leaky_relu(
-                h_next - (1 - self.h_alpha) * h, negative_slope=0.1
+                h_next - (1 - self.h_alpha) * h, negative_slope=0.001
             ).squeeze()
+            # and get the LF decrease
+            lyapunov_function_change = V_next - (1 - self.V_lambda) * V
+            lyapunov_function_change = lyapunov_function_change.squeeze()
 
-            # Add the violation to the cost
+            # Add the BF violation and LF decrease to the cost
             costs[:, option_idx].add_(
                 self.lookahead_dual_penalty * barrier_function_violation
+                + Q * lyapunov_function_change
             )
 
-            if self.debug_mode:  # or (h > 0).any():
+            if self.debug_mode_goal_seeking and torch.allclose(
+                self.controller_mode, torch.zeros_like(self.controller_mode)
+            ):
                 print("=============")
                 print(f"x: {x}")
                 print(f"h: {h}")
+                print(f"V: {V}")
                 print(f"u_option: {u_option}")
                 print(f"x_next: {x_next}")
                 print(f"h_next: {h_next}")
+                print(f"V_next: {V_next}")
                 print(f"bf violation = {barrier_function_violation}")
+                print(f"lf change = {lyapunov_function_change}")
                 print(f"cost = {costs[:, option_idx]}")
 
                 fig, ax = plt.subplots()
@@ -366,24 +504,270 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         # Now find the option with the lowest cost for each batch
         best_option_cost, best_option_idx = torch.min(costs, dim=1)
-
-        u = u_nominal + u_options[best_option_idx]
-
-        # Substitute no action if that's better
-        better_do_nothing = no_action_cost < best_option_cost
-        u[better_do_nothing] = no_action[better_do_nothing]
-        best_option_cost[better_do_nothing] = no_action_cost[better_do_nothing]
+        u = u_options[best_option_idx]
 
         # Clamp to make sure we don't violate any control limits
         upper_limit, lower_limit = self.dynamics_model.control_limits
         u = torch.clamp(u, lower_limit, upper_limit)
 
-        return u, best_option_cost
+        # Any control inputs that are zero indicate a deadlock, so we should
+        # switch to the exploratory mode and save the hit points for any rows that
+        # are switching
+        switch_to_exploratory = u.norm(dim=-1) < 1e-3
+        switch_to_exploratory.logical_and_(
+            self.controller_mode == self.GOAL_SEEKING_MODE
+        )
+        self.hit_points_V[switch_to_exploratory] = V[switch_to_exploratory]
+        self.hit_points_h[switch_to_exploratory] = h[switch_to_exploratory]
+        self.num_exploratory_steps[switch_to_exploratory] = 0.0
 
-    def u(self, x: torch.Tensor) -> torch.Tensor:
+        # Do nothing for any points that have reached the goal (measured by V)
+        goal_reached = x[:, :2].norm(dim=-1) < 0.75
+        u[goal_reached] *= 0.0
+        switch_to_exploratory[goal_reached] = False
+
+        return u, best_option_cost.type_as(u), switch_to_exploratory
+
+    def u_exploratory(
+        self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return the control input for the observations o and state x in the
+        exploratory mode.
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of states
+            o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
+               observations
+            h: bs x 1 tensor of barrier function values
+        returns:
+            u: bs x self.dynamics_model.n_controls tensor of control values
+            cost: bs tensor of cost for each control action
+            switch_to_goal_seeking: bs tensor of booleans indicating which rows should
+                                    switch controller modes to goal seeking
+        """
+        batch_size = x.shape[0]
+        # The exploration controller is a one-step lookahead controller that executes
+        # a random walk by varying the previous control in a way that *on average*
+        # causes the Lyapunov function to decrease but introduces sufficient variance
+        # to escape any local minimum. We do this through reverse simulated annealing,
+        # where we start with zero temperature (which induces similar behavior to the
+        # goal-seeking mode), and gradually increasing temperature until the local
+        # minimum is escaped (signalled by the Lyapunov function decreasing below its
+        # value at the hit point)
+        #
+        # We do this by discretizing the action space and searching over the resulting
+        # grid. We use approximate lookahead dynamics to propagate the provided
+        # observations forward one step without querying the geometry model.
+        #
+        # The energy function is similar to the cost used in the goal-seeking mode, with
+        # an extra term to encourage staying near the hit contour of the barrier
+        # function
+        #
+        #       Q * (V_{t+1} - (1 - lambda) V_t) + R ||u - u_prev||^2
+        #       + P * [h_0 - h_{t+1} - eps_h]_+
+        # s.t.
+        #
+        #       h_{t+1} - (1 - alpha) h_t <= 0
+        #
+        # where the constraint is relaxed to a cost with a large penalty
+        Q = 0.0
+        R = 0.1
+        P = 1000.0
+        eps_h = 0.5
+
+        # Get the LF value at the current state
+        V = self.V(x)
+
+        # Create the grid of controls over the action space. We can do this once
+        # and use the same grid for all batches.
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        search_grid_axes = []
+        for idx in range(self.dynamics_model.n_controls):
+            search_grid_axis = torch.linspace(
+                lower_lim[idx].item(),
+                upper_lim[idx].item(),
+                self.lookahead_grid_n,
+            )
+            # Add the option to not do anything
+            search_grid_axis = torch.cat((search_grid_axis, torch.tensor([0.0])))
+            search_grid_axes.append(search_grid_axis)
+
+        # This will make an N x n_controls tensor,
+        # where N = lookahead_grid_n ^ n_controls
+        u_options = torch.cartesian_prod(*search_grid_axes).type_as(x)
+        u_options = torch.unique(u_options, dim=0)
+        # In exploration mode, we want to move forward
+        u_options[:, 0] += 0.1
+        if self.debug_mode_exploratory and torch.allclose(
+            self.controller_mode, torch.ones_like(self.controller_mode)
+        ):
+            print("u axes")
+            for u_ax in search_grid_axes:
+                print(f"\t{u_ax.T}")
+            print("u options")
+            print(u_options.T)
+
+        # We now want to track which element of the search grid is best for each
+        # row of the batched input. Create a tensor of costs for each option in each
+        # batch.
+        costs = torch.zeros(batch_size, u_options.shape[0])
+        # We'll also want to save the next state for each of these options,
+        # so that we can remember the next state for the best option
+        V_nexts = torch.zeros(batch_size, u_options.shape[0], 1)
+
+        # For each control option, run the approximate lookahead to get the next set
+        # of observations and compute the cost based on the changes in LF and BF
+        for option_idx in range(u_options.shape[0]):
+            # Reshape the control option to match the batch size
+            u_option = u_options[option_idx, :].reshape(1, -1)  # 1 x n_controls
+            u_option = u_option.expand(batch_size, -1)  # batch_size x n_controls
+
+            # Get the cost for this option
+            # u_cost = (u_option[:, 1] ** 2).sum(dim=-1)
+            u_cost = -(u_option[:, 0] ** 2).sum(dim=-1)
+
+            # Get the next state and observation from lookahead
+            x_next, o_next = self.approximate_lookahead(
+                x, o, u_option, self.controller_period
+            )
+
+            # Get the next values of the BF and LF
+            h_next = self.h(x_next, o_next)
+            V_next = self.V(x_next)
+            V_nexts[:, option_idx, :] = V_next
+
+            # Get the violation of the barrier decrease constraint
+            barrier_function_violation = F.leaky_relu(
+                h_next - (1 - self.h_alpha) * h, negative_slope=0.001
+            ).reshape(-1)
+            # Also try to stay near the contour of the barrier function
+            bf_tracking = (h_next - self.hit_points_h).abs()
+            bf_tracking = F.leaky_relu(bf_tracking - eps_h, negative_slope=0.01)
+            bf_tracking = bf_tracking.reshape(-1)
+            # and get the LF decrease
+            lyapunov_function_change = V_next - (1 - self.V_lambda) * V
+            lyapunov_function_change = lyapunov_function_change.reshape(-1)
+
+            # Scale the Lyapunov and control costs based on how long we've been
+            # exploring (like a temperature in simulated annealing, this will make
+            # us care less about increasing the lyapunov function if we've been
+            # exploring for a while)
+            temp = 1.0  # / (2.0 * self.num_exploratory_steps + 0.2).reshape(-1)
+
+            # Add the BF violation and LF decrease to the cost
+            costs[:, option_idx].add_(
+                self.lookahead_dual_penalty * barrier_function_violation
+                + P * bf_tracking
+                + temp * (Q * lyapunov_function_change + R * u_cost)
+            )
+
+            if (
+                self.debug_mode_exploratory
+                and torch.allclose(
+                    self.controller_mode, torch.ones_like(self.controller_mode)
+                )
+                and (h > 0).any()
+            ):
+                print("=============")
+                print(f"x: {x}")
+                print(f"h: {h}")
+                print(f"V: {V}")
+                print(f"u_option: {u_option}")
+                print(f"x_next: {x_next}")
+                print(f"h_next: {h_next}")
+                print(f"V_next: {V_next}")
+                print(f"bf violation = {barrier_function_violation}")
+                print(f"lf change = {lyapunov_function_change}")
+                print(f"cost = {costs[:, option_idx]}")
+
+                fig, ax = plt.subplots()
+                dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
+                dynamics_model.scene.plot(ax)
+                ax.set_aspect("equal")
+
+                ax.plot(x[:, 0], x[:, 1], "ko")
+
+                lidar_pts = o[0, :, :]
+                rotation_mat = torch.tensor(
+                    [
+                        [torch.cos(x[0, 2]), -torch.sin(x[0, 2])],
+                        [torch.sin(x[0, 2]), torch.cos(x[0, 2])],
+                    ]
+                )
+                lidar_pts = rotation_mat @ lidar_pts
+                lidar_pts[0, :] += x[0, 0]
+                lidar_pts[1, :] += x[0, 1]
+                ax.plot(lidar_pts[0, :], lidar_pts[1, :], "k-o")
+
+                ax.plot(x_next[:, 0], x_next[:, 1], "ro")
+
+                lidar_pts = o_next[0, :, :]
+                rotation_mat = torch.tensor(
+                    [
+                        [torch.cos(x_next[0, 2]), -torch.sin(x_next[0, 2])],
+                        [torch.sin(x_next[0, 2]), torch.cos(x_next[0, 2])],
+                    ]
+                )
+                lidar_pts = rotation_mat @ lidar_pts
+                lidar_pts[0, :] += x_next[0, 0]
+                lidar_pts[1, :] += x_next[0, 1]
+                ax.plot(lidar_pts[0, :], lidar_pts[1, :], "r-o")
+
+                mng = plt.get_current_fig_manager()
+                mng.resize(*mng.window.maxsize())
+                plt.show()
+
+        # Now randomly select an option for each row based on cost (= energy in the
+        # parlance of simulated annealing). Convert costs to probabilities of selection
+        # according to P = exp(-cost) (normalized)
+        selection_probabilities = -costs
+        selection_probabilities = F.softmax(selection_probabilities, dim=-1)
+        chosen_option_idx = torch.multinomial(selection_probabilities, 1).reshape(-1)
+        _, chosen_option_idx = torch.max(selection_probabilities, dim=-1)
+
+        # Extract the control and cost for this option
+        u = u_options[chosen_option_idx]
+        u_cost = torch.zeros(batch_size).type_as(u)
+        for batch_idx in range(batch_size):
+            u_cost[batch_idx] = costs[batch_idx, chosen_option_idx[batch_idx]]
+
+        if self.debug_mode_exploratory and torch.allclose(
+            self.controller_mode, torch.ones_like(self.controller_mode)
+        ):
+            print("costs")
+            print(costs)
+            print("selection_probabilities")
+            print(selection_probabilities)
+            print(f"chose option {chosen_option_idx}, u = {u}")
+
+        # Clamp to make sure we don't violate any control limits
+        upper_limit, lower_limit = self.dynamics_model.control_limits
+        u = torch.clamp(u, lower_limit, upper_limit)
+
+        # Once in the exploratory mode, we can transition back to the goal seeking
+        # mode once the Lyapunov function value has decreased below the hit point value
+        V_next = torch.zeros_like(self.hit_points_V)
+        for batch_idx in range(batch_size):
+            V_next[batch_idx] = V_nexts[batch_idx, chosen_option_idx[batch_idx]]
+
+        switch_to_goal_seeking = (V_next < 0.95 * self.hit_points_V).reshape(-1)
+        switch_to_goal_seeking.logical_and_(
+            self.controller_mode == self.EXPLORATORY_MODE
+        )
+
+        return u, u_cost.type_as(u), switch_to_goal_seeking
+
+    def u(self, x: torch.Tensor, reset: bool = False) -> torch.Tensor:
         """Returns the control input at a given state. Computes the observations and
         barrier function value at this state before computing the control.
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of state
+            reset: if True, reset the modes of the controller
         """
+        if reset:
+            self.reset_controller(x)
+
         obs = self.get_observations(x)
         h = self.h(x, obs)
         u, _ = self.u_(x, obs, h)

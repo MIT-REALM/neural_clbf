@@ -18,5 +18,6 @@ __all__ = [
     "BFContourExperiment",
     "RolloutTimeSeriesExperiment",
     "RolloutStateSpaceExperiment",
+    "RolloutNormExperiment",
     "CarSCurveExperiment",
 ]

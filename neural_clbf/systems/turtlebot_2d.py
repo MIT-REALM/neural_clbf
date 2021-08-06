@@ -127,11 +127,11 @@ class TurtleBot2D(PlanarLidarSystem):
         # These are relaxed for now, but eventually they should be measured on hardware
         upper_limit = torch.ones(self.n_controls)
         upper_limit[TurtleBot2D.V] = 2.0
-        upper_limit[TurtleBot2D.THETA_DOT] = 4.0 * np.pi
+        upper_limit[TurtleBot2D.THETA_DOT] = 6.0 * np.pi
 
         lower_limit = torch.ones(self.n_controls)
         lower_limit[TurtleBot2D.V] = 0.0
-        lower_limit[TurtleBot2D.THETA_DOT] = -4.0 * np.pi
+        lower_limit[TurtleBot2D.THETA_DOT] = -6.0 * np.pi
 
         return (upper_limit, lower_limit)
 
@@ -163,15 +163,12 @@ class TurtleBot2D(PlanarLidarSystem):
         """
         # Extract batch size and set up a tensor for holding the result
         batch_size = x.shape[0]
-        f = torch.zeros((batch_size, self.n_dims, 1))
-        f = f.type_as(x)
 
-        # f is a zero vector as nothing should happen when no control input is given
-        f[:, TurtleBot2D.X, 0] = 0
-        f[:, TurtleBot2D.Y, 0] = 0
-        f[:, TurtleBot2D.THETA, 0] = 0
+        # memoize the tensor
+        if not hasattr(self, "f_tensor"):
+            self.f_tensor = torch.zeros(self.n_dims, 1)
 
-        return f
+        return self.f_tensor.expand(batch_size, -1, -1).type_as(x)
 
     def _g(self, x: torch.Tensor, params: Scenario):
         """
@@ -193,14 +190,11 @@ class TurtleBot2D(PlanarLidarSystem):
 
         # Effect on x
         g[:, TurtleBot2D.X, TurtleBot2D.V] = torch.cos(theta)
-        g[:, TurtleBot2D.X, TurtleBot2D.THETA_DOT] = 0.0
 
         # Effect on y
         g[:, TurtleBot2D.Y, TurtleBot2D.V] = torch.sin(theta)
-        g[:, TurtleBot2D.Y, TurtleBot2D.THETA_DOT] = 0.0
 
         # Effect on theta
-        g[:, TurtleBot2D.THETA, TurtleBot2D.V] = 0.0
         g[:, TurtleBot2D.THETA, TurtleBot2D.THETA_DOT] = 1.0
 
         return g
