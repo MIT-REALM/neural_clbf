@@ -296,7 +296,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.controller_mode[switch_flags] = destination_mode
 
     def u_(
-        self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor
+        self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor, V: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Return the control input for the observations o and state x
 
@@ -305,6 +305,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
                observations
             h: bs x 1 tensor of barrier function values
+            V: bs x 1 tensor of lyapunov function values
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control values
             cost: bs tensor of cost for each control action
@@ -320,10 +321,19 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Update the number of steps in the exploratory mode
         self.num_exploratory_steps[exploratory] += 1.0
 
+        # Both control modes do a lookeahead that wants a list of options for control
+        # inputs, and the next state, observations, V, and h values for each option.
+        # We can save time by doing this once for both modes
+        u_options, x_next, o_next, h_next, V_next = self.lookahead(x, o)
+
         # Get control inputs for the goal seeking and exploratory modes,
         # and at the same time see if any need to switch modes
-        u_goal_seeking, gs_cost, switch_to_exploratory = self.u_goal_seeking(x, o, h)
-        u_exploratory, exp_cost, switch_to_goal_seeking = self.u_exploratory(x, o, h)
+        u_goal_seeking, gs_cost, switch_to_exploratory = self.u_goal_seeking(
+            x, o, h, V, u_options, x_next, o_next, h_next, V_next
+        )
+        u_exploratory, exp_cost, switch_to_goal_seeking = self.u_exploratory(
+            x, o, h, V, u_options, x_next, o_next, h_next, V_next
+        )
 
         # Collate the control inputs and costs
         u = torch.zeros_like(u_goal_seeking).type_as(x)
@@ -347,8 +357,94 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Return the correct control
         return u, costs
 
+    def lookahead(
+        self,
+        x: torch.Tensor,
+        o: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Generate a list of control input options and evaluate them.
+
+        args:
+            x: bs x self.dynamics_model.n_dims tensor of states
+            o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
+               observations
+        returns:
+            u_options: N x n_controls tensor of possible control inputs, where
+                       N = self.lookahead_grid_n ^ n_controls (same below)
+            x_next: bs x N x self.dynamics_model.n_dims tensor of next states
+            o_next: bs x N x self.dynamics_model.obs_dim x self.dynamics_model.n_obs
+                    tensor of observations at the next state
+            V_next: bs x N x 1 tensor of Lyapunov function values at the next state
+            h_next: bs x N x 1 tensor of barrier function values at the next state
+        """
+        batch_size = x.shape[0]
+        # Create the grid of controls over the action space.
+        upper_lim, lower_lim = self.dynamics_model.control_limits
+        search_grid_axes = []
+        for idx in range(self.dynamics_model.n_controls):
+            search_grid_axis = torch.linspace(
+                lower_lim[idx].item(),
+                upper_lim[idx].item(),
+                self.lookahead_grid_n,
+            )
+            # Add the option to not do anything
+            search_grid_axis = torch.cat((search_grid_axis, torch.tensor([0.0])))
+            search_grid_axes.append(search_grid_axis)
+
+        # This will make an N x n_controls tensor,
+        # where N = lookahead_grid_n ^ n_controls
+        u_options = torch.cartesian_prod(*search_grid_axes).type_as(x)
+        u_options = torch.unique(u_options, dim=0)
+
+        # We want to move forward, so modify the controls
+        u_options[:, 0] += 0.1  # bias v forward for turtlebot
+
+        if self.debug_mode_goal_seeking or self.debug_mode_exploratory:
+            print("u axes")
+            for u_ax in search_grid_axes:
+                print(f"\t{u_ax.T}")
+            print("u options")
+            print(u_options.T)
+
+        # For each control option, run the approximate lookahead to get the next set
+        # of states, observations, LF, and BF
+        x_nexts = torch.zeros(batch_size, u_options.shape[0], x.shape[1])
+        o_nexts = torch.zeros(batch_size, u_options.shape[0], o.shape[1], o.shape[2])
+        V_nexts = torch.zeros(batch_size, u_options.shape[0], 1)
+        h_nexts = torch.zeros(batch_size, u_options.shape[0], 1)
+        for option_idx in range(u_options.shape[0]):
+            # Reshape the control option to match the batch size
+            u_option = u_options[option_idx, :].reshape(1, -1)  # 1 x n_controls
+            u_option = u_option.expand(batch_size, -1)  # batch_size x n_controls
+
+            # Get the next state and observation from lookahead
+            x_next, o_next = self.approximate_lookahead(
+                x, o, u_option, self.controller_period
+            )
+
+            # Get the next values of the LF and BF
+            h_next = self.h(x_next, o_next)
+            V_next = self.V(x_next)
+
+            # Save
+            x_nexts[:, option_idx, :] = x_next
+            o_nexts[:, option_idx, :, :] = o_next
+            V_nexts[:, option_idx, :] = V_next
+            h_nexts[:, option_idx, :] = h_next
+
+        return u_options, x_nexts, o_nexts, h_nexts, V_nexts
+
     def u_goal_seeking(
-        self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor
+        self,
+        x: torch.Tensor,
+        o: torch.Tensor,
+        h: torch.Tensor,
+        V: torch.Tensor,
+        u_options: torch.Tensor,
+        x_nexts: torch.Tensor,
+        o_nexts: torch.Tensor,
+        h_nexts: torch.Tensor,
+        V_nexts: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return the control input for the observations o and state x in the goal
         seeking mode.
@@ -358,6 +454,14 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
                observations
             h: bs x 1 tensor of barrier function values
+            V: bs x 1 tensor of Lyapunov function values
+            u_options: N x n_controls tensor of possible control inputs, where
+                       N = self.lookahead_grid_n ^ n_controls (same below)
+            x_nexts: bs x N x self.dynamics_model.n_dims tensor of next states
+            o_nexts: bs x N x self.dynamics_model.obs_dim x self.dynamics_model.n_obs
+                     tensor of observations at the next state
+            h_nexts: bs x N x 1 tensor of barrier function values at the next state
+            V_nexts: bs x N x 1 tensor of Lyapunov function values at the next state
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control values
             cost: bs tensor of cost for each control action
@@ -384,36 +488,6 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         Q = 1.0
         R = 0.01
 
-        # Get the LF value at the current state
-        V = self.V(x)
-
-        # Create the grid of controls over the action space. We can do this once
-        # and use the same grid for all batches.
-        upper_lim, lower_lim = self.dynamics_model.control_limits
-        search_grid_axes = []
-        for idx in range(self.dynamics_model.n_controls):
-            search_grid_axis = torch.linspace(
-                lower_lim[idx].item(),
-                upper_lim[idx].item(),
-                self.lookahead_grid_n,
-            )
-            # Add the option to not do anything
-            search_grid_axis = torch.cat((search_grid_axis, torch.tensor([0.0])))
-            search_grid_axes.append(search_grid_axis)
-
-        # This will make an N x n_controls tensor,
-        # where N = lookahead_grid_n ^ n_controls
-        u_options = torch.cartesian_prod(*search_grid_axes).type_as(x)
-        u_options = torch.unique(u_options, dim=0)
-        if self.debug_mode_goal_seeking and torch.allclose(
-            self.controller_mode, torch.zeros_like(self.controller_mode)
-        ):
-            print("u axes")
-            for u_ax in search_grid_axes:
-                print(f"\t{u_ax.T}")
-            print("u options")
-            print(u_options.T)
-
         # We now want to track which element of the search grid is best for each
         # row of the batched input. Create a tensor of costs for each option in each
         # batch. We'll dualize the barrier function constraint with the set penalty,
@@ -428,13 +502,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             u_option = u_option.expand(batch_size, -1)  # batch_size x n_controls
 
             # Get the next state and observation from lookahead
-            x_next, o_next = self.approximate_lookahead(
-                x, o, u_option, self.controller_period
-            )
-
-            # Get the next values of the LF and BF
-            h_next = self.h(x_next, o_next)
-            V_next = self.V(x_next)
+            x_next = x_nexts[:, option_idx, :]
+            o_next = o_nexts[:, option_idx, :, :]
+            V_next = V_nexts[:, option_idx, :]
+            h_next = h_nexts[:, option_idx, :]
 
             # Get the violation of the barrier decrease constraint
             barrier_function_violation = F.leaky_relu(
@@ -513,7 +584,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Any control inputs that are zero indicate a deadlock, so we should
         # switch to the exploratory mode and save the hit points for any rows that
         # are switching
-        switch_to_exploratory = u.norm(dim=-1) < 1e-3
+        switch_to_exploratory = u.norm(dim=-1) <= 0.2
         switch_to_exploratory.logical_and_(
             self.controller_mode == self.GOAL_SEEKING_MODE
         )
@@ -529,7 +600,16 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         return u, best_option_cost.type_as(u), switch_to_exploratory
 
     def u_exploratory(
-        self, x: torch.Tensor, o: torch.Tensor, h: torch.Tensor
+        self,
+        x: torch.Tensor,
+        o: torch.Tensor,
+        h: torch.Tensor,
+        V: torch.Tensor,
+        u_options: torch.Tensor,
+        x_nexts: torch.Tensor,
+        o_nexts: torch.Tensor,
+        h_nexts: torch.Tensor,
+        V_nexts: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return the control input for the observations o and state x in the
         exploratory mode.
@@ -539,6 +619,14 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             o: bs x self.dynamics_model.obs_dim x self.dynamics_model.n_obs tensor of
                observations
             h: bs x 1 tensor of barrier function values
+            V: bs x 1 tensor of lyapunov function values
+            u_options: N x n_controls tensor of possible control inputs, where
+                       N = self.lookahead_grid_n ^ n_controls (same below)
+            x_nexts: bs x N x self.dynamics_model.n_dims tensor of next states
+            o_nexts: bs x N x self.dynamics_model.obs_dim x self.dynamics_model.n_obs
+                     tensor of observations at the next state
+            h_nexts: bs x N x 1 tensor of barrier function values at the next state
+            V_nexts: bs x N x 1 tensor of Lyapunov function values at the next state
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control values
             cost: bs tensor of cost for each control action
@@ -575,45 +663,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         P = 1000.0
         eps_h = 0.5
 
-        # Get the LF value at the current state
-        V = self.V(x)
-
-        # Create the grid of controls over the action space. We can do this once
-        # and use the same grid for all batches.
-        upper_lim, lower_lim = self.dynamics_model.control_limits
-        search_grid_axes = []
-        for idx in range(self.dynamics_model.n_controls):
-            search_grid_axis = torch.linspace(
-                lower_lim[idx].item(),
-                upper_lim[idx].item(),
-                self.lookahead_grid_n,
-            )
-            # Add the option to not do anything
-            search_grid_axis = torch.cat((search_grid_axis, torch.tensor([0.0])))
-            search_grid_axes.append(search_grid_axis)
-
-        # This will make an N x n_controls tensor,
-        # where N = lookahead_grid_n ^ n_controls
-        u_options = torch.cartesian_prod(*search_grid_axes).type_as(x)
-        u_options = torch.unique(u_options, dim=0)
-        # In exploration mode, we want to move forward
-        u_options[:, 0] += 0.1
-        if self.debug_mode_exploratory and torch.allclose(
-            self.controller_mode, torch.ones_like(self.controller_mode)
-        ):
-            print("u axes")
-            for u_ax in search_grid_axes:
-                print(f"\t{u_ax.T}")
-            print("u options")
-            print(u_options.T)
-
         # We now want to track which element of the search grid is best for each
         # row of the batched input. Create a tensor of costs for each option in each
         # batch.
         costs = torch.zeros(batch_size, u_options.shape[0])
-        # We'll also want to save the next state for each of these options,
-        # so that we can remember the next state for the best option
-        V_nexts = torch.zeros(batch_size, u_options.shape[0], 1)
 
         # For each control option, run the approximate lookahead to get the next set
         # of observations and compute the cost based on the changes in LF and BF
@@ -627,14 +680,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             u_cost = -(u_option[:, 0] ** 2).sum(dim=-1)
 
             # Get the next state and observation from lookahead
-            x_next, o_next = self.approximate_lookahead(
-                x, o, u_option, self.controller_period
-            )
-
-            # Get the next values of the BF and LF
-            h_next = self.h(x_next, o_next)
-            V_next = self.V(x_next)
-            V_nexts[:, option_idx, :] = V_next
+            x_next = x_nexts[:, option_idx, :]
+            o_next = o_nexts[:, option_idx, :, :]
+            V_next = V_nexts[:, option_idx, :]
+            h_next = h_nexts[:, option_idx, :]
 
             # Get the violation of the barrier decrease constraint
             barrier_function_violation = F.leaky_relu(
@@ -770,7 +819,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         obs = self.get_observations(x)
         h = self.h(x, obs)
-        u, _ = self.u_(x, obs, h)
+        V = self.V(x)
+        u, _ = self.u_(x, obs, h, V)
         return u
 
     def forward(self, x):
@@ -863,11 +913,12 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #      period has elapsed, and computing the violation of BF conditions
         #      based on that change.
 
-        # Get the barrier function at this current state
+        # Get the barrier and lyapunov function at this current state
         h_t = self.h(x, o)
+        V_t = self.V(x)
 
         # Get the control input
-        u_t, u_cost = self.u_(x, o, h_t)
+        u_t, u_cost = self.u_(x, o, h_t, V_t)
 
         # Penalize the cost
         barrier_loss = F.relu(eps + u_cost).mean()

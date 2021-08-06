@@ -388,7 +388,7 @@ class ControlAffineSystem(ABC):
     ) -> torch.Tensor:
         """
         Simulate dynamics forward for controller_dt, simulating at self.dt, with control
-        held constant at u, starting from x
+        held constant at u, starting from x.
 
         args:
             x: bs x self.n_dims tensor of state

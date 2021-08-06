@@ -151,6 +151,94 @@ class TurtleBot2D(PlanarLidarSystem):
 
         return (upper_limit, lower_limit)
 
+    @staticmethod
+    @torch.jit.script
+    def discrete_update_local_frame(
+        u: torch.Tensor,
+        controller_dt: float,
+    ) -> torch.Tensor:
+        """
+        Simulate one step forward in the local frame, assuming a zero-order hold for
+        controller_dt time. Expressed in the local frame where x points out the front
+        of the robot.
+
+        args:
+            u: bs x self.n_controls tensor of controls
+            controller_dt: the amount of time to hold for
+        returns:
+            delta_x: bs x self.n_dims state update in the local frame
+        """
+        delta_x = torch.zeros(u.shape[0], 3).type_as(u)
+
+        # Get references to the state and controls
+        v = u[:, 0]
+        omega = u[:, 1]
+
+        # There are three cases: going straight, turning left, and turning right
+        eps = 1e-3
+        straight = omega.abs() < eps
+        left = omega >= eps
+        right = omega <= -eps
+
+        # When going straight, the robot just moves v * controller_dt straight ahead
+        # in the local frame (so y and theta are unchanged)
+        delta_x[straight, 0] = v[straight] * controller_dt
+
+        # When turning left, the bot traces around a circle of radius r and sweeps an
+        # angle alpha, centered to the left of the bot
+        r = v[left] / (omega[left] + eps)
+        alpha = omega[left] * controller_dt
+        delta_x[left, 0] = r * torch.sin(alpha)
+        delta_x[left, 1] = r * (1 - torch.cos(alpha))
+        delta_x[left, 2] = alpha
+
+        # When turning right, the bot traces around a circle of radius r and sweeps an
+        # angle alpha, but centered on the right of the bot
+        r = v[right] / (-omega[right] + eps)
+        alpha = -omega[right] * controller_dt  # negate to make alpha positive here
+        delta_x[right, 0] = r * torch.sin(alpha)
+        delta_x[right, 1] = -r * (1 - torch.cos(alpha))
+        delta_x[right, 2] = -alpha
+
+        return delta_x
+
+    def zero_order_hold(
+        self,
+        x: torch.Tensor,
+        u: torch.Tensor,
+        controller_dt: float,
+        params: Optional[Scenario] = None,
+    ) -> torch.Tensor:
+        """
+        Simulate dynamics forward for controller_dt, simulating at self.dt, with control
+        held constant at u, starting from x.
+
+        Overriden for the turtlebot to predict future state from a dubins path.
+
+        args:
+            x: bs x self.n_dims tensor of state
+            u: bs x self.n_controls tensor of controls
+            controller_dt: the amount of time to hold for
+            params: a dictionary giving the parameter values for the system. If None,
+                    default to the nominal parameters used at initialization
+        returns:
+            x_next: bs x self.n_dims tensor of next states
+        """
+        # First figure out change in local frame
+        delta_x = TurtleBot2D.discrete_update_local_frame(u, controller_dt)
+
+        # Convert delta x to the world frame using a rotation matrix
+        theta = x[:, TurtleBot2D.THETA]
+        c_theta = torch.cos(theta).view(-1, 1, 1)
+        s_theta = torch.sin(theta).view(-1, 1, 1)
+        first_row = torch.cat((c_theta, -s_theta), dim=2)
+        second_row = torch.cat((s_theta, c_theta), dim=2)
+        rotation_mat = torch.cat((first_row, second_row), dim=1)
+        delta_x[:, :2] = torch.bmm(rotation_mat, delta_x[:, :2].unsqueeze(-1)).squeeze()
+
+        # Return the simulated state
+        return x + delta_x
+
     def _f(self, x: torch.Tensor, params: Scenario):
         """
         Return the control-independent part of the control-affine dynamics.

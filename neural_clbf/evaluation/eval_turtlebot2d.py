@@ -1,15 +1,13 @@
 import numpy as np
 
-from shapely.geometry import box
 import torch
 
 from neural_clbf.controllers import NeuralObsBFController
-
-from neural_clbf.systems.planar_lidar_system import Scene
+import neural_clbf.evaluation.scenes as scene_utils
 
 
 @torch.no_grad()
-def eval_and_plot_linear_satellite():
+def eval_and_plot_turtlebot():
     # Load the checkpoint file. This should include the experiment suite used during
     # training.
     log_dir = "saved_models/perception/turtlebot2d/commit_26f34ff/"
@@ -24,7 +22,7 @@ def eval_and_plot_linear_satellite():
     contour_experiment.domain = [(-4.0, 0.0), (-2.0, 2.0)]
 
     # Modify rollout parameters
-    rollout_experiment.t_sim = 5
+    rollout_experiment.t_sim = 10
     rollout_experiment.start_x = torch.tensor(
         [
             [-2.5, -2.5, np.pi / 2],
@@ -40,12 +38,7 @@ def eval_and_plot_linear_satellite():
     # neural_controller.debug_mode_goal_seeking = True
 
     # Modify scene
-    scene = Scene([])
-    scene.add_walls(10.0)
-    scene.add_obstacle(box(-1.1, -1.0, -0.9, 1.0))
-    # scene.add_obstacle(rotate(box(-1.1, -0.6, -0.9, 0.6), 1, use_radians=True))
-    scene.add_obstacle(box(-2.0, 1.0, -0.9, 1.2))
-    scene.add_obstacle(box(-2.0, -1.2, -0.9, -1.0))
+    scene = scene_utils.bugtrap()
     neural_controller.dynamics_model.scene = scene
 
     # Run the experiments and plot
@@ -54,4 +47,4 @@ def eval_and_plot_linear_satellite():
 
 
 if __name__ == "__main__":
-    eval_and_plot_linear_satellite()
+    eval_and_plot_turtlebot()
