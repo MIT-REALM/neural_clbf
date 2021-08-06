@@ -238,74 +238,74 @@ class RealTimeSeriesExperiment(Experiment):
     
     #########################################################################################
     #don't need to worry about plotting for now
-    def plot(
-        self,
-        controller_under_test: "Controller",
-        results_df: pd.DataFrame,
-        display_plots: bool = False,
-    ) -> List[Tuple[str, figure]]:
-        """
-        Plot the results, and return the plot handles. Optionally
-        display the plots.
-        args:
-            controller_under_test: the controller with which to run the experiment
-            display_plots: defaults to False. If True, display the plots (blocks until
-                           the user responds).
-        returns: a list of tuples containing the name of each figure and the figure
-                 object.
-        """
-        # Set the color scheme
-        sns.set_theme(context="talk", style="white")
+#     def plot(
+#         self,
+#         controller_under_test: "Controller",
+#         results_df: pd.DataFrame,
+#         display_plots: bool = False,
+#     ) -> List[Tuple[str, figure]]:
+#         """
+#         Plot the results, and return the plot handles. Optionally
+#         display the plots.
+#         args:
+#             controller_under_test: the controller with which to run the experiment
+#             display_plots: defaults to False. If True, display the plots (blocks until
+#                            the user responds).
+#         returns: a list of tuples containing the name of each figure and the figure
+#                  object.
+#         """
+#         # Set the color scheme
+#         sns.set_theme(context="talk", style="white")
 
-        # Plot the state and control trajectories (and V, if it's present)
-        plot_V = "V" in results_df.measurement.values
-        num_plots = len(self.plot_x_indices) + len(self.plot_u_indices)
-        if plot_V:
-            num_plots += 1
+#         # Plot the state and control trajectories (and V, if it's present)
+#         plot_V = "V" in results_df.measurement.values
+#         num_plots = len(self.plot_x_indices) + len(self.plot_u_indices)
+#         if plot_V:
+#             num_plots += 1
 
-        fig, axs = plt.subplots(num_plots, 1)
-        fig.set_size_inches(10, 4 * num_plots)
+#         fig, axs = plt.subplots(num_plots, 1)
+#         fig.set_size_inches(10, 4 * num_plots)
 
-        # Plot all of the states first
-        for i, state_label in enumerate(self.plot_x_labels):
-            ax = axs[i]
-            state_mask = results_df["measurement"] == state_label
-            sns.lineplot(
-                ax=ax, x="t", y="value", hue="Parameters", data=results_df[state_mask]
-            )
-            ax.set_ylabel(state_label)
-            # Clear the x label since the plots are stacked
-            ax.set_xlabel("")
+#         # Plot all of the states first
+#         for i, state_label in enumerate(self.plot_x_labels):
+#             ax = axs[i]
+#             state_mask = results_df["measurement"] == state_label
+#             sns.lineplot(
+#                 ax=ax, x="t", y="value", hue="Parameters", data=results_df[state_mask]
+#             )
+#             ax.set_ylabel(state_label)
+#             # Clear the x label since the plots are stacked
+#             ax.set_xlabel("")
 
-        # Then all of the controls
-        for i, control_label in enumerate(self.plot_u_labels):
-            ax = axs[len(self.plot_x_indices) + i]
-            control_mask = results_df["measurement"] == control_label
-            sns.lineplot(
-                ax=ax, x="t", y="value", hue="Parameters", data=results_df[control_mask]
-            )
-            ax.set_ylabel(control_label)
-            # Clear the x label since the plots are stacked
-            ax.set_xlabel("")
+#         # Then all of the controls
+#         for i, control_label in enumerate(self.plot_u_labels):
+#             ax = axs[len(self.plot_x_indices) + i]
+#             control_mask = results_df["measurement"] == control_label
+#             sns.lineplot(
+#                 ax=ax, x="t", y="value", hue="Parameters", data=results_df[control_mask]
+#             )
+#             ax.set_ylabel(control_label)
+#             # Clear the x label since the plots are stacked
+#             ax.set_xlabel("")
 
-        # Finally, V (if available)
-        if plot_V:
-            ax = axs[-1]
-            V_mask = results_df["measurement"] == "V"
-            sns.lineplot(
-                ax=ax, x="t", y="value", hue="Parameters", data=results_df[V_mask]
-            )
-            ax.set_ylabel("$V$")
-            # Clear the x label since the plots are stacked
-            ax.set_xlabel("")
+#         # Finally, V (if available)
+#         if plot_V:
+#             ax = axs[-1]
+#             V_mask = results_df["measurement"] == "V"
+#             sns.lineplot(
+#                 ax=ax, x="t", y="value", hue="Parameters", data=results_df[V_mask]
+#             )
+#             ax.set_ylabel("$V$")
+#             # Clear the x label since the plots are stacked
+#             ax.set_xlabel("")
 
-        # Set one x label for all the stacked plots
-        axs[-1].set_xlabel("t")
+#         # Set one x label for all the stacked plots
+#         axs[-1].set_xlabel("t")
 
-        fig_handle = ("Real Turtlebot (time series)", fig)
+#         fig_handle = ("Real Turtlebot (time series)", fig)
 
-        if display_plots:
-            plt.show()
-            return []
-        else:
-            return [fig_handle]
+#         if display_plots:
+#             plt.show()
+#             return []
+#         else:
+#             return [fig_handle]
