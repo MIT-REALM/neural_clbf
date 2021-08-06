@@ -117,11 +117,15 @@ class RolloutStateSpaceExperiment(Experiment):
         device = "cpu"
         if hasattr(controller_under_test, "device"):
             device = controller_under_test.device  # type: ignore
+        x_current = x_sim_start.to(device)
+
+        # Reset the controller if necessary
+        if hasattr(controller_under_test, "reset_controller"):
+            controller_under_test.reset_controller(x_current)  # type: ignore
 
         # Simulate!
         delta_t = controller_under_test.dynamics_model.dt
         num_timesteps = int(self.t_sim // delta_t)
-        x_current = x_sim_start.to(device)
         u_current = torch.zeros(x_sim_start.shape[0], n_controls, device=device)
         controller_update_freq = int(controller_under_test.controller_period / delta_t)
         prog_bar_range = tqdm.trange(
@@ -174,7 +178,7 @@ class RolloutStateSpaceExperiment(Experiment):
                     log_packet["h"] = h[sim_index].cpu().numpy().item()
                 # Log the Lyapunov function if applicable
                 if V is not None:
-                    log_packet["V"] = V.cpu().numpy().item()
+                    log_packet["V"] = V[sim_index].cpu().numpy().item()
 
                 results_df = results_df.append(log_packet, ignore_index=True)
 
@@ -234,14 +238,26 @@ class RolloutStateSpaceExperiment(Experiment):
             V_ax = ax[num_plots - 1]
 
         # Plot the rollout
-        sns.lineplot(
-            ax=rollout_ax,
-            x=self.plot_x_label,
-            y=self.plot_y_label,
-            style="Parameters",
-            hue="Simulation",
-            data=results_df,
-        )
+        # sns.lineplot(
+        #     ax=rollout_ax,
+        #     x=self.plot_x_label,
+        #     y=self.plot_y_label,
+        #     style="Parameters",
+        #     hue="Simulation",
+        #     data=results_df,
+        # )
+        for plot_idx, sim_index in enumerate(results_df["Simulation"].unique()):
+            sim_mask = results_df["Simulation"] == sim_index
+            rollout_ax.plot(
+                results_df[sim_mask][self.plot_x_label].to_numpy(),
+                results_df[sim_mask][self.plot_y_label].to_numpy(),
+                linestyle="-",
+                marker="+",
+                markersize=5,
+                color=sns.color_palette()[plot_idx],
+            )
+            rollout_ax.set_xlabel(self.plot_x_label)
+            rollout_ax.set_ylabel(self.plot_y_label)
 
         # Remove the legend -- too much clutter
         rollout_ax.legend([], [], frameon=False)
@@ -251,27 +267,27 @@ class RolloutStateSpaceExperiment(Experiment):
 
         # Plot the barrier function if applicable
         if "h" in results_df:
-            sns.lineplot(
-                ax=h_ax,
-                x="t",
-                y="h",
-                style="Parameters",
-                hue="Simulation",
-                data=results_df,
-            )
-            h_ax.set_ylabel("$h$")
-            h_ax.set_xlabel("t")
-            # Remove the legend -- too much clutter
-            h_ax.legend([], [], frameon=False)
-
-            # Plot a reference line at h = 0
-            h_ax.plot([0, results_df["t"].max()], [0, 0], color="k")
-
-            # Also plot the derivatives
-
             # Get the derivatives for each simulation
-            for sim_index in results_df["Simulation"].unique():
+            for plot_idx, sim_index in enumerate(results_df["Simulation"].unique()):
                 sim_mask = results_df["Simulation"] == sim_index
+
+                h_ax.plot(
+                    results_df[sim_mask]["t"].to_numpy(),
+                    results_df[sim_mask]["h"].to_numpy(),
+                    linestyle="-",
+                    marker="+",
+                    markersize=5,
+                    color=sns.color_palette()[plot_idx],
+                )
+                h_ax.set_ylabel("$h$")
+                h_ax.set_xlabel("t")
+                # Remove the legend -- too much clutter
+                h_ax.legend([], [], frameon=False)
+
+                # Plot a reference line at h = 0
+                h_ax.plot([0, results_df["t"].max()], [0, 0], color="k")
+
+                # Also plot the derivatives
                 h_next = results_df[sim_mask]["h"][1:].to_numpy()
                 h_now = results_df[sim_mask]["h"][:-1].to_numpy()
                 alpha = controller_under_test.h_alpha  # type: ignore
@@ -281,26 +297,37 @@ class RolloutStateSpaceExperiment(Experiment):
                     results_df[sim_mask]["t"][:-1].to_numpy(),
                     h_violation,
                     linestyle=":",
+                    color=sns.color_palette()[plot_idx],
                 )
                 h_ax.set_ylabel("$h$ violation")
 
         # Plot the lyapunov function if applicable
         if "V" in results_df:
-            sns.lineplot(
-                ax=V_ax,
-                x="t",
-                y="V",
-                style="Parameters",
-                hue="Simulation",
-                data=results_df,
-            )
+            for plot_idx, sim_index in enumerate(results_df["Simulation"].unique()):
+                sim_mask = results_df["Simulation"] == sim_index
+                V_ax.plot(
+                    results_df[sim_mask]["t"].to_numpy(),
+                    results_df[sim_mask]["V"].to_numpy(),
+                    linestyle="-",
+                    marker="+",
+                    markersize=5,
+                    color=sns.color_palette()[plot_idx],
+                )
+            # sns.lineplot(
+            #     ax=V_ax,
+            #     x="t",
+            #     y="V",
+            #     style="Parameters",
+            #     hue="Simulation",
+            #     data=results_df,
+            # )
             V_ax.set_ylabel("$V$")
             V_ax.set_xlabel("t")
             # Remove the legend -- too much clutter
             V_ax.legend([], [], frameon=False)
 
-            # Plot a reference line at h = 0
-            h_ax.plot([0, results_df.t.max()], [0, 0], color="k")
+            # Plot a reference line at V = 0
+            V_ax.plot([0, results_df.t.max()], [0, 0], color="k")
 
         fig_handle = ("Rollout (state space)", fig)
 
