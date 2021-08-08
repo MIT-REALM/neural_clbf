@@ -25,9 +25,19 @@ def eval_and_plot_turtlebot():
     rollout_experiment.t_sim = 10
     rollout_experiment.start_x = torch.tensor(
         [
+            # Start from same room as goal (OK, 10s)
             [-2.5, -2.5, np.pi / 2],
             [-4.0, 0.0, 0.0],
-            # [-2.0, 0.0, 0.0],
+            # # Start from table room (OK, 20s)
+            # [-13.5, 1.0, 0.0],
+            # [-11.83, -4.8, 0.0],
+            # # Start from chair room (OK, 80)
+            # [-13.5, -13.5, 0.0],
+            # [-7.0, -8.0, 0.0],
+            # Start from chair room (testing)
+            # [-1.0, -13.5, 0.0],  # (OK, 80)
+            # [-3.0, -12, 0.0],  # (OK, 200)
+            # [-3.8, -11, 0.0],  # (OK, 100)
         ]
     )
     neural_controller.lookahead_grid_n = 8
@@ -38,7 +48,7 @@ def eval_and_plot_turtlebot():
     # neural_controller.debug_mode_goal_seeking = True
 
     # Modify scene
-    scene = scene_utils.bugtrap()
+    scene = scene_utils.room_4()
     neural_controller.dynamics_model.scene = scene
 
     # Run the experiments and plot
