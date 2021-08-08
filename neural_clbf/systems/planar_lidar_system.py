@@ -414,10 +414,6 @@ class PlanarLidarSystem(ObservableSystem):
         # Use this to get the anticipated next state
         delta_x = x_next - x
 
-        # # DEBUG what happens if we just get the observation at the next state?
-        # o_next = self.get_observations(x_next)
-        # return x_next, o_next
-
         # We can also extract the planar part of the change in state and use that to
         # update the observations. Each observation is a point in the current agent
         # frame, and the change in state changes the agent frame. We can apply this
