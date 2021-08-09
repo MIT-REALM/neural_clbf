@@ -87,7 +87,7 @@ def main(args):
         plot_u_indices=[TurtleBot.V, TurtleBot.THETA_DOT],
         plot_u_labels=["$v$", "$\\dot{\\theta}$"],
         t_sim=6.0,
-        n_sims_per_start=5,
+        n_sims_per_start=2,
     )
     rollout_state_space_experiment = RolloutStateSpaceExperiment(
         "Rollout State Space",
@@ -97,7 +97,7 @@ def main(args):
         plot_y_index=TurtleBot.Y,
         plot_y_label="$y$",
         scenarios=scenarios,
-        n_sims_per_start=5,
+        n_sims_per_start=2,
         t_sim=6.0,
     )
     experiment_suite = ExperimentSuite(
