@@ -92,9 +92,9 @@ def main(args):
     rollout_state_space_experiment = RolloutStateSpaceExperiment(
         "Rollout State Space",
         start_x,
-        plot_x_index=[TurtleBot.X],
-        plot_x_label=["$x$"],
-        plot_y_index=[TurtleBot.Y],
+        plot_x_index=TurtleBot.X,
+        plot_x_label="$x$",
+        plot_y_index=TurtleBot.Y,
         plot_y_label="$y$",
         scenarios=scenarios,
         n_sims_per_start=5,
