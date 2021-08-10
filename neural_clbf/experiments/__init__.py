@@ -4,6 +4,7 @@ from .experiment_suite import ExperimentSuite
 from .clf_contour_experiment import CLFContourExperiment
 from .clf_verification_experiment import CLFVerificationExperiment
 from .bf_contour_experiment import BFContourExperiment
+from .lf_contour_experiment import LFContourExperiment
 from .rollout_time_series_experiment import RolloutTimeSeriesExperiment
 from .rollout_norm_experiment import RolloutNormExperiment
 from .rollout_state_space_experiment import RolloutStateSpaceExperiment
@@ -16,6 +17,7 @@ __all__ = [
     "CLFContourExperiment",
     "CLFVerificationExperiment",
     "BFContourExperiment",
+    "LFContourExperiment",
     "RolloutTimeSeriesExperiment",
     "RolloutStateSpaceExperiment",
     "RolloutNormExperiment",

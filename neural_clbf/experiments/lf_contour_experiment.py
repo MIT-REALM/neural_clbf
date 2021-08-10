@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from neural_clbf.controllers import Controller, NeuralObsBFController  # noqa
 
 
-class BFContourExperiment(Experiment):
-    """An experiment for plotting the contours of learned BFs"""
+class LFContourExperiment(Experiment):
+    """An experiment for plotting the contours of learned LFs"""
 
     def __init__(
         self,
@@ -28,9 +28,8 @@ class BFContourExperiment(Experiment):
         x_axis_label: str = "$x$",
         y_axis_label: str = "$y$",
         default_state: Optional[torch.Tensor] = None,
-        plot_unsafe_region: bool = True,
     ):
-        """Initialize an experiment for plotting the value of the BF over selected
+        """Initialize an experiment for plotting the value of the LF over selected
         state dimensions.
 
         args:
@@ -45,9 +44,8 @@ class BFContourExperiment(Experiment):
             default_state: 1 x dynamics_model.n_dims tensor of default state
                            values. The values at x_axis_index and y_axis_index will be
                            overwritten by the grid values.
-            plot_unsafe_region: True to plot the safe/unsafe region boundaries.
         """
-        super(BFContourExperiment, self).__init__(name)
+        super(LFContourExperiment, self).__init__(name)
 
         # Default to plotting over [-1, 1] in all directions
         if domain is None:
@@ -60,7 +58,6 @@ class BFContourExperiment(Experiment):
         self.x_axis_label = x_axis_label
         self.y_axis_label = y_axis_label
         self.default_state = default_state
-        self.plot_unsafe_region = plot_unsafe_region
 
     @torch.no_grad()
     def run(self, controller_under_test: "Controller") -> pd.DataFrame:
@@ -82,7 +79,6 @@ class BFContourExperiment(Experiment):
             raise ValueError("Controller under test must be a NeuralObsBFController")
 
         controller_under_test = cast("NeuralObsBFController", controller_under_test)
-        dynamics_model = cast("ObservableSystem", controller_under_test.dynamics_model)
 
         # Set up a dataframe to store the results
         results_df = pd.DataFrame()
@@ -115,31 +111,24 @@ class BFContourExperiment(Experiment):
         )
 
         # Loop through the grid
-        prog_bar_range = tqdm.trange(self.n_grid, desc="Plotting BF", leave=True)
+        prog_bar_range = tqdm.trange(self.n_grid, desc="Plotting LF", leave=True)
         for i in prog_bar_range:
             for j in range(self.n_grid):
                 # Adjust x to be at the current grid point
                 x[0, self.x_axis_index] = x_vals[i]
                 x[0, self.y_axis_index] = y_vals[j]
 
-                # Get the value of the BF from observations at this point
-                obs = dynamics_model.get_observations(x)
-                h = controller_under_test.h(x, obs)
+                # Get the value of the LF at this point
+                V = controller_under_test.V(x)
 
                 # TODO @dawsonc measure violation
-
-                # Get the goal, safe, or unsafe classification
-                is_safe = controller_under_test.dynamics_model.safe_mask(x).all()
-                is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
 
                 # Store the results
                 results_df = results_df.append(
                     {
                         self.x_axis_label: x_vals[i].cpu().numpy().item(),
                         self.y_axis_label: y_vals[j].cpu().numpy().item(),
-                        "h": h.cpu().numpy().item(),
-                        "Safe region": is_safe.cpu().numpy().item(),
-                        "Unsafe region": is_unsafe.cpu().numpy().item(),
+                        "V": V.cpu().numpy().item(),
                     },
                     ignore_index=True,
                 )
@@ -173,64 +162,16 @@ class BFContourExperiment(Experiment):
         contours = ax.tricontourf(
             results_df[self.x_axis_label],
             results_df[self.y_axis_label],
-            results_df["h"],
+            results_df["V"],
             cmap=sns.color_palette("rocket", as_cmap=True),
         )
         plt.colorbar(contours, ax=ax, orientation="vertical")
 
-        # Overlay the safe/unsafe regions (if specified)
-        if self.plot_unsafe_region:
-            ax.plot([], [], c="green", label="Safe Region")
-            ax.tricontour(
-                results_df[self.x_axis_label],
-                results_df[self.y_axis_label],
-                results_df["Safe region"],
-                colors=["green"],
-                levels=[0.5],
-            )
-            ax.plot([], [], c="magenta", label="Unsafe Region")
-            ax.tricontour(
-                results_df[self.x_axis_label],
-                results_df[self.y_axis_label],
-                results_df["Unsafe region"],
-                colors=["magenta"],
-                levels=[0.5],
-            )
-
-            # Plot the environment if possible
-            if hasattr(controller_under_test.dynamics_model, "plot_environment"):
-                controller_under_test.dynamics_model.plot_environment(ax)
-
-            ax.plot([], [], c="blue", label="h(o(x)) = 0.0")
-            if hasattr(controller_under_test, "safe_level"):
-                ax.tricontour(
-                    results_df[self.x_axis_label],
-                    results_df[self.y_axis_label],
-                    results_df["h"],
-                    colors=["blue"],
-                    levels=[0.0],
-                )
-            else:
-                ax.tricontour(
-                    results_df[self.x_axis_label],
-                    results_df[self.y_axis_label],
-                    results_df["h"],
-                    colors=["blue"],
-                    levels=[0.0],
-                )
-
         # Make the legend
-        ax.legend(
-            bbox_to_anchor=(0, 1.02, 1, 0.2),
-            loc="lower left",
-            mode="expand",
-            borderaxespad=0,
-            ncol=4,
-        )
         ax.set_xlabel(self.x_axis_label)
         ax.set_ylabel(self.y_axis_label)
 
-        fig_handle = ("h Contour", fig)
+        fig_handle = ("V Contour", fig)
 
         if display_plots:
             plt.show()
