@@ -52,6 +52,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         h_hidden_layers: int = 2,
         h_hidden_size: int = 48,
         h_alpha: float = 0.9,
+        V_hidden_layers: int = 2,
+        V_hidden_size: int = 48,
         V_lambda: float = 0.0,
         lookahead_grid_n: int = 10,
         lookahead_dual_penalty: float = 1e2,
@@ -73,6 +75,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             h_hidden_layers: number of hidden layers to use for the BF network
             h_hidden_size: number of neurons per hidden layer in the BF network
             h_alpha: convergence rate for the BF
+            h_hidden_layers: number of hidden layers to use for the LF network
+            h_hidden_size: number of neurons per hidden layer in the LF network
             V_lambda: convergence rate for the LF
             lookahead_grid_n: the number of points to search along each control
                               dimension for the lookahead control.
@@ -163,6 +167,24 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.h_layers["output_linear"] = nn.Linear(self.h_hidden_size, 1)
         self.h_nn = nn.Sequential(self.h_layers)
 
+        # ----------------------------------------------------------------------------
+        # Define the LF network, which we denote V
+        # ----------------------------------------------------------------------------
+        self.V_hidden_layers = V_hidden_layers
+        self.V_hidden_size = V_hidden_size
+        num_V_inputs = self.dynamics_model.n_dims
+        # We're going to build the network up layer by layer, starting with the input
+        self.V_layers: OrderedDict[str, nn.Module] = OrderedDict()
+        self.V_layers["input_linear"] = nn.Linear(num_V_inputs, self.V_hidden_size)
+        self.V_layers["input_activation"] = nn.ReLU()
+        for i in range(self.V_hidden_layers):
+            self.V_layers[f"layer_{i}_linear"] = nn.Linear(
+                self.V_hidden_size, self.V_hidden_size
+            )
+            self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
+        self.V_layers["output_linear"] = nn.Linear(self.V_hidden_size, 1)
+        self.V_nn = nn.Sequential(self.V_layers)
+
     def prepare_data(self):
         return self.datamodule.prepare_data()
 
@@ -242,18 +264,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             V: bs x 1 tensor of BF values
         """
-        # Use a very simple Lyapunov function for now (hand-designed for turtlebot)
-        distance_squared = (x[:, :2] ** 2).sum(dim=-1).reshape(-1, 1)
-
-        # Phi is the angle from the current heading towards the origin
-        angle_from_bot_to_origin = torch.atan2(-x[:, 1], -x[:, 0])
-        theta = x[:, 2]
-        phi = angle_from_bot_to_origin - theta
-        # First, wrap the angle error into [-pi, pi]
-        phi = torch.atan2(torch.sin(phi), torch.cos(phi))
-        phi = phi.reshape(-1, 1)
-
-        V = 1.0 * distance_squared + 0.5 * (1 - torch.cos(phi))
+        V = self.V_nn(x)
 
         return V
 
@@ -274,11 +285,11 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.last_controller_mode = self.controller_mode.clone().detach()
 
         # Store the LF and BF at each hit point
-        self.hit_points_V = torch.zeros(batch_size, 1).type_as(x)
-        self.hit_points_h = torch.zeros(batch_size, 1).type_as(x)
+        self.hit_points_V = torch.zeros(batch_size, 1).type_as(x).detach()
+        self.hit_points_h = torch.zeros(batch_size, 1).type_as(x).detach()
 
         # This tensor stores number of steps spent in the exploratory mode
-        self.num_exploratory_steps = torch.zeros(batch_size, 1).type_as(x)
+        self.num_exploratory_steps = torch.zeros(batch_size, 1).type_as(x).detach()
         self.num_exploratory_steps.requires_grad = False
 
         # Also store the previous control input to avoid being too jerky during the
@@ -352,8 +363,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.switch_modes(self.GOAL_SEEKING_MODE, switch_to_goal_seeking)
         self.switch_modes(self.EXPLORATORY_MODE, switch_to_exploratory)
 
-        if (self.last_controller_mode != self.controller_mode).any():
-            print(self.controller_mode)
+        # if (self.last_controller_mode != self.controller_mode).any():
+        #     print(self.controller_mode)
         self.last_controller_mode = self.controller_mode.clone().detach()
 
         # Save the control as the previous control
@@ -366,7 +377,14 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self,
         x: torch.Tensor,
         o: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
         """Generate a list of control input options and evaluate them.
 
         args:
@@ -379,8 +397,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             x_next: bs * N x self.dynamics_model.n_dims tensor of next states
             o_next: bs * N x self.dynamics_model.obs_dim x self.dynamics_model.n_obs
                     tensor of observations at the next state
-            V_next: bs * N x 1 tensor of Lyapunov function values at the next state
             h_next: bs * N x 1 tensor of barrier function values at the next state
+            V_next: bs * N x 1 tensor of Lyapunov function values at the next state
             idxs: bs * N x 2 tensor of indices into x and u_options
         """
         # Create the grid of controls over the action space.
@@ -506,7 +524,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         if self.debug_mode_goal_seeking and torch.allclose(
             self.controller_mode, torch.zeros_like(self.controller_mode)
         ):
-            for state_idx, option_idx in range(u_options.shape[0]):
+            for state_idx, option_idx in idxs:
                 # Reshape the control option to match the batch size
                 u_option = u_options[option_idx, :].reshape(1, -1)  # 1 x n_controls
 
@@ -594,10 +612,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         )
         self.hit_points_V[switch_to_exploratory] = V.view(batch_size, num_options, -1)[
             switch_to_exploratory, 0
-        ]
+        ].detach()
         self.hit_points_h[switch_to_exploratory] = h.view(batch_size, num_options, -1)[
             switch_to_exploratory, 0
-        ]
+        ].detach()
         self.num_exploratory_steps[switch_to_exploratory] = 0.0
 
         # Do nothing for any points that have reached the goal (measured by V)
@@ -917,51 +935,74 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         loss = []
         eps = 1e-1
 
-        # We'll encourage satisfying the BF conditions by...
-        #
-        #   1) Getting the change in the barrier function value after one control
-        #      period has elapsed, and computing the violation of BF conditions
-        #      based on that change.
-
         # Get the barrier and lyapunov function at this current state
         h_t = self.h(x, o)
         V_t = self.V(x)
 
         # Get the control input
+        self.reset_controller(x)
         u_t, u_cost = self.u_(x, o, h_t, V_t)
 
         # Penalize the cost
         barrier_loss = F.relu(eps + u_cost).mean()
         loss.append(("Barrier descent loss", barrier_loss))
 
-        # # Propagate the dynamics forward via a zero-order hold for one control period
-        # x_tplus1 = self.dynamics_model.zero_order_hold(x, u_t, self.controller_period)
+        return loss
 
-        # # Get the barrier function at this new state
-        # o_tplus1 = self.get_observations(x_tplus1)
-        # h_tplus1 = self.h(x, o_tplus1)
+    def tuning_loss(
+        self,
+        x: torch.Tensor,
+        o: torch.Tensor,
+        goal_mask: torch.Tensor,
+        safe_mask: torch.Tensor,
+        unsafe_mask: torch.Tensor,
+        accuracy: bool = False,
+    ) -> List[Tuple[str, torch.Tensor]]:
+        """
+        Evaluate a loss that tunes the BF and LF into well-defined shapes
 
-        # # The discrete-time barrier function is h(t+1) - h(t) \leq -alpha h(t)
-        # # which reformulates to h(t+1) - (1 - alpha) h(t) \leq 0
-        # dhdt = (h_tplus1 - h_t) / self.controller_period
-        # barrier_function_violation = dhdt + (1 - self.h_alpha) * h_t
-        # barrier_function_violation = F.relu(eps + barrier_function_violation)
-        # barrier_loss = 1e1 * barrier_function_violation.mean()
-        # barrier_acc = (barrier_function_violation <= eps).sum() / x.shape[0]
+        args:
+            x: the points at which to evaluate the loss,
+            o: the observations at points x
+            goal_mask: the points in x marked as part of the goal
+            safe_mask: the points in x marked safe
+            unsafe_mask: the points in x marked unsafe
+            accuracy: if True, return the accuracy (from 0 to 1) as well as the losses
+        returns:
+            loss: a list of tuples containing ("category_name", loss_value).
+        """
+        # Compute loss to encourage satisfaction of the following conditions...
+        loss = []
 
-        # loss.append(("Barrier descent loss", barrier_loss))
+        # Get the barrier and lyapunov function at this current state
+        h_t = self.h(x, o)
+        V_t = self.V(x)
 
-        # if accuracy:
-        #     loss.append(("Barrier descent accuracy", barrier_acc))
+        # Make h act like negative distance with some buffer
+        min_dist, _ = o.norm(dim=1).min(dim=-1)
+        min_dist = min_dist.reshape(-1, 1)
+        h_tuning_distance = 0.2 - min_dist
+        h_tuning_loss = 1e-1 * ((h_t - h_tuning_distance) ** 2).sum(dim=-1).mean()
+        loss.append(("H tuning loss", h_tuning_loss))
+
+        # Make V act like a norm measuring range and angle from the origin
+        distance_squared = (x[:, :2] ** 2).sum(dim=-1).reshape(-1, 1)
+        # Phi is the angle from the current heading towards the origin
+        angle_from_bot_to_origin = torch.atan2(-x[:, 1], -x[:, 0])
+        theta = x[:, 2]
+        phi = angle_from_bot_to_origin - theta
+        # First, wrap the angle error into [-pi, pi]
+        phi = torch.atan2(torch.sin(phi), torch.cos(phi))
+        phi = phi.reshape(-1, 1)
+        V_tuning = 1.0 * distance_squared + 0.5 * (1 - torch.cos(phi))
+        V_tuning_loss = 1e-1 * ((V_t - V_tuning) ** 2).sum(dim=-1).mean()
+        loss.append(("V tuning loss", V_tuning_loss))
 
         return loss
 
     def losses(self):
         """Return a list of loss functions"""
-        return [
-            self.boundary_loss,
-            self.descent_loss,
-        ]
+        return [self.boundary_loss, self.descent_loss, self.tuning_loss]
 
     def accuracies(self):
         """Return a list of loss+accuracy functions"""

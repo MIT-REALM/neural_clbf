@@ -17,6 +17,7 @@ from neural_clbf.systems.planar_lidar_system import Scene
 from neural_clbf.experiments import (
     ExperimentSuite,
     BFContourExperiment,
+    LFContourExperiment,
     RolloutStateSpaceExperiment,
 )
 from neural_clbf.training.utils import current_git_hash
@@ -130,6 +131,15 @@ def main(args):
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
+    V_contour_experiment = LFContourExperiment(
+        "h_Contour",
+        domain=[(-5.0, 5.0), (-5.0, 5.0)],
+        n_grid=60,
+        x_axis_index=TurtleBot2D.X,
+        y_axis_index=TurtleBot2D.Y,
+        x_axis_label="$x$",
+        y_axis_label="$y$",
+    )
     rollout_experiment = RolloutStateSpaceExperiment(
         "Rollout",
         start_x,
@@ -141,7 +151,9 @@ def main(args):
         n_sims_per_start=1,
         t_sim=5.0,
     )
-    experiment_suite = ExperimentSuite([h_contour_experiment, rollout_experiment])
+    experiment_suite = ExperimentSuite(
+        [h_contour_experiment, V_contour_experiment, rollout_experiment]
+    )
 
     # Initialize the controller
     bf_controller = NeuralObsBFController(
