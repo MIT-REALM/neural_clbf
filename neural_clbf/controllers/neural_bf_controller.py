@@ -181,8 +181,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.V_hidden_size, self.V_hidden_size
             )
-            self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
-        self.V_layers["output_linear"] = nn.Linear(self.V_hidden_size, 1)
+            if i < self.clbf_hidden_layers - 1:
+                self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
+        # Use the positive definite trick to encode V
+        # self.V_layers["output_linear"] = nn.Linear(self.V_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 
     def prepare_data(self):
@@ -249,10 +251,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
 
-        # Add the learned term as a correction to the minimum distance
-        min_dist, _ = o.norm(dim=1).min(dim=-1)
-        min_dist = min_dist.reshape(-1, 1)
-        h += 0.2 - min_dist
+        # # Add the learned term as a correction to the minimum distance
+        # min_dist, _ = o.norm(dim=1).min(dim=-1)
+        # min_dist = min_dist.reshape(-1, 1)
+        # h += 0.2 - min_dist
 
         return h
 
@@ -265,6 +267,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             V: bs x 1 tensor of BF values
         """
         V = self.V_nn(x)
+        V = 0.5 * (V * V).sum(dim=1)
 
         return V
 
