@@ -181,7 +181,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.V_hidden_size, self.V_hidden_size
             )
-            if i < self.clbf_hidden_layers - 1:
+            if i < self.V_hidden_layers - 1:
                 self.V_layers[f"layer_{i}_activation"] = nn.ReLU()
         # Use the positive definite trick to encode V
         # self.V_layers["output_linear"] = nn.Linear(self.V_hidden_size, 1)
