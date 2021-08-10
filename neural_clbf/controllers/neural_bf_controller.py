@@ -267,7 +267,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             V: bs x 1 tensor of BF values
         """
         V = self.V_nn(x)
-        V = 0.5 * (V ** 2).sum(dim=-1)
+        V = 0.5 * (V ** 2).sum(dim=-1).reshape(-1, 1)
 
         return V
 
