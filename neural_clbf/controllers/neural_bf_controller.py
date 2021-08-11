@@ -251,10 +251,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
 
-        # Add the learned term as a correction to the minimum distance
-        min_dist, _ = o.norm(dim=1).min(dim=-1)
-        min_dist = min_dist.reshape(-1, 1)
-        h += 0.2 - min_dist
+        # # Add the learned term as a correction to the minimum distance
+        # min_dist, _ = o.norm(dim=1).min(dim=-1)
+        # min_dist = min_dist.reshape(-1, 1)
+        # h += 0.2 - min_dist
 
         return h
 
