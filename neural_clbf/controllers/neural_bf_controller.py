@@ -251,10 +251,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Then get the barrier function value
         h = self.h_nn(encoded_obs)
 
-        # # Add the learned term as a correction to the minimum distance
-        # min_dist, _ = o.norm(dim=1).min(dim=-1)
-        # min_dist = min_dist.reshape(-1, 1)
-        # h += 0.2 - min_dist
+        # Add the learned term as a correction to the minimum distance
+        min_dist, _ = o.norm(dim=1).min(dim=-1)
+        min_dist = min_dist.reshape(-1, 1)
+        h += 0.2 - min_dist
 
         return h
 
@@ -268,6 +268,17 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         """
         V = self.V_nn(x)
         V = 0.5 * (V ** 2).sum(dim=-1).reshape(-1, 1)
+
+        # Add the learned term as a correction to a norm-like base
+        distance_squared = (x[:, :2] ** 2).sum(dim=-1).reshape(-1, 1)
+        # Phi is the angle from the current heading towards the origin
+        angle_from_bot_to_origin = torch.atan2(-x[:, 1], -x[:, 0])
+        theta = x[:, 2]
+        phi = angle_from_bot_to_origin - theta
+        # First, wrap the angle error into [-pi, pi]
+        phi = torch.atan2(torch.sin(phi), torch.cos(phi))
+        phi = phi.reshape(-1, 1)
+        V += 1.0 * distance_squared + 0.5 * (1 - torch.cos(phi))
 
         return V
 
