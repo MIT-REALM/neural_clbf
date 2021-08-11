@@ -172,7 +172,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # ----------------------------------------------------------------------------
         self.V_hidden_layers = V_hidden_layers
         self.V_hidden_size = V_hidden_size
-        num_V_inputs = self.dynamics_model.n_dims
+        # For turtlebot, the inputs to V are range and heading to the origin
+        num_V_inputs = 2
         # We're going to build the network up layer by layer, starting with the input
         self.V_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.V_layers["input_linear"] = nn.Linear(num_V_inputs, self.V_hidden_size)
@@ -266,11 +267,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             V: bs x 1 tensor of BF values
         """
-        V = self.V_nn(x)
-        V = 0.5 * (V ** 2).sum(dim=-1).reshape(-1, 1)
-
-        # Add the learned term as a correction to a norm-like base
-        distance_squared = (x[:, :2] ** 2).sum(dim=-1).reshape(-1, 1)
+        # The inputs to V for the turtlebot are range and heading to the origin
+        range_to_goal = torch.sqrt((x[:, :2] ** 2).sum(dim=-1)).reshape(-1, 1)
         # Phi is the angle from the current heading towards the origin
         angle_from_bot_to_origin = torch.atan2(-x[:, 1], -x[:, 0])
         theta = x[:, 2]
@@ -278,6 +276,13 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # First, wrap the angle error into [-pi, pi]
         phi = torch.atan2(torch.sin(phi), torch.cos(phi))
         phi = phi.reshape(-1, 1)
+
+        V_input = torch.hstack((range_to_goal, phi))
+        V = self.V_nn(V_input)
+        V = 0.5 * (V ** 2).sum(dim=-1).reshape(-1, 1)
+
+        # Add the learned term as a correction to a norm-like base
+        distance_squared = range_to_goal ** 2
         V += 1.0 * distance_squared + 0.5 * (1 - torch.cos(phi))
 
         return V

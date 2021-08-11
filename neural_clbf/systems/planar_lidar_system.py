@@ -160,8 +160,8 @@ class Scene:
         """Return a simulated LIDAR measurement of the scene, taken from the specified pose
 
         args:
-            qs: a N x 6 tensor containing the x, y, and theta coordinates for each of N
-                measurements to be taken, along with the velocity in each coordinate.
+            qs: a N x 3 tensor containing the x, y, and theta coordinates for each of N
+                measurements to be taken
             num_rays: the number of equally spaced rays to measure
             field_of_view: a tuple specifying the maximum and minimum angle of the field
                            of view of the LIDAR sensor, measured in the vehicle frame
@@ -269,6 +269,38 @@ class Scene:
                 measurements[q_idx, :2, ray_idx] = contact_pt_agent
 
         return measurements
+
+    def min_distance_to_obstacle(
+        self,
+        qs: torch.Tensor,
+    ) -> torch.Tensor:
+        """Returns the minimum distance to an obstacle in the scene
+
+        args:
+            qs: a N x 3 tensor containing the x, y, and theta coordinates for each of N
+                measurements to be taken
+        returns:
+            an N x 1 tensor of the minimum distance from the robot to any obstacle at
+            each point
+        """
+        # Reshape input if necessary
+        if qs.ndim == 1:
+            qs = torch.reshape(qs, (1, -1))
+
+        # Create the array to store the results, then iterate through each sample point
+        min_distances = torch.zeros(qs.shape[0], 1).type_as(qs)
+
+        for q_idx, q in enumerate(qs):
+            agent_point = Point(q[0].item(), q[1].item())
+
+            # Check if we're in collision
+            min_distance = float('inf')
+            for obstacle in self.obstacles:
+                min_distance = min(min_distance, obstacle.distance(agent_point))
+
+            min_distances[q_idx, 0] = min_distance
+
+        return min_distances
 
     def plot(self, ax: Axes):
         """Plot the given scene
@@ -475,12 +507,10 @@ class PlanarLidarSystem(ObservableSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
         min_safe_ray_length = 0.5
 
-        measurements = self.get_observations(x)
+        qs = self.planar_configuration(x)
+        min_distances = self.scene.min_distance_to_obstacle(qs).reshape(-1)
 
-        # Get the x and y values
-        ray_lengths = measurements[:, :2, :].norm(dim=1)
-
-        safe_mask.logical_and_(ray_lengths.min(dim=1)[0] >= min_safe_ray_length)
+        safe_mask.logical_and_(min_distances >= min_safe_ray_length)
 
         return safe_mask
 
@@ -494,12 +524,10 @@ class PlanarLidarSystem(ObservableSystem):
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
         min_safe_ray_length = 0.2
 
-        measurements = self.get_observations(x)
+        qs = self.planar_configuration(x)
+        min_distances = self.scene.min_distance_to_obstacle(qs).reshape(-1)
 
-        # Get the x and y values
-        ray_lengths = measurements[:, :2, :].norm(dim=1)
-
-        unsafe_mask.logical_or_(ray_lengths.min(dim=1)[0] <= min_safe_ray_length)
+        unsafe_mask.logical_or_(min_distances <= min_safe_ray_length)
 
         return unsafe_mask
 

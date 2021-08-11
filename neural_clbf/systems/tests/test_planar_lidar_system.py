@@ -26,6 +26,11 @@ def test_scene_initializaton():
         [obs in obstacles for obs in scene.obstacles]
     ), "Environment.obstacles should contain all provided obstacles"
 
+    # Make sure we can get the minimum distance to an obstacle
+    q = torch.tensor([[0.5, 1.2, 0.0]])
+    min_distances = scene.min_distance_to_obstacle(q)
+    assert torch.allclose(min_distances, torch.zeros_like(min_distances) + 0.2)
+
 
 def test_scene_add_obstacle():
     """Test adding an obstacle to a scene"""
