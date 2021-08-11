@@ -173,7 +173,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.V_hidden_layers = V_hidden_layers
         self.V_hidden_size = V_hidden_size
         # For turtlebot, the inputs to V are range and heading to the origin
-        num_V_inputs = 2
+        num_V_inputs = 3
         # We're going to build the network up layer by layer, starting with the input
         self.V_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.V_layers["input_linear"] = nn.Linear(num_V_inputs, self.V_hidden_size)
@@ -277,7 +277,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         phi = torch.atan2(torch.sin(phi), torch.cos(phi))
         phi = phi.reshape(-1, 1)
 
-        V_input = torch.hstack((range_to_goal, phi))
+        V_input = torch.hstack((range_to_goal, torch.cos(phi), torch.sin(phi)))
         V = self.V_nn(V_input)
         V = 0.5 * (V ** 2).sum(dim=-1).reshape(-1, 1)
 
