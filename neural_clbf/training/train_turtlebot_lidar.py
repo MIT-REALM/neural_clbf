@@ -27,7 +27,7 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 # batch_size = 1024
 batch_size = 64
-controller_period = 0.2
+controller_period = 0.1
 
 start_x = torch.tensor(
     [
@@ -166,7 +166,7 @@ def main(args):
         h_hidden_size=48,
         h_alpha=0.6,
         lookahead_dual_penalty=1e3,
-        lookahead_grid_n=5,
+        lookahead_grid_n=8,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=10,
