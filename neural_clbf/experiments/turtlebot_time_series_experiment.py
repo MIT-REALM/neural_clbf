@@ -1,4 +1,4 @@
-"""An experiment for use in testing the clbf controller on a turtlebot"""
+"""A mock experiment for use in testing"""
 from copy import copy
 import random
 from typing import List, Tuple, Optional, TYPE_CHECKING
@@ -14,11 +14,9 @@ from neural_clbf.experiments import Experiment
 from neural_clbf.systems.utils import ScenarioList
 
 # turtlebot script imports
-# TODO get path for send_command.py file and import execute_command function
-# TODO get path for odometry file and import get_odom function
-# from ...send_command import execute_command
-import rospy
-
+import turtlebot_scripts.odometry_status as odometry_status
+from neural_clbf.turtlebot_scripts.send_command import execute_command
+import os
 
 if TYPE_CHECKING:
     from neural_clbf.controllers import Controller  # noqa
@@ -38,7 +36,6 @@ class RealTimeSeriesExperiment(Experiment):
             command_publisher,
             rate,
             listener,
-            position,
             move_command,
             odom_frame,
             base_frame,
@@ -78,14 +75,13 @@ class RealTimeSeriesExperiment(Experiment):
         self.plot_u_indices = plot_u_indices
         self.plot_u_labels = plot_u_labels
         self.scenarios = scenarios
-        self.n_sims_per_start = n_sims_per_start
+        # self.n_sims_per_start = n_sims_per_start
         self.t_sim = t_sim
 
         # turtlebot interface parameters
         self.rate = rate
         self.command_publisher = command_publisher
         self.listener = listener
-        self.position = position
         self.move_command = move_command
         self.odom_frame = odom_frame
         self.base_frame = base_frame
@@ -104,8 +100,9 @@ class RealTimeSeriesExperiment(Experiment):
             format (i.e. each row should correspond to a single observation from the
             experiment).
         """
-        # TODO need to add the following line before commands for odometry usage
-        # os.system("timeout 3 rostopic pub /reset std_msgs/Empty '{}'")
+        # reset turtlebot odometry
+        # TODO can get rid of this once we get a positioning system
+        os.system("timeout 3 rostopic pub /reset std_msgs/Empty '{}'")
 
         # Each scenario has a specific set of parameters. In this case,
         # it's the radius of the turtlebot's wheels and the distance between them
@@ -128,7 +125,7 @@ class RealTimeSeriesExperiment(Experiment):
 
         # since we're only running one simulation for real life, used
         # a hardcoded value for now
-        # TODO see what exactly n_sims_per_start does vs. n_sims
+        #TODO see what exactly n_sims_per_start does vs. n_sims
         n_sims = 1
         self.n_sims_per_start = 1
 
@@ -146,13 +143,24 @@ class RealTimeSeriesExperiment(Experiment):
         n_controls = controller_under_test.dynamics_model.n_controls
         # ARGUMENT
         # self.start_x is as shown below in train_turtlebot.py. This will
-        # need to be fed in as an argument when this script is called
+        # need to be fed in as an argument to this class when this script is called.
         # commented in for convenience the starting point:
         # self.start_x = [1.0, 1.0, np.pi/2]
         x_sim_start = torch.zeros(n_sims, n_dims).type_as(self.start_x)
-        for i in range(0, self.start_x.shape[0]):
-            for j in range(0, self.n_sims_per_start):
-                x_sim_start[i * self.n_sims_per_start + j, :] = self.start_x[i, :]
+        (self.position, self.rotation) = odometry_status.get_odom(self.listener, self.odom_frame, self.base_frame)
+
+        # the controller tries to move to the origin. Thus, we need to 
+        # modify the odometry values a bit to make the controller 
+        # think it doesn't start at the origin.
+        # In this case, we make the starting position roughly be (-1,-1)
+        # meaning the turtlebot should move to (1,1) to get to the "origin"
+        x_sim_start[0] = [self.position.x, self.position.y, self.rotation]
+        x_sim_start += self.start_x
+
+        # commented out; don't think we need it
+        # for i in range(0, self.start_x.shape[0]):
+        #     for j in range(0, self.n_sims_per_start):
+        #         x_sim_start[i * self.n_sims_per_start + j, :] = self.start_x[i, :]
 
         # Generate a random scenario for each rollout from the given scenarios
         # commented out because we don't want random scenarios, just a single predefined
@@ -177,11 +185,8 @@ class RealTimeSeriesExperiment(Experiment):
             device = controller_under_test.device  # type: ignore
 
         # Simulate!
-        # TODO delta_t is probably fine, try to match it with turtlebot
-        # update rate too if possible
         delta_t = controller_under_test.dynamics_model.dt
 
-        # leaving this in for now
         num_timesteps = int(self.t_sim // delta_t)
 
         # should be fine as is; this just sets the initial position to
@@ -191,7 +196,6 @@ class RealTimeSeriesExperiment(Experiment):
         # initial command matrix of zeros; no need to change this line
         u_current = torch.zeros(x_sim_start.shape[0], n_controls, device=device)
 
-        # TODO try to match controller update frequency with turtlebot update frequency
         controller_update_freq = int(controller_under_test.controller_period / delta_t)
 
         prog_bar_range = tqdm.trange(
@@ -200,8 +204,6 @@ class RealTimeSeriesExperiment(Experiment):
 
         # for now, we'll keep the set "simulation" time, but this might need to be changed if it
         # doesn't work or is just not optimal
-
-
 
         for tstep in prog_bar_range:
             # Get the control input at the current state if it's time
@@ -231,7 +233,6 @@ class RealTimeSeriesExperiment(Experiment):
                 base_log_packet[measurement_label] = value.cpu().numpy().item()
 
             # Pick out the states to log
-            # TODO make sure these state values are being taken from turtlebot
             for i, state_index in enumerate(self.plot_x_indices):
                 state_label = self.plot_x_labels[i]
                 state_value = x_current[0, state_index].cpu().numpy().item()
@@ -243,12 +244,10 @@ class RealTimeSeriesExperiment(Experiment):
                 results_df = results_df.append(log_packet, ignore_index=True)
 
             # Pick out the controls to log
-            # TODO does this need to be modified? I don't think so, but check
             for i, control_index in enumerate(self.plot_u_indices):
                 control_label = self.plot_u_labels[i]
                 u_value = u_current[0, control_index].cpu().numpy().item()
 
-                # TODO same idea as above, but this is probably fine as is
                 log_packet = copy(base_log_packet)
                 log_packet["measurement"] = control_label
                 log_packet["value"] = u_value
@@ -266,9 +265,7 @@ class RealTimeSeriesExperiment(Experiment):
             # Move forward using the dynamics
             # this block seems good to go
             xdot = controller_under_test.dynamics_model.closed_loop_dynamics(
-                # TODO modify x_current to be obtained from turtlebot
                 x_current[0, :].unsqueeze(0),
-                # TODO need to send commands to turtlebot
                 u_current[0, :].unsqueeze(0),
 
                 random_scenarios[0],
@@ -278,16 +275,18 @@ class RealTimeSeriesExperiment(Experiment):
             # TODO this will need to be fixed when we use a positioning system
             (self.position, self.rotation) = odometry_status.get_odom(self.listener, self.odom_frame, self.base_frame)
 
-            # TODO check if this matches with what is expected of x_current
-            x_current[0, :] = [self.position.x, self.position.y, self.rotation]
+            # update the current position
+            # since the odometry starts off with (0,0,0), we need to add to
+            # the odometric measurements the actual starting position
+            x_current[0, :] = [self.position.x, self.position.y, self.rotation] + self.start_x
 
             # set the output command to the command obtained from the
             # dynamics model
-            self.move_command = xdot
+            linear_command = xdot[0]
+            angular_command = xdot[1]
 
-            # TODO I think xdot is a list: [xdot, ydot, theta_dot]
-            # so make sure the command script handles this properly
-            execute_command(self.command_publisher, self.move_command, command, 0, self.position, self.rotation)
+            # call the function that sends the commands to the turtlebot
+            execute_command(self.command_publisher, self.move_command, linear_command, angular_command, self.position, self.rotation)
 
         results_df = results_df.set_index("t")
         return results_df
