@@ -625,7 +625,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Any control inputs that are zero indicate a deadlock, so we should
         # switch to the exploratory mode and save the hit points for any rows that
         # are switching
-        switch_to_exploratory = (u.norm(dim=-1) <= 0.2).squeeze()
+        # switch_to_exploratory = (u.norm(dim=-1) <= 0.2).reshape(-1)
+        switch_to_exploratory = (V_nexts > (1 - self.V_lambda) * V)[
+            best_option_idx
+        ].reshape(-1)
         switch_to_exploratory.logical_and_(
             self.controller_mode == self.GOAL_SEEKING_MODE
         )
@@ -846,7 +849,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # mode once the Lyapunov function value has decreased below the hit point value
         V_next = V_nexts[torch.arange(batch_size) * num_options + chosen_option_idx, :]
 
-        switch_to_goal_seeking = (V_next < 0.95 * self.hit_points_V).reshape(-1)
+        switch_to_goal_seeking = (V_next < (1 - self.V_lambda) * self.hit_points_V).reshape(-1)
         switch_to_goal_seeking.logical_and_(
             self.controller_mode == self.EXPLORATORY_MODE
         )

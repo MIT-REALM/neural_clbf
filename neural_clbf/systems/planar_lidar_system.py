@@ -294,7 +294,7 @@ class Scene:
             agent_point = Point(q[0].item(), q[1].item())
 
             # Check if we're in collision
-            min_distance = float('inf')
+            min_distance = float("inf")
             for obstacle in self.obstacles:
                 min_distance = min(min_distance, obstacle.distance(agent_point))
 

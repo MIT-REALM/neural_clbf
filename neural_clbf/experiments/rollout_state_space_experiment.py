@@ -252,7 +252,7 @@ class RolloutStateSpaceExperiment(Experiment):
                 results_df[sim_mask][self.plot_x_label].to_numpy(),
                 results_df[sim_mask][self.plot_y_label].to_numpy(),
                 linestyle="-",
-                marker="+",
+                # marker="+",
                 markersize=5,
                 color=sns.color_palette()[plot_idx],
             )
