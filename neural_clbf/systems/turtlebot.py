@@ -260,6 +260,6 @@ class TurtleBot(ControlAffineSystem):
 
         # Clamp given the control limits
         u_upper, u_lower = self.control_limits
-        u = torch.clamp(u, u_lower, u_upper)
+        u = torch.clamp(u, u_lower.type_as(u), u_upper.type_as(u))
 
         return u
