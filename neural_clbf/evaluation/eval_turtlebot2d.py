@@ -70,6 +70,8 @@ def eval_and_plot_turtlebot_bugtrap():
     # Modify contour parameters
     cbf_contour_experiment.n_grid = 30
     cbf_contour_experiment.domain = [(-4.0, 0.0), (-2.0, 2.0)]
+    clf_contour_experiment.n_grid = 30
+    clf_contour_experiment.domain = [(-4.0, 0.0), (-2.0, 2.0)]
 
     # Modify rollout parameters
     rollout_experiment.t_sim = 4

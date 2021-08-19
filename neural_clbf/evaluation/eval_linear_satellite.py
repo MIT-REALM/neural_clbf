@@ -32,7 +32,7 @@ def plot_linear_satellite():
     neural_controller = NeuralCBFController.load_from_checkpoint(log_dir + "v0.ckpt")
 
     # Load the saved data
-    results_df = pd.read_csv(log_dir + "experiments/2021-07-11_17_26_05/V_Contour.csv")
+    results_df = pd.read_csv(log_dir + "experiments/2021-08-02_20_30_57/V Contour.csv")
 
     # Run the experiments and save the results
     neural_controller.experiment_suite.experiments[0].plot(

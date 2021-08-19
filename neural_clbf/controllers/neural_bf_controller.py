@@ -849,7 +849,9 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # mode once the Lyapunov function value has decreased below the hit point value
         V_next = V_nexts[torch.arange(batch_size) * num_options + chosen_option_idx, :]
 
-        switch_to_goal_seeking = (V_next < (1 - self.V_lambda) * self.hit_points_V).reshape(-1)
+        switch_to_goal_seeking = (
+            V_next < (1 - self.V_lambda) * self.hit_points_V
+        ).reshape(-1)
         switch_to_goal_seeking.logical_and_(
             self.controller_mode == self.EXPLORATORY_MODE
         )
