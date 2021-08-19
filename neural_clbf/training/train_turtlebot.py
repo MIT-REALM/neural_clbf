@@ -13,7 +13,6 @@ from neural_clbf.datamodules import (
 from neural_clbf.experiments import (
     ExperimentSuite,
     CLFContourExperiment,
-    RolloutTimeSeriesExperiment,
     RolloutStateSpaceExperiment,
 )
 from neural_clbf.systems import TurtleBot
@@ -27,8 +26,10 @@ controller_period = 0.01
 
 start_x = torch.tensor(
     [
-        # [0, 0, 0],
         [1.0, 1.0, np.pi / 2],
+        [-1.0, 1.0, np.pi / 2],
+        [-1.0, -1.0, np.pi / 2],
+        [1.0, -1.0, np.pi / 2],
     ]
 )
 simulation_dt = 0.001
@@ -79,16 +80,6 @@ def main(args):
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
-    rollout_time_series_experiment = RolloutTimeSeriesExperiment(
-        "Rollout Time Series",
-        start_x,
-        plot_x_indices=[TurtleBot.X, TurtleBot.Y],
-        plot_x_labels=["$x$", "$y$"],
-        plot_u_indices=[TurtleBot.V, TurtleBot.THETA_DOT],
-        plot_u_labels=["$v$", "$\\dot{\\theta}$"],
-        t_sim=6.0,
-        n_sims_per_start=5,
-    )
     rollout_state_space_experiment = RolloutStateSpaceExperiment(
         "Rollout State Space",
         start_x,
@@ -97,13 +88,12 @@ def main(args):
         plot_y_index=TurtleBot.Y,
         plot_y_label="$y$",
         scenarios=scenarios,
-        n_sims_per_start=5,
-        t_sim=6.0,
+        n_sims_per_start=1,
+        t_sim=4.0,
     )
     experiment_suite = ExperimentSuite(
         [
             V_contour_experiment,
-            rollout_time_series_experiment,
             rollout_state_space_experiment,
         ]
     )
