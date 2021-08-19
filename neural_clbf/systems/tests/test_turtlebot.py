@@ -98,7 +98,7 @@ def test_turtlebot_dynamics():
     assert xdot[0, TurtleBot.X] == 0.0
     assert xdot[0, TurtleBot.Y] == 0.0
     # theta should be negative
-    assert xdot[0, TurtleBot.THETA] < 0.0
+    assert xdot[0, TurtleBot.THETA] > 0.0
 
     # If both angular velocity and linear velocity are increased, we should
     # experience positive change in x and y position and
@@ -110,4 +110,4 @@ def test_turtlebot_dynamics():
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     assert xdot[0, TurtleBot.X] > 0.0
     assert xdot[0, TurtleBot.Y] == 0.0
-    assert xdot[0, TurtleBot.THETA] < 0.0
+    assert xdot[0, TurtleBot.THETA] > 0.0
