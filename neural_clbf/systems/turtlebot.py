@@ -225,7 +225,7 @@ class TurtleBot(ControlAffineSystem):
         # the turtlebot. If the bot is pointing away from the origin, this inner product
         # will be negative, so we'll drive backwards towards the goal. If the bot
         # is pointing towards the origin, it will drive forwards.
-        u = torch.zeros(x.shape[0], self.n_controls)
+        u = torch.zeros(x.shape[0], self.n_controls).type_as(x)
 
         v_scaling = 1.0
         bot_to_origin = -x[:, : TurtleBot.Y + 1].reshape(-1, 1, 2)
