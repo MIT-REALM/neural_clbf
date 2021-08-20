@@ -6,31 +6,19 @@ nodes for the turtlebot into one interface
 """
 
 # import python and ros libraries
-from neural_clbf.controllers.neural_cbf_controller import NeuralCBFController
-from neural_clbf.experiments import experiment
 import rospy
 from geometry_msgs.msg import Twist, Point
 from sensor_msgs.msg import BatteryState, LaserScan
 from actionlib_msgs.msg import *
-# from sound_play.libsoundplay import SoundClient
+from numpy import pi
 
 # import other realm-specific scripts
-from .battery_status import battery, batteryLevel
+from .battery_status import battery
 from .laser_data import get_laser_data
-# from turtlebot_functions import *
 from neural_clbf.experiments.real_time_series_experiment import RealTimeSeriesExperiment
 import torch
 import tf
 from neural_clbf.systems import TurtleBot
-from neural_clbf.controllers import NeuralCLBFController
-from numpy import pi
-
-
-# just setting an initial value for these; otherwise an error gets thrown
-# might be able to just toss these later? depends on how script changes
-posX = 0
-posY = 0
-batteryLevel = 100
 
 
 class TurtleBot(object):
@@ -41,21 +29,10 @@ class TurtleBot(object):
         Initializes publishers, subscribers, and various
         other necessary variables.
 
-        IMPORTANT: When replacing the control script, you must
-        modify the "self.command = ..." line (line 102) within this function.
-        This line of code passes several important arguments to
-        the control script that are needed to call various functions.
-        
         """
 
         # create a node name run_turtlebot_node
         rospy.init_node('run_turtlebot_node', anonymous=True)
-
-        # might try getting sound functionality but hasn't worked yet
-        # sound_client = SoundClient()
-        # sound = rospy.Publisher('sound', SoundClient, queue_size=10)
-        # rospy.sleep(2)
-        # sound.publish('/home/realm/Downloads/chime_up.wav')
 
         # set update rate; i.e. how often we send commands (Hz)
         self.rate = rospy.Rate(10)
@@ -64,7 +41,6 @@ class TurtleBot(object):
         self.listener = tf.TransformListener()
 
         # create a position of type Point
-        # TODO can probably delete this since it gets set and updated within other scripts
         self.position = Point()
         
         # create an object to send commands to turtlebot of type Twist
@@ -87,7 +63,6 @@ class TurtleBot(object):
 
         rospy.on_shutdown(self.shutdown)
 
-
         # find the coordinate conversion from the turtlebot to the ground truth frame
         try:
             self.listener.waitForTransform(self.odom_frame, "base_footprint", rospy.Time(), rospy.Duration(1.0))
@@ -99,9 +74,6 @@ class TurtleBot(object):
             except(tf.Exception, tf.ConnectivityException, tf.LookupException):
                 rospy.loginfo("Cannot find transform between odom and base_link or base_footprint")
                 rospy.signal_shutdown("tf Exception")
-
-        # IMPORTANT: When substituting in a new control script, you must update this line
-        # self.command = turtlebot_command(self.command_publisher, self.rate, self.listener, self.move_command, self.odom_frame, self.base_frame)
 
         # bool flag to stop commands from running multiple times (see run_turtlebot() below)
         self.first_turn = True
@@ -118,7 +90,6 @@ class TurtleBot(object):
         rospy.sleep(1)
     
 
-# 
 def run_turtlebot(neural_controller):
     """
     
@@ -128,16 +99,12 @@ def run_turtlebot(neural_controller):
     """
     # Initialize an instance of the controller
     start_tensor  = torch.tensor(
-        [[-1, -1, 0.0]]
+        [[-1.0, -1.0, 0]]
     )
-    list1 = [0,1]
-    list2 = [0,1]
-    list3 = ["test", "test"]
-    list4 = ["test", "test"]
+
     turtle = TurtleBot()
     experiment = RealTimeSeriesExperiment(turtle.command_publisher, turtle.rate, turtle.listener, turtle.move_command, 
-    turtle.odom_frame, turtle.base_frame, "real experiment", start_x=start_tensor, plot_x_indices=list1, plot_x_labels=list3, 
-    plot_u_indices=list2, plot_u_labels=list4)
+    turtle.odom_frame, turtle.base_frame, "Turtlebot experiment", start_x=start_tensor)
     neural_controller.experiment_suite.experiments = [experiment]
 
 

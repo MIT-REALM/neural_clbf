@@ -94,15 +94,3 @@ class pid_controller(object):
         self._last_time = self.current_time
 
         return self.command
-
-        
-
-        
-        
-    
-
-    
-
-    
-    
-
