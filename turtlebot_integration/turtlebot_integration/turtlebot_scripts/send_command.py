@@ -1,7 +1,7 @@
 import rospy
-from .battery_status import batteryLevel
 from .message_creator import create_message
-from math import pi
+from numpy import pi
+
 
 def execute_command(command_publisher, move_command, move_command_translational,
                     move_command_angular, position, rotation, upper_command_limit):
@@ -29,6 +29,8 @@ def execute_command(command_publisher, move_command, move_command_translational,
         rotation: turtlebot's current attitude
     
     """
+    # pull max command values from tensor obtained from turtlebot
+    # system file
     max_command_translational = upper_command_limit[0].item()
     max_command_rotational = upper_command_limit[0].item()
 
@@ -50,7 +52,7 @@ def execute_command(command_publisher, move_command, move_command_translational,
     
     # publish turtlebot status to console
     create_message(
-        move_command, batteryLevel, position, rotation*360/(2*pi)
+        move_command, position, rotation*360/(2*pi)
     )
 
     # briefly pause to avoid overloading turtlebot with commands, which will
