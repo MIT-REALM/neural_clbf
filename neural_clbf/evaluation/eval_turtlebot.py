@@ -1,29 +1,21 @@
 #!/usr/bin/python
 import pandas as pd
-import sys
-sys.path.append("~/realm/src/realm_turtlebots/neural_clbf/")
+import os
 
 from neural_clbf.controllers import NeuralCLBFController
 from neural_clbf.experiments import CLFVerificationExperiment
-from neural_clbf.turtlebot_scripts import run_turtlebot_node
+from integration.integration.turtlebot_scripts import run_turtlebot_node
 import numpy as np
+import torch
 
-
+@torch.no_grad()
 def eval_turtlebot():
     # Load the checkpoint file. This should include the experiment suite used during
     # training.
-    log_dir = "~/realm/src/realm_turtlebots/neural_clbf/saved_models/turtlebot/commit_15d6e41/version_0"
+    log_dir = "~/neural_clbf/saved_models/aas/turtlebot/commit_15d6e41/"
     neural_controller = NeuralCLBFController.load_from_checkpoint(log_dir + "epoch=244-step=302092.ckpt")
 
-    # Increase the resolution of the grid.
-    neural_controller.experiment_suite.experiments[0].n_grid = 500
-
-    # TODO fix this later, but duct tape solution for now. This turns the list of
-    # experiments into a single element list with the first experiment; we only need
-    # one "experiment" for a real life test.
-    neural_controller.experiment_suite.experiments = [neural_controller.experiment_suite.experiments[0]]
-
-    run_turtlebot_node()
+    run_turtlebot_node.run_turtlebot(neural_controller)
 
     # Run the experiment and save the results
     # neural_controller.experiment_suite.run_all_and_save_to_csv(
