@@ -21,7 +21,6 @@ class TurtleBot(ControlAffineSystem):
         R: radius of the wheels
         L: radius of rotation, or the distance between the two wheels
     """
-
     # Number of states and controls
     N_DIMS = 3
     N_CONTROLS = 2
@@ -38,7 +37,7 @@ class TurtleBot(ControlAffineSystem):
     def __init__(
         self,
         nominal_params: Scenario,
-        dt: float = 0.01,
+        dt: float = 0.0001,
         controller_dt: Optional[float] = None,
         scenarios: Optional[ScenarioList] = None,
     ):
@@ -59,6 +58,7 @@ class TurtleBot(ControlAffineSystem):
             scenarios=scenarios,
             use_linearized_controller=False,
         )
+
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -190,37 +190,19 @@ class TurtleBot(ControlAffineSystem):
         g = torch.zeros((batch_size, self.n_dims, self.n_controls))
         g = g.type_as(x)
 
-        # Extract the needed parameters
-        R, L = params["R"], params["L"]
-        # and state variables
+        # Extract state variables
         theta = x[:, TurtleBot.THETA]
 
-        # Tensor for wheel velocities
-        v = torch.zeros((2, 2))
-        v = v.type_as(x)
-
-        # Building tensor v
-        v[0, 0] = 1 / R
-        v[1, 0] = 1 / R
-        v[0, 1] = L / (2 * R)
-        v[1, 1] = -L / (2 * R)
-
         # Effect on x
-        g[:, TurtleBot.X, TurtleBot.V] = R / 2 * torch.cos(theta)
-        g[:, TurtleBot.X, TurtleBot.THETA_DOT] = R / 2 * torch.cos(theta)
+        g[:, TurtleBot.X, TurtleBot.V] = torch.cos(theta)
 
         # Effect on y
-        g[:, TurtleBot.Y, TurtleBot.V] = R / 2 * torch.sin(theta)
-        g[:, TurtleBot.Y, TurtleBot.THETA_DOT] = R / 2 * torch.sin(theta)
+        g[:, TurtleBot.Y, TurtleBot.V] = torch.sin(theta)
 
         # Effect on theta
-        g[:, TurtleBot.THETA, TurtleBot.V] = -R / (2 * L)
-        g[:, TurtleBot.THETA, TurtleBot.THETA_DOT] = R / (2 * L)
-
-        g = g.matmul(v)
+        g[:, TurtleBot.THETA, TurtleBot.THETA_DOT] = 1.0
 
         return g
-
 
     def u_nominal(
         self, x: torch.Tensor, params: Optional[Scenario] = None
@@ -244,7 +226,7 @@ class TurtleBot(ControlAffineSystem):
         # the turtlebot. If the bot is pointing away from the origin, this inner product
         # will be negative, so we'll drive backwards towards the goal. If the bot
         # is pointing towards the origin, it will drive forwards.
-        u = torch.zeros(x.shape[0], self.n_controls)
+        u = torch.zeros(x.shape[0], self.n_controls).type_as(x)
 
         v_scaling = 1.0
         bot_to_origin = -x[:, : TurtleBot.Y + 1].reshape(-1, 1, 2)
@@ -259,7 +241,7 @@ class TurtleBot(ControlAffineSystem):
         # However, this angle becomes ill-defined as the bot approaches the origin, so
         # so we switch this term off if the bot is too close (and instead just control
         # theta to zero)
-        phi_control_on = bot_to_origin.norm(dim=-1) >= 0.2
+        phi_control_on = bot_to_origin.norm(dim=-1) >= 0.02
         phi_control_on = phi_control_on.reshape(-1)
         omega_scaling = 5.0
         angle_from_origin_to_bot = torch.atan2(x[:, TurtleBot.Y], x[:, TurtleBot.X])
@@ -279,6 +261,6 @@ class TurtleBot(ControlAffineSystem):
 
         # Clamp given the control limits
         u_upper, u_lower = self.control_limits
-        u = torch.clamp(u, u_lower, u_upper)
+        u = torch.clamp(u, u_lower.type_as(u), u_upper.type_as(u))
 
         return u
