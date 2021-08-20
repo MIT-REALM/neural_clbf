@@ -8,10 +8,16 @@ from matplotlib.pyplot import figure
 import pandas as pd
 import seaborn as sns
 import torch
+from torch.nn.functional import linear
 import tqdm
 
 from neural_clbf.experiments import Experiment
 from neural_clbf.systems.utils import ScenarioList
+
+# turtlebot script imports
+from integration.integration.turtlebot_scripts import odometry_status
+from integration.integration.turtlebot_scripts.send_command import execute_command
+import os
 
 if TYPE_CHECKING:
     from neural_clbf.controllers import Controller  # noqa
@@ -20,21 +26,30 @@ if TYPE_CHECKING:
 class RealTimeSeriesExperiment(Experiment):
     """An experiment for plotting actual
     performance of controller on turtlebot.
-    
+
     Plots trajectories as a function of time.
     """
 
     def __init__(
-        self,
-        name: str,
-        start_x: torch.Tensor,
-        plot_x_indices: List[int],
-        plot_x_labels: List[str],
-        plot_u_indices: List[int],
-        plot_u_labels: List[str],
-        scenarios: Optional[ScenarioList] = None,
-        n_sims_per_start: int = 5,
-        t_sim: float = 5.0,
+            self,
+
+            # turtlebot interface parameters
+            command_publisher,
+            rate,
+            listener,
+            move_command,
+            odom_frame,
+            base_frame,
+
+            # clbf parameters
+            name: str,
+            start_x: torch.Tensor,
+            plot_x_indices: List[int],
+            plot_x_labels: List[str],
+            plot_u_indices: List[int],
+            plot_u_labels: List[str],
+            scenarios: Optional[ScenarioList] = None,
+            t_sim: float = 150.0,
     ):
         """Initialize an experiment for controller performance on turtlebot.
         args:
@@ -45,21 +60,26 @@ class RealTimeSeriesExperiment(Experiment):
             plot_u_labels: a list of the labels for each control trace
             scenarios: a list of parameter scenarios to sample from. If None, use the
                        nominal parameters of the controller's dynamical system
-            n_sims_per_start: the number of simulations to run (with random parameters),
-                              per row in start_x
             t_sim: the amount of time to simulate for
         """
         super(RealTimeSeriesExperiment, self).__init__(name)
 
-        # Save parameters
+        # clbf parameters
         self.start_x = start_x
         self.plot_x_indices = plot_x_indices
         self.plot_x_labels = plot_x_labels
         self.plot_u_indices = plot_u_indices
         self.plot_u_labels = plot_u_labels
         self.scenarios = scenarios
-        self.n_sims_per_start = n_sims_per_start
         self.t_sim = t_sim
+
+        # turtlebot interface parameters
+        self.rate = rate
+        self.command_publisher = command_publisher
+        self.listener = listener
+        self.move_command = move_command
+        self.odom_frame = odom_frame
+        self.base_frame = base_frame
 
     @torch.no_grad()
     def run(self, controller_under_test: "Controller") -> pd.DataFrame:
@@ -75,9 +95,10 @@ class RealTimeSeriesExperiment(Experiment):
             format (i.e. each row should correspond to a single observation from the
             experiment).
         """
-        #TODO find out what exactly scenarios is; I think it's a starting point.
-        # Make sure to either modify this to fit real experiment or make sure
-        # it is picking a singular starting point
+        # reset turtlebot odometry
+        # TODO can get rid of this once we get a positioning system
+        os.system("timeout 3 rostopic pub /reset std_msgs/Empty '{}'")
+
         # Deal with optional parameters
         if self.scenarios is None:
             scenarios = [controller_under_test.dynamics_model.nominal_params]
@@ -87,12 +108,9 @@ class RealTimeSeriesExperiment(Experiment):
         # Set up a dataframe to store the results
         results_df = pd.DataFrame()
 
-        # Compute the number of simulations to run
-        #TODO we're only going to run one "simulation" so
-        # this probably will need to be changed
-        n_sims = self.n_sims_per_start * self.start_x.shape[0]
-
         # Determine the parameter range to sample from
+        # this pulls the min and max values from the turtlebot model script
+        # so no need to modify this
         parameter_ranges = {}
         for param_name in scenarios[0].keys():
             param_max = max([s[param_name] for s in scenarios])
@@ -100,117 +118,102 @@ class RealTimeSeriesExperiment(Experiment):
             parameter_ranges[param_name] = (param_min, param_max)
 
         # Generate a tensor of start states
-        #TODO this may need to be modified to make it work for only a 
-        # single start point since we're only running one experiment
         n_dims = controller_under_test.dynamics_model.n_dims
         n_controls = controller_under_test.dynamics_model.n_controls
-        x_sim_start = torch.zeros(n_sims, n_dims).type_as(self.start_x)
-        for i in range(0, self.start_x.shape[0]):
-            for j in range(0, self.n_sims_per_start):
-                x_sim_start[i * self.n_sims_per_start + j, :] = self.start_x[i, :]
 
-        # Generate a random scenario for each rollout from the given scenarios
-        #TODO We don't want a random scenario, we want to run one scenario: the turtlebot
-        # starts in one position and then moves to the origin
-        random_scenarios = []
-        for i in range(n_sims):
-            random_scenario = {}
-            for param_name in scenarios[0].keys():
-                param_min = parameter_ranges[param_name][0]
-                param_max = parameter_ranges[param_name][1]
-                random_scenario[param_name] = random.uniform(param_min, param_max)
-            random_scenarios.append(random_scenario)
+        # self.start_x is as shown below in train_turtlebot.py. This will
+        # need to be fed in as an argument to this class when this script is called.
+        # I commented in for convenience an example starting point:
+        # self.start_x = [1.0, 1.0, np.pi/2]
+        (self.position, self.rotation) = odometry_status.get_odom(self.listener, self.odom_frame, self.base_frame)
+
+
+        # temporary placeholder to make the code work, eventually should just replace random
+        # scenarios with scenarios since we're not running a bunch of random scenarios, just one.
+        random_scenarios = scenarios
+
 
         # Make sure everything's on the right device
-        # this probably doesn't need to be modified
         device = "cpu"
         if hasattr(controller_under_test, "device"):
             device = controller_under_test.device  # type: ignore
 
         # Simulate!
-        #TODO delta_t is probably fine, try to match it with turtlebot
-        # update rate too if possible
         delta_t = controller_under_test.dynamics_model.dt
-        
-        #TODO probably should modify to make it run until we reach the
-        # goal rather than until the simulation time is up
         num_timesteps = int(self.t_sim // delta_t)
-        
-        #TODO change this to get position and attitude from turtlebot
-        x_current = x_sim_start.to(device)
-        
-        #TODO send this to the turtlebot as a command
-        u_current = torch.zeros(x_sim_start.shape[0], n_controls, device=device)
-        
-        #TODO try to match controller update frequency with turtlebot update frequency
+        x_current = torch.zeros(1, n_dims).type_as(self.start_x)
+        u_current = torch.zeros(1, n_dims).type_as(self.start_x)
         controller_update_freq = int(controller_under_test.controller_period / delta_t)
         prog_bar_range = tqdm.trange(
             0, num_timesteps, desc="Controller Rollout", leave=True
         )
-        
-        #TODO again, might need to be modified if we're doing this based on when
-        # the turtlebot reaches the goal rather than a set amount of simulation time
-        for tstep in prog_bar_range:
-            # Get the control input at the current state if it's time
-            #TODO make sure x_current is coming from turtlebot
-            if tstep % controller_update_freq == 0:
-                u_current = controller_under_test.u(x_current)
 
-            # Log the current state and control for each simulation
-            #TODO make sure we're only doing one "simulation"
-            for sim_index in range(n_sims):
+        for tstep in prog_bar_range:
+            
+            (self.position, self.rotation) = odometry_status.get_odom(self.listener, self.odom_frame, self.base_frame)
+            x_current[0, :] = torch.tensor([self.position.x, self.position.y, self.rotation]) + self.start_x
+
+            # Get the control input at the current state if it's time
+            if tstep % controller_update_freq == 0:
+
+                # TODO when Charles sends the updated code, make sure to change this
+                # back to controller_under_test.u(x_current) to make sure it works
+                u_current = controller_under_test.dynamics_model.u_nominal(x_current)
+                # set the output command to the command obtained from the
+                # dynamics model
+                linear_command = u_current[0][0].item()
+                print(linear_command)
+                angular_command = u_current[0][1].item()
+
+                # call the function that sends the commands to the turtlebot
+
+                # pull the control limits from the turtlebot system file
+                (upper_command_limit, _)= controller_under_test.dynamics_model.control_limits
+                execute_command(self.command_publisher, self.move_command, linear_command, angular_command, self.position, self.rotation, upper_command_limit)
+
+                # Log the current state and control
                 base_log_packet = {"t": tstep * delta_t}
 
                 # Include the parameters
-                #TODO how much of this do we need for the actual turtlebot?
                 param_string = ""
-                for param_name, param_value in random_scenarios[sim_index].items():
+                for param_name, param_value in random_scenarios[0].items():
                     param_value_string = "{:.3g}".format(param_value)
                     param_string += f"{param_name} = {param_value_string}, "
                     base_log_packet[param_name] = param_value
                 base_log_packet["Parameters"] = param_string[:-2]
 
                 # Log the goal/safe/unsafe/out of bounds status
-                #TODO make sure x_current is coming from turtlebot
-                # the other three lines should be fine I think
-                x = x_current[sim_index, :].unsqueeze(0)
+                x = x_current[0, :].unsqueeze(0)
                 is_goal = controller_under_test.dynamics_model.goal_mask(x).all()
                 is_safe = controller_under_test.dynamics_model.safe_mask(x).all()
                 is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
-                
-                #TODO not sure if this needs to be modified but I don't think so
+
                 for measurement_label, value in zip(
-                    ["goal", "safe", "unsafe"], [is_goal, is_safe, is_unsafe]
+                        ["goal", "safe", "unsafe"], [is_goal, is_safe, is_unsafe]
                 ):
-                    #TODO what's this do?
                     base_log_packet[measurement_label] = value.cpu().numpy().item()
 
                 # Pick out the states to log
-                #TODO make sure these state values are being taken from turtlebot
                 for i, state_index in enumerate(self.plot_x_indices):
                     state_label = self.plot_x_labels[i]
-                    state_value = x_current[sim_index, state_index].cpu().numpy().item()
-                    
-                    #TODO probably can leave this?
+                    state_value = x_current[0, state_index].cpu().numpy().item()
+
                     log_packet = copy(base_log_packet)
                     log_packet["measurement"] = state_label
                     log_packet["value"] = state_value
                     results_df = results_df.append(log_packet, ignore_index=True)
 
                 # Pick out the controls to log
-                #TODO does this need to be modified? I don't think so, but check
                 for i, control_index in enumerate(self.plot_u_indices):
                     control_label = self.plot_u_labels[i]
-                    u_value = u_current[sim_index, control_index].cpu().numpy().item()
-                    
-                    #TODO same idea as above, but this is probably fine as is
+                    u_value = u_current[0, control_index].cpu().numpy().item()
+
                     log_packet = copy(base_log_packet)
                     log_packet["measurement"] = control_label
                     log_packet["value"] = u_value
                     results_df = results_df.append(log_packet, ignore_index=True)
 
                 # If this controller supports querying the Lyapunov function, save that
-                #TODO this is probably fine as is?
                 if hasattr(controller_under_test, "V"):
                     V = controller_under_test.V(x).cpu().numpy().item()  # type: ignore
 
@@ -219,26 +222,26 @@ class RealTimeSeriesExperiment(Experiment):
                     log_packet["value"] = V
                     results_df = results_df.append(log_packet, ignore_index=True)
 
-            # Simulate forward using the dynamics
-            #TODO make sure to modify for doing only one "simulation"
-            for i in range(n_sims):
-                xdot = controller_under_test.dynamics_model.closed_loop_dynamics(
-                    #TODO modify x_current to be obtained from turtlebot
-                    x_current[i, :].unsqueeze(0),
-                    #TODO need to send commands to turtlebot
-                    u_current[i, :].unsqueeze(0),
-                    #TODO get rid of this line? what's this do?
-                    random_scenarios[i],
-                )
-                #TODO get rid of this line and use state given by turtlebot
-                x_current[i, :] = x_current[i, :] + delta_t * xdot.squeeze()
+                
+                print(x_current)
+                print(u_current)
+                print(is_goal)
+                print(is_safe)
+            
+
+
 
         results_df = results_df.set_index("t")
         return results_df
-    
+
     #########################################################################################
-    #don't need to worry about plotting for now
-#     def plot(
+    # don't need to worry about plotting for now
+    def plot():
+        pass
+
+
+
+
 #         self,
 #         controller_under_test: "Controller",
 #         results_df: pd.DataFrame,
