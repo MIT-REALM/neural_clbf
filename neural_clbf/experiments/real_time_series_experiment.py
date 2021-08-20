@@ -1,12 +1,10 @@
 """A mock experiment for use in testing"""
 from copy import copy
-import random
-from typing import List, Tuple, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
+from unicodedata import name
 
-import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 import pandas as pd
-import seaborn as sns
 import torch
 from torch.nn.functional import linear
 import tqdm
@@ -18,6 +16,7 @@ from neural_clbf.systems.utils import ScenarioList
 from integration.integration.turtlebot_scripts import odometry_status
 from integration.integration.turtlebot_scripts.send_command import execute_command
 import os
+
 
 if TYPE_CHECKING:
     from neural_clbf.controllers import Controller  # noqa
@@ -44,32 +43,27 @@ class RealTimeSeriesExperiment(Experiment):
             # clbf parameters
             name: str,
             start_x: torch.Tensor,
-            plot_x_indices: List[int],
-            plot_x_labels: List[str],
-            plot_u_indices: List[int],
-            plot_u_labels: List[str],
             scenarios: Optional[ScenarioList] = None,
-            t_sim: float = 150.0,
+
+            # Note on t_sim: actual time taken does not seem
+            # to correspond to this. Raise this value as needed to
+            # make script run long enough for turtlebot
+            # to reach the destination
+            t_sim: float = 300.0,
     ):
         """Initialize an experiment for controller performance on turtlebot.
         args:
-            name: the name of this experiment
-            plot_x_indices: a list of the indices of the state variables to plot
-            plot_x_labels: a list of the labels for each state variable trace
-            plot_u_indices: a list of the indices of the control inputs to plot
-            plot_u_labels: a list of the labels for each control trace
             scenarios: a list of parameter scenarios to sample from. If None, use the
                        nominal parameters of the controller's dynamical system
-            t_sim: the amount of time to simulate for
+            t_sim: the amount of time to simulate for. Note on t_sim: the actual
+                        amount of time taken to run the experiment (when it's not a simulation) does
+                        not seem to correspond to this value. Raise t_sim as needed to 
+                        make the script run long enough for the turtlebot to reach the destination.
         """
         super(RealTimeSeriesExperiment, self).__init__(name)
 
         # clbf parameters
         self.start_x = start_x
-        self.plot_x_indices = plot_x_indices
-        self.plot_x_labels = plot_x_labels
-        self.plot_u_indices = plot_u_indices
-        self.plot_u_labels = plot_u_labels
         self.scenarios = scenarios
         self.t_sim = t_sim
 
@@ -96,7 +90,6 @@ class RealTimeSeriesExperiment(Experiment):
             experiment).
         """
         # reset turtlebot odometry
-        # TODO can get rid of this once we get a positioning system
         os.system("timeout 3 rostopic pub /reset std_msgs/Empty '{}'")
 
         # Deal with optional parameters
@@ -121,24 +114,10 @@ class RealTimeSeriesExperiment(Experiment):
         n_dims = controller_under_test.dynamics_model.n_dims
         n_controls = controller_under_test.dynamics_model.n_controls
 
-        # self.start_x is as shown below in train_turtlebot.py. This will
-        # need to be fed in as an argument to this class when this script is called.
-        # I commented in for convenience an example starting point:
-        # self.start_x = [1.0, 1.0, np.pi/2]
+        # get intial state from odometry
         (self.position, self.rotation) = odometry_status.get_odom(self.listener, self.odom_frame, self.base_frame)
 
-
-        # temporary placeholder to make the code work, eventually should just replace random
-        # scenarios with scenarios since we're not running a bunch of random scenarios, just one.
-        random_scenarios = scenarios
-
-
-        # Make sure everything's on the right device
-        device = "cpu"
-        if hasattr(controller_under_test, "device"):
-            device = controller_under_test.device  # type: ignore
-
-        # Simulate!
+        # Execute!
         delta_t = controller_under_test.dynamics_model.dt
         num_timesteps = int(self.t_sim // delta_t)
         x_current = torch.zeros(1, n_dims).type_as(self.start_x)
@@ -165,10 +144,10 @@ class RealTimeSeriesExperiment(Experiment):
                 print(linear_command)
                 angular_command = u_current[0][1].item()
 
-                # call the function that sends the commands to the turtlebot
-
                 # pull the control limits from the turtlebot system file
                 (upper_command_limit, _)= controller_under_test.dynamics_model.control_limits
+
+                # call the function that sends the commands to the turtlebot
                 execute_command(self.command_publisher, self.move_command, linear_command, angular_command, self.position, self.rotation, upper_command_limit)
 
                 # Log the current state and control
@@ -176,7 +155,7 @@ class RealTimeSeriesExperiment(Experiment):
 
                 # Include the parameters
                 param_string = ""
-                for param_name, param_value in random_scenarios[0].items():
+                for param_name, param_value in scenarios[0].items():
                     param_value_string = "{:.3g}".format(param_value)
                     param_string += f"{param_name} = {param_value_string}, "
                     base_log_packet[param_name] = param_value
@@ -193,26 +172,6 @@ class RealTimeSeriesExperiment(Experiment):
                 ):
                     base_log_packet[measurement_label] = value.cpu().numpy().item()
 
-                # Pick out the states to log
-                for i, state_index in enumerate(self.plot_x_indices):
-                    state_label = self.plot_x_labels[i]
-                    state_value = x_current[0, state_index].cpu().numpy().item()
-
-                    log_packet = copy(base_log_packet)
-                    log_packet["measurement"] = state_label
-                    log_packet["value"] = state_value
-                    results_df = results_df.append(log_packet, ignore_index=True)
-
-                # Pick out the controls to log
-                for i, control_index in enumerate(self.plot_u_indices):
-                    control_label = self.plot_u_labels[i]
-                    u_value = u_current[0, control_index].cpu().numpy().item()
-
-                    log_packet = copy(base_log_packet)
-                    log_packet["measurement"] = control_label
-                    log_packet["value"] = u_value
-                    results_df = results_df.append(log_packet, ignore_index=True)
-
                 # If this controller supports querying the Lyapunov function, save that
                 if hasattr(controller_under_test, "V"):
                     V = controller_under_test.V(x).cpu().numpy().item()  # type: ignore
@@ -222,93 +181,15 @@ class RealTimeSeriesExperiment(Experiment):
                     log_packet["value"] = V
                     results_df = results_df.append(log_packet, ignore_index=True)
 
-                
-                print(x_current)
-                print(u_current)
-                print(is_goal)
-                print(is_safe)
-            
-
-
-
         results_df = results_df.set_index("t")
         return results_df
 
-    #########################################################################################
-    # don't need to worry about plotting for now
     def plot():
+        """
+        
+        plot function here is left empty. It is required
+        because of the Experiment class, but has no
+        purpose for this script.
+        
+        """
         pass
-
-
-
-
-#         self,
-#         controller_under_test: "Controller",
-#         results_df: pd.DataFrame,
-#         display_plots: bool = False,
-#     ) -> List[Tuple[str, figure]]:
-#         """
-#         Plot the results, and return the plot handles. Optionally
-#         display the plots.
-#         args:
-#             controller_under_test: the controller with which to run the experiment
-#             display_plots: defaults to False. If True, display the plots (blocks until
-#                            the user responds).
-#         returns: a list of tuples containing the name of each figure and the figure
-#                  object.
-#         """
-#         # Set the color scheme
-#         sns.set_theme(context="talk", style="white")
-
-#         # Plot the state and control trajectories (and V, if it's present)
-#         plot_V = "V" in results_df.measurement.values
-#         num_plots = len(self.plot_x_indices) + len(self.plot_u_indices)
-#         if plot_V:
-#             num_plots += 1
-
-#         fig, axs = plt.subplots(num_plots, 1)
-#         fig.set_size_inches(10, 4 * num_plots)
-
-#         # Plot all of the states first
-#         for i, state_label in enumerate(self.plot_x_labels):
-#             ax = axs[i]
-#             state_mask = results_df["measurement"] == state_label
-#             sns.lineplot(
-#                 ax=ax, x="t", y="value", hue="Parameters", data=results_df[state_mask]
-#             )
-#             ax.set_ylabel(state_label)
-#             # Clear the x label since the plots are stacked
-#             ax.set_xlabel("")
-
-#         # Then all of the controls
-#         for i, control_label in enumerate(self.plot_u_labels):
-#             ax = axs[len(self.plot_x_indices) + i]
-#             control_mask = results_df["measurement"] == control_label
-#             sns.lineplot(
-#                 ax=ax, x="t", y="value", hue="Parameters", data=results_df[control_mask]
-#             )
-#             ax.set_ylabel(control_label)
-#             # Clear the x label since the plots are stacked
-#             ax.set_xlabel("")
-
-#         # Finally, V (if available)
-#         if plot_V:
-#             ax = axs[-1]
-#             V_mask = results_df["measurement"] == "V"
-#             sns.lineplot(
-#                 ax=ax, x="t", y="value", hue="Parameters", data=results_df[V_mask]
-#             )
-#             ax.set_ylabel("$V$")
-#             # Clear the x label since the plots are stacked
-#             ax.set_xlabel("")
-
-#         # Set one x label for all the stacked plots
-#         axs[-1].set_xlabel("t")
-
-#         fig_handle = ("Real Turtlebot (time series)", fig)
-
-#         if display_plots:
-#             plt.show()
-#             return []
-#         else:
-#             return [fig_handle]
