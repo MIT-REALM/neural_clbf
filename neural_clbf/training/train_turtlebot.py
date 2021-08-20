@@ -22,7 +22,7 @@ from neural_clbf.training.utils import current_git_hash
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 64
-controller_period = 0.01
+controller_period = 0.1
 
 start_x = torch.tensor(
     [
@@ -32,7 +32,7 @@ start_x = torch.tensor(
         [1.0, -1.0, np.pi / 2],
     ]
 )
-simulation_dt = 0.001
+simulation_dt = 0.01
 
 
 def main(args):
@@ -109,7 +109,7 @@ def main(args):
         safe_level=1.0,
         controller_period=controller_period,
         clf_relaxation_penalty=1e5,
-        num_init_epochs=5,
+        num_init_epochs=1,
         epochs_per_episode=100,
     )
 
