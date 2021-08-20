@@ -12,8 +12,8 @@ import torch
 def eval_turtlebot():
     # Load the checkpoint file. This should include the experiment suite used during
     # training.
-    log_dir = "~/neural_clbf/saved_models/aas/turtlebot/commit_15d6e41/"
-    neural_controller = NeuralCLBFController.load_from_checkpoint(log_dir + "epoch=244-step=302092.ckpt")
+    log_dir = "~/neural_clbf/saved_models/aas/turtlebot/"
+    neural_controller = NeuralCLBFController.load_from_checkpoint(log_dir + "version_0.ckpt")
 
     run_turtlebot_node.run_turtlebot(neural_controller)
 
