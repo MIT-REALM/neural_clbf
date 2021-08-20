@@ -7,7 +7,6 @@ from gurobipy import GRB
 import numpy as np
 import torch
 import torch.nn.functional as F
-import pdb
 
 from neural_clbf.systems import ControlAffineSystem
 from neural_clbf.systems.utils import ScenarioList
