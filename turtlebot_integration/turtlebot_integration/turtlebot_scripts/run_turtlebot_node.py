@@ -18,7 +18,7 @@ from actionlib_msgs.msg import *
 from .battery_status import battery, batteryLevel
 from .laser_data import get_laser_data
 # from turtlebot_functions import *
-from neural_clbf.experiments.turtlebot_time_series_experiment import RealTimeSeriesExperiment
+from neural_clbf.experiments.real_time_series_experiment import RealTimeSeriesExperiment
 import torch
 import tf
 from neural_clbf.systems import TurtleBot
@@ -77,9 +77,6 @@ class TurtleBot(object):
         # create a publisher node to send velocity commands to turtlebot
         self.command_publisher = rospy.Publisher('cmd_vel', Twist, queue_size=10)
 
-        # set the starting point [x, y, theta]
-        self.initial_position = [0, 0, 0]
-
         # create a subscriber to get measurements from lidar sensor.
         # currently not used, but is left here in case lidar measurements
         # are needed in the future. See also the laser_data.py script.
@@ -121,11 +118,12 @@ class TurtleBot(object):
         rospy.sleep(1)
     
 
-# function that sends velocity commands to turtlebot, calls other functions. Run by main function (see below)
+# 
 def run_turtlebot(neural_controller):
     """
     
-    Sends commands to the turtlebot
+    Creates an experiment and turtlebot object
+    and runs the experiment file
 
     """
     # Initialize an instance of the controller
@@ -149,7 +147,6 @@ def run_turtlebot(neural_controller):
         # running indefinitely
         if turtle.first_turn is True:
             experiment.run(neural_controller)
-            # do we need a specific function?
 
         turtle.first_turn = False
         

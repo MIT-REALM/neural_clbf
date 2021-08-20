@@ -3,9 +3,8 @@ from .battery_status import batteryLevel
 from .message_creator import create_message
 from math import pi
 
-
 def execute_command(command_publisher, move_command, move_command_translational,
-                    move_command_angular, position, rotation):
+                    move_command_angular, position, rotation, upper_command_limit):
     """
     
     Sends movement command created by a control script to a turtlebot.
@@ -30,22 +29,20 @@ def execute_command(command_publisher, move_command, move_command_translational,
         rotation: turtlebot's current attitude
     
     """
-    # TODO call limits from turtlebot system file instead of hard coding here
-    # max_command_translational = 0.05
-    # max_command_rotational = 0.1
+    max_command_translational = upper_command_limit[0].item()
+    max_command_rotational = upper_command_limit[0].item()
 
-    # if move_command_translational > max_command_translational:
-    #     move_command_translational = max_command_translational
-    # elif move_command_translational < -max_command_translational:
-    #     move_command_translational = -max_command_translational
+    if move_command_translational > max_command_translational:
+        move_command_translational = max_command_translational
+    elif move_command_translational < -max_command_translational:
+        move_command_translational = -max_command_translational
+
+    if move_command_angular > max_command_rotational:
+        move_command_angular = max_command_rotational
+    elif move_command_angular < -max_command_rotational:
+        move_command_angular = -max_command_rotational
 
     move_command.linear.x = move_command_translational
-
-    # if move_command_angular > max_command_rotational:
-    #     move_command_angular = max_command_rotational
-    # elif move_command_angular < -max_command_rotational:
-    #     move_command_angular = -max_command_rotational
-
     move_command.angular.z = move_command_angular
 
     # send the command to the turtlebot

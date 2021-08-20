@@ -1,10 +1,10 @@
-#!/usr/bin/env
+#!/usr/bin/env python3
 
 import rospy
 
 # TODO replace distance travelled with current x y positions
 
-def create_message(move_command, batteryLevel, distance, angle):
+def create_message(move_command, batteryLevel, position, angle):
     """
     
     Generates a message containing information on the turtlebot's
@@ -22,7 +22,9 @@ def create_message(move_command, batteryLevel, distance, angle):
         --------------------------------
         Odometry
 
-        Distance travelled (meters): %f
+        X Position (meters): %f
+
+        Y Position (meters): %f
 
         Angle (degrees): %f 
         --------------------------------
@@ -42,9 +44,11 @@ def create_message(move_command, batteryLevel, distance, angle):
         --------------------------------
         Odometry
 
-        Distance travelled (meters): %f
+        X Position (meters): %f
 
-        Angle (degrees): %f
+        Y Position (meters): %f
+
+        Angle (degrees): %f 
         --------------------------------
         Estimated battery level: %f/100
         BATTERY LEVEL LOW. CHARGE SOON.
@@ -55,7 +59,7 @@ def create_message(move_command, batteryLevel, distance, angle):
         """
 
     # write the above message to the console with velocity, position, battery level values
-    rospy.loginfo(msg, round(move_command.linear.x, 2), round(move_command.angular.z, 2), distance.x, angle, batteryLevel)
+    rospy.loginfo(msg, round(move_command.linear.x, 2), round(move_command.angular.z, 2), position.x, position.y, angle, batteryLevel)
     
 
     
