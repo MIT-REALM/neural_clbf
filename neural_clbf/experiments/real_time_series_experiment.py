@@ -135,9 +135,11 @@ class RealTimeSeriesExperiment(Experiment):
             # Get the control input at the current state if it's time
             if tstep % controller_update_freq == 0:
 
-                # TODO when Charles sends the updated code, make sure to change this
-                # back to controller_under_test.u(x_current) to make sure it works
-                u_current = controller_under_test.dynamics_model.u_nominal(x_current)
+                # TODO This line currently has issues, and will not work as-is.
+                # Currently only works with u_nominal specifically:
+                # u_current = controller_under_test.dynamics_model.u_nominal(x_current)
+                u_current = controller_under_test.u(x_current)
+
                 # set the output command to the command obtained from the
                 # dynamics model
                 linear_command = u_current[0][0].item()
