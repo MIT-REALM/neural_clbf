@@ -41,9 +41,9 @@ def main(args):
     scenarios = [
         nominal_params,
     ]
-    for ux in [-0.01, 0.01]:
-        for uy in [-0.01, 0.01]:
-            for uz in [-0.01, 0.01]:
+    for ux in [-0.015, 0.015]:
+        for uy in [-0.015, 0.015]:
+            for uz in [-0.015, 0.015]:
                 scenarios.append(
                     {
                         "a": 6871,
@@ -79,7 +79,7 @@ def main(args):
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
+        quotas={"safe": 0.2, "unsafe": 0.2},
     )
 
     # Define the experiment suite

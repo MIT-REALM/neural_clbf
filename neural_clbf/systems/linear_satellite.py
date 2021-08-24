@@ -145,10 +145,11 @@ class LinearSatellite(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Stay within some maximum distance from the target
-        safe_mask.logical_and_(x.norm(dim=-1) <= 1.5)
+        distance = x[:, : LinearSatellite.Z + 1].norm(dim=-1)
+        safe_mask.logical_and_(distance <= 1.5)
 
         # Stay at least some minimum distance from the target
-        safe_mask.logical_and_(x.norm(dim=-1) >= 0.5)
+        safe_mask.logical_and_(distance >= 0.5)
 
         return safe_mask
 
@@ -161,10 +162,11 @@ class LinearSatellite(ControlAffineSystem):
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
 
         # Maximum distance
-        unsafe_mask.logical_or_(x.norm(dim=-1) >= 2.0)
+        distance = x[:, : LinearSatellite.Z + 1].norm(dim=-1)
+        unsafe_mask.logical_or_(distance >= 2.0)
 
         # Minimum distance
-        unsafe_mask.logical_or_(x.norm(dim=-1) <= 0.3)
+        unsafe_mask.logical_or_(distance <= 0.3)
 
         return unsafe_mask
 
