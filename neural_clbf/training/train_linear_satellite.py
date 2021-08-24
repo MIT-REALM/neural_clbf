@@ -104,10 +104,12 @@ def main(args):
         n_sims_per_start=1,
         t_sim=10.0,
     )
-    experiment_suite = ExperimentSuite([
-        V_contour_experiment,
-        rollout_state_space_experiment,
-    ])
+    experiment_suite = ExperimentSuite(
+        [
+            V_contour_experiment,
+            rollout_state_space_experiment,
+        ]
+    )
 
     # Initialize the controller
     clbf_controller = NeuralCBFController(
