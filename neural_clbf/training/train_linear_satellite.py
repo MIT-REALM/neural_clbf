@@ -13,6 +13,7 @@ from neural_clbf.systems import LinearSatellite
 from neural_clbf.experiments import (
     ExperimentSuite,
     CLFContourExperiment,
+    RolloutStateSpaceExperiment,
 )
 from neural_clbf.training.utils import current_git_hash
 
@@ -92,7 +93,21 @@ def main(args):
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
-    experiment_suite = ExperimentSuite([V_contour_experiment])
+    rollout_state_space_experiment = RolloutStateSpaceExperiment(
+        "Rollout State Space",
+        start_x,
+        plot_x_index=LinearSatellite.X,
+        plot_x_label="$x$",
+        plot_y_index=LinearSatellite.Y,
+        plot_y_label="$y$",
+        scenarios=[nominal_params],
+        n_sims_per_start=1,
+        t_sim=10.0,
+    )
+    experiment_suite = ExperimentSuite([
+        V_contour_experiment,
+        rollout_state_space_experiment,
+    ])
 
     # Initialize the controller
     clbf_controller = NeuralCBFController(
