@@ -122,7 +122,7 @@ def main(args):
         cbf_lambda=1.0,
         controller_period=controller_period,
         cbf_relaxation_penalty=1e2,
-        scale_parameter=1.0,
+        scale_parameter=10.0,
     )
 
     # Initialize the logger and trainer
