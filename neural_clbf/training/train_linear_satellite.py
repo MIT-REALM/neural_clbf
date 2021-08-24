@@ -42,9 +42,9 @@ def main(args):
     scenarios = [
         nominal_params,
     ]
-    for ux in [-0.015, 0.015]:
-        for uy in [-0.015, 0.015]:
-            for uz in [-0.015, 0.015]:
+    for ux in [-0.01, 0.01]:
+        for uy in [-0.01, 0.01]:
+            for uz in [-0.01, 0.01]:
                 scenarios.append(
                     {
                         "a": 6871,
@@ -76,11 +76,11 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=0,
         trajectory_length=1,
-        fixed_samples=10000,
-        max_points=10000,
+        fixed_samples=50000,
+        max_points=50000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2},
+        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
 
     # Define the experiment suite
@@ -122,6 +122,7 @@ def main(args):
         cbf_lambda=1.0,
         controller_period=controller_period,
         cbf_relaxation_penalty=1e2,
+        scale_parameter=1.0,
     )
 
     # Initialize the logger and trainer
