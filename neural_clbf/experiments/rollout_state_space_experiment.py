@@ -130,7 +130,6 @@ class RolloutStateSpaceExperiment(Experiment):
             # Get the control input at the current state if it's time
             if tstep % controller_update_freq == 0:
                 u_current = controller_under_test.u(x_current)
-                u_current = controller_under_test.dynamics_model.u_nominal(x_current)
 
             # Log the current state and control for each simulation
             for sim_index in range(n_sims):
