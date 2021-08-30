@@ -3,6 +3,8 @@ numpy
 matplotlib
 seaborn
 pandas
+# Saving videos
+celluloid
 
 # Code quality
 mypy
