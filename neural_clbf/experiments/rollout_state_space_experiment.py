@@ -148,6 +148,7 @@ class RolloutStateSpaceExperiment(Experiment):
                 y_value = x_current[sim_index, self.plot_y_index].cpu().numpy().item()
                 log_packet[self.plot_x_label] = x_value
                 log_packet[self.plot_y_label] = y_value
+                log_packet["state"] = x_current[sim_index, :].cpu().detach().numpy()
 
                 results_df = results_df.append(log_packet, ignore_index=True)
 
