@@ -71,11 +71,17 @@ def animate_linear_satellite():
     # training.
     log_dir = "saved_models/aas/linear_satellite_cbf/commit_736760c/"
     neural_controller = NeuralCBFController.load_from_checkpoint(log_dir + "v1.ckpt")
+    neural_controller.cbf_relaxation_penalty = 1e5
+    neural_controller.clf_lambda = 0.0
+
+    # Save the contour experiment for later use
+    contour_experiment = neural_controller.experiment_suite.experiments[0]
+    contour_experiment.n_grid = 50
 
     # Get the dataframe from a rollout
-    neural_controller.experiment_suite.experiments[1].t_sim = 10.0
+    neural_controller.experiment_suite.experiments[1].t_sim = 20.0
     neural_controller.experiment_suite.experiments[1].start_x = torch.tensor(
-        [[0.5, 0.5, 0.0, 0.0, 0.0, 0.0]]
+        [[0.5, 0.0, 0.0, 0.0, 0.0, 0.0]]
     )
     rollout_df = neural_controller.experiment_suite.experiments[1].run(
         neural_controller
@@ -93,6 +99,8 @@ def animate_linear_satellite():
     # Draw a frame for each step of the simulation
     seconds_per_frame = 1.0 / 30
     dt = neural_controller.dynamics_model.dt
+    num_frames = 0
+    contour_df = pd.DataFrame()
     for i in range(0, rollout_df.shape[0], int(seconds_per_frame / dt)):
         # Add a satellite image at the origin
         ego_sat_icon = plt.imread("neural_clbf/evaluation/datafiles/ego_sat_icon.png")
@@ -114,13 +122,13 @@ def animate_linear_satellite():
         # Add a circle for the minimum radius
         keepout_zone = Circle((0, 0), safe_r, fill=False, ec="k")
         ax.add_artist(keepout_zone)
-        ax.text(
-            -0.38,
-            0.1,
-            "Keepout Zone",
-            rotation=45,
-            fontsize="x-large",
-        )
+        # ax.text(
+        #     -0.38,
+        #     0.1,
+        #     "Keepout Zone",
+        #     rotation=45,
+        #     fontsize="x-large",
+        # )
 
         # For each timestep, plot the path of the adversary satellite
         adv_sat_icon = plt.imread("neural_clbf/evaluation/datafiles/adv_sat_icon.png")
@@ -137,7 +145,32 @@ def animate_linear_satellite():
         y_so_far = rollout_df["$y$"][:i]
         ax.plot(x_so_far, y_so_far, c="blue")
 
+        # Also plot a level set of the CBF at this point (only update every few frames
+        # to finish in a reasonable amount of time)
+        if num_frames % 5 == 0:
+            current_state = torch.tensor(rollout_df["state"][i])
+            contour_experiment.default_state = current_state
+            contour_df = contour_experiment.run(neural_controller)
+
+        ax.tricontour(
+            contour_df["$x$"],
+            contour_df["$y$"],
+            contour_df["V"],
+            cmap="Greys",
+            levels=10,
+            linewidths=1.0,
+        )
+        ax.tricontour(
+            contour_df["$x$"],
+            contour_df["$y$"],
+            contour_df["V"],
+            colors=["red"],
+            levels=[0.0],
+            linewidths=2.0,
+        )
+
         camera.snap()
+        num_frames += 1
 
     animation = camera.animate(interval=int(1e3 * seconds_per_frame), blit=True)
     animation.save("with_safeorbit.mp4")

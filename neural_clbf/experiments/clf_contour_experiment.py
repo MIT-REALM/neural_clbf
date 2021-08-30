@@ -131,9 +131,9 @@ class CLFContourExperiment(Experiment):
                 is_safe = controller_under_test.dynamics_model.safe_mask(x).all()
                 is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
 
-                # Get the QP relaxation
-                _, r = controller_under_test.solve_CLF_QP(x)
-                relaxation = r.max()
+                # # Get the QP relaxation
+                # _, r = controller_under_test.solve_CLF_QP(x)
+                # relaxation = r.max()
 
                 # Store the results
                 results_df = results_df.append(
@@ -141,7 +141,7 @@ class CLFContourExperiment(Experiment):
                         self.x_axis_label: x_vals[i].cpu().numpy().item(),
                         self.y_axis_label: y_vals[j].cpu().numpy().item(),
                         "V": V.cpu().numpy().item(),
-                        "QP relaxation": relaxation.cpu().numpy().item(),
+                        # "QP relaxation": relaxation.cpu().numpy().item(),
                         "Goal region": is_goal.cpu().numpy().item(),
                         "Safe region": is_safe.cpu().numpy().item(),
                         "Unsafe region": is_unsafe.cpu().numpy().item(),
