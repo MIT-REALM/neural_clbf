@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 from neural_clbf.controllers import NeuralObsBFController
-import neural_clbf.evaluation.scenes as scene_utils
+import neural_clbf.evaluation.turtle2d.scenes as scene_utils
 
 
 @torch.no_grad()

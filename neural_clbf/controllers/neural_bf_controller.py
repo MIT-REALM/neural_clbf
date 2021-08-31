@@ -257,7 +257,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         # Add the learned term as a correction to the minimum distance
         min_dist, _ = o.norm(dim=1).min(dim=-1)
         min_dist = min_dist.reshape(-1, 1)
-        h += 0.2 - min_dist
+        h += 0.3 - min_dist
 
         return h
 
@@ -918,7 +918,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #   2.) h < 0 in the safe region
         h_safe = h[safe_mask]
         safe_violation = F.relu(eps + h_safe)
-        safe_h_term = 1e2 * safe_violation.mean()
+        safe_h_term = 1e0 * safe_violation.mean()
         loss.append(("BF safe region term", safe_h_term))
         if accuracy:
             safe_h_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
@@ -927,7 +927,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #   3.) h > 0 in the unsafe region
         h_unsafe = h[unsafe_mask]
         unsafe_violation = F.relu(eps - h_unsafe)
-        unsafe_h_term = 1e2 * unsafe_violation.mean()
+        unsafe_h_term = 1e0 * unsafe_violation.mean()
         loss.append(("BF unsafe region term", unsafe_h_term))
         if accuracy:
             unsafe_h_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
