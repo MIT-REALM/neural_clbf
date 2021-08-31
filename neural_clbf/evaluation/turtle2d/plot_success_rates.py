@@ -13,7 +13,7 @@ import pandas as pd
 # in the safety_starter_agents directory, with the turtle2d env.
 # Steps are converted to time with timestep 0.1
 data = [
-    {"Algorithm": "PPO", "Metric": "Goal-reaching rate", "Value": 44 / 100},
-    {"Algorithm": "PPO", "Metric": "Collision rate", "Value": 11 / 100},
-    {"Algorithm": "PPO", "Metric": "Time to goal ", "Value": 0.1 * float('nan')},
+    {"Algorithm": "PPO", "Metric": "Goal-reaching rate", "Value": 256 / 500},
+    {"Algorithm": "PPO", "Metric": "Collision rate", "Value": 57 / 500},
+    {"Algorithm": "PPO", "Metric": "Time to goal ", "Value": 0.1 * 38.07},
 ]
