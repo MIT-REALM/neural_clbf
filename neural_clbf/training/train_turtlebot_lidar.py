@@ -131,15 +131,15 @@ def main(args):
         x_axis_label="$x$",
         y_axis_label="$y$",
     )
-    V_contour_experiment = LFContourExperiment(
-        "h_Contour",
-        domain=[(-5.0, 5.0), (-5.0, 5.0)],
-        n_grid=60,
-        x_axis_index=TurtleBot2D.X,
-        y_axis_index=TurtleBot2D.Y,
-        x_axis_label="$x$",
-        y_axis_label="$y$",
-    )
+    # V_contour_experiment = LFContourExperiment(
+    #     "V_Contour",
+    #     domain=[(-5.0, 5.0), (-5.0, 5.0)],
+    #     n_grid=60,
+    #     x_axis_index=TurtleBot2D.X,
+    #     y_axis_index=TurtleBot2D.Y,
+    #     x_axis_label="$x$",
+    #     y_axis_label="$y$",
+    # )
     rollout_experiment = RolloutStateSpaceExperiment(
         "Rollout",
         start_x,
@@ -151,9 +151,11 @@ def main(args):
         n_sims_per_start=1,
         t_sim=5.0,
     )
-    experiment_suite = ExperimentSuite(
-        [h_contour_experiment, V_contour_experiment, rollout_experiment]
-    )
+    experiment_suite = ExperimentSuite([
+        h_contour_experiment,
+        # V_contour_experiment,
+        rollout_experiment,
+    ])
 
     # Initialize the controller
     bf_controller = NeuralObsBFController(
@@ -164,7 +166,7 @@ def main(args):
         encoder_hidden_size=48,
         h_hidden_layers=2,
         h_hidden_size=48,
-        h_alpha=0.6,
+        h_alpha=0.3,
         lookahead_dual_penalty=1e3,
         lookahead_grid_n=8,
         controller_period=controller_period,

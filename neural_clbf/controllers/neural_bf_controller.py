@@ -918,7 +918,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #   2.) h < 0 in the safe region
         h_safe = h[safe_mask]
         safe_violation = F.relu(eps + h_safe)
-        safe_h_term = 1e0 * safe_violation.mean()
+        safe_h_term = 1e2 * safe_violation.mean()
         loss.append(("BF safe region term", safe_h_term))
         if accuracy:
             safe_h_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
@@ -927,7 +927,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         #   3.) h > 0 in the unsafe region
         h_unsafe = h[unsafe_mask]
         unsafe_violation = F.relu(eps - h_unsafe)
-        unsafe_h_term = 1e0 * unsafe_violation.mean()
+        unsafe_h_term = 1e2 * unsafe_violation.mean()
         loss.append(("BF unsafe region term", unsafe_h_term))
         if accuracy:
             unsafe_h_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
@@ -1008,7 +1008,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         min_dist, _ = o.norm(dim=1).min(dim=-1)
         min_dist = min_dist.reshape(-1, 1)
         h_tuning_distance = 0.2 - min_dist
-        h_tuning_loss = 1e-1 * ((h_t - h_tuning_distance) ** 2).sum(dim=-1).mean()
+        h_tuning_loss = 1e0 * ((h_t - h_tuning_distance) ** 2).sum(dim=-1).mean()
         loss.append(("H tuning loss", h_tuning_loss))
 
         # Make V act like a norm measuring range and angle from the origin
@@ -1021,7 +1021,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         phi = torch.atan2(torch.sin(phi), torch.cos(phi))
         phi = phi.reshape(-1, 1)
         V_tuning = 1.0 * distance_squared + 0.5 * (1 - torch.cos(phi))
-        V_tuning_loss = 1e-1 * ((V_t - V_tuning) ** 2).sum(dim=-1).mean()
+        V_tuning_loss = 1e0 * ((V_t - V_tuning) ** 2).sum(dim=-1).mean()
         loss.append(("V tuning loss", V_tuning_loss))
 
         return loss
@@ -1195,7 +1195,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             self.datamodule.add_data(self.simulator_fn)
 
     def configure_optimizers(self):
-        opt = torch.optim.Adam(
+        opt = torch.optim.SGD(
             self.parameters(),
             lr=self.primal_learning_rate,
         )
