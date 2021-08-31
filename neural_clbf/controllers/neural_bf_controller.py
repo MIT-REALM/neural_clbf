@@ -63,6 +63,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         epochs_per_episode: Optional[int] = None,
         validation_dynamics_model: Optional[ObservableSystem] = None,
         debug_mode: bool = False,
+        state_only: bool = False,
     ):
         """Initialize the controller.
 
@@ -90,6 +91,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             validation_dynamics_model: optionally provide a dynamics model to use during
                                        validation
             debug_mode: if True, print and plot some debug information. Defaults false
+            state_only: if True, define the barrier function in terms of robot state
         """
         super(NeuralObsBFController, self).__init__(
             dynamics_model=dynamics_model,
