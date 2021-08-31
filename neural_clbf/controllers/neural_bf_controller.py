@@ -970,7 +970,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         u_t, u_cost = self.u_(x, o, h_t, V_t)
 
         # Penalize the cost
-        barrier_loss = F.relu(eps + u_cost).mean()
+        barrier_loss = 1e0 * F.relu(eps + u_cost)[torch.logical_not(unsafe_mask)].mean()
         loss.append(("Barrier descent loss", barrier_loss))
 
         return loss
