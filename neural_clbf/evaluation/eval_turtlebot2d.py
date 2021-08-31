@@ -96,6 +96,30 @@ def eval_and_plot_turtlebot_bugtrap():
     # cbf_contour_experiment.run_and_plot(neural_controller, display_plots=True)
 
 
+def eval_and_plot_turtlebot_training():
+    # Load the checkpoint file. This should include the experiment suite used during
+    # training.
+    log_dir = "saved_models/perception/turtlebot2d/commit_26f34ff/"
+    neural_controller = NeuralObsBFController.load_from_checkpoint(log_dir + "v0.ckpt")
+
+    # Get the experiment
+    rollout_experiment = neural_controller.experiment_suite.experiments[2]
+
+    # Modify rollout parameters
+    rollout_experiment.t_sim = 4
+    neural_controller.lookahead_grid_n = 8
+    neural_controller.controller_period = 0.1
+    neural_controller.dynamics_model.dt = 0.01
+    neural_controller.lookahead_dual_penalty = 1e3
+    # neural_controller.debug_mode_exploratory = True
+    # neural_controller.debug_mode_goal_seeking = True
+
+    # Run the experiments and plot
+    rollout_experiment.run_and_plot(neural_controller, display_plots=True)
+    # cbf_contour_experiment.run_and_plot(neural_controller, display_plots=True)
+
+
 if __name__ == "__main__":
     # eval_and_plot_turtlebot_room()
-    eval_and_plot_turtlebot_bugtrap()
+    # eval_and_plot_turtlebot_bugtrap()
+    eval_and_plot_turtlebot_training()
