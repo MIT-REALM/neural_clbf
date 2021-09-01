@@ -68,7 +68,9 @@ class RolloutSuccessRateExperiment(Experiment):
         )
         for sim_idx in prog_bar_range:
             # Generate a safe starting state
-            x = controller_under_test.dynamics_model.sample_safe(1, max_tries=int(1e6))
+            x = controller_under_test.dynamics_model.sample_safe(1)
+            while controller_under_test.dynamics_model.unsafe_mask(x).any():
+                x = controller_under_test.dynamics_model.sample_safe(1)
 
             # Reset the controller if necessary
             if hasattr(controller_under_test, "reset_controller"):
