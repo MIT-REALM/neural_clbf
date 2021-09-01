@@ -176,6 +176,7 @@ def main(args):
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=10,
+        state_only=True,
     )
 
     # Initialize the logger and trainer
