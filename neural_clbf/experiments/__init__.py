@@ -8,6 +8,7 @@ from .lf_contour_experiment import LFContourExperiment
 from .rollout_time_series_experiment import RolloutTimeSeriesExperiment
 from .rollout_norm_experiment import RolloutNormExperiment
 from .rollout_state_space_experiment import RolloutStateSpaceExperiment
+from .rollout_success_rate_experiment import RolloutSuccessRateExperiment
 from .car_s_curve_experiment import CarSCurveExperiment
 
 
@@ -20,6 +21,7 @@ __all__ = [
     "LFContourExperiment",
     "RolloutTimeSeriesExperiment",
     "RolloutStateSpaceExperiment",
+    "RolloutSuccessRateExperiment",
     "RolloutNormExperiment",
     "CarSCurveExperiment",
 ]

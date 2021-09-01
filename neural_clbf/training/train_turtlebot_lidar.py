@@ -166,9 +166,7 @@ def main(args):
         experiment_suite=experiment_suite,
         encoder_hidden_layers=2,
         encoder_hidden_size=48,
-        # h_hidden_layers=2,
-        # h_hidden_size=48,
-        h_hidden_layers=4,
+        h_hidden_layers=2,
         h_hidden_size=48,
         h_alpha=0.3,
         lookahead_dual_penalty=1e3,
@@ -176,12 +174,11 @@ def main(args):
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
         epochs_per_episode=10,
-        state_only=True,
     )
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/lidar_turtlebot_state",
+        "logs/lidar_turtlebot",
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(

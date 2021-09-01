@@ -14,6 +14,6 @@
 # Steps are converted to time with timestep 0.1
 data = [
     {"Algorithm": "PPO", "Metric": "Goal-reaching rate", "Value": 256 / 500},
-    {"Algorithm": "PPO", "Metric": "Collision rate", "Value": 57 / 500},
+    {"Algorithm": "PPO", "Metric": "Safety rate", "Value": 1 - 57 / 500},
     {"Algorithm": "PPO", "Metric": "Time to goal ", "Value": 0.1 * 38.07},
 ]
