@@ -127,6 +127,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.epochs_per_episode = epochs_per_episode
         self.debug_mode_exploratory = debug_mode
         self.debug_mode_goal_seeking = debug_mode
+        self.state_only = state_only
 
         # ----------------------------------------------------------------------------
         # Define the encoder network
@@ -157,6 +158,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.h_hidden_layers = h_hidden_layers
         self.h_hidden_size = h_hidden_size
         num_h_inputs = self.encoder_hidden_size
+        if self.state_only:
+            # If we're in "state-only" mode, take state as the input to h
+            # (this allows training to compare with a state-based CBF)
+            num_h_inputs = self.dynamics_model.n_dims
         # We're going to build the network up layer by layer, starting with the input
         self.h_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.h_layers["input_linear"] = nn.Linear(num_h_inputs, self.h_hidden_size)
@@ -248,16 +253,23 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         returns:
             h: bs x 1 tensor of BF values
         """
-        # Encode the observations
-        encoded_obs = self.encoder(o)
+        # Then get the barrier function value.
+        # Most of the time, this is done based on observations, but we want to
+        # enable comparisons with a state-based barrier function, so we include the
+        # option for that as well.
+        if not self.state_only:
+            # Encode the observations
+            encoded_obs = self.encoder(o)
 
-        # Then get the barrier function value
-        h = self.h_nn(encoded_obs)
+            # Get the barrier function based on those observations
+            h = self.h_nn(encoded_obs)
 
-        # Add the learned term as a correction to the minimum distance
-        min_dist, _ = o.norm(dim=1).min(dim=-1)
-        min_dist = min_dist.reshape(-1, 1)
-        h += 0.3 - min_dist
+            # Add the learned term as a correction to the minimum distance
+            min_dist, _ = o.norm(dim=1).min(dim=-1)
+            min_dist = min_dist.reshape(-1, 1)
+            h += 0.3 - min_dist
+        else:
+            h = self.h_nn(x)
 
         return h
 

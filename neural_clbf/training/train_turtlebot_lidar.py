@@ -17,7 +17,7 @@ from neural_clbf.systems.planar_lidar_system import Scene
 from neural_clbf.experiments import (
     ExperimentSuite,
     BFContourExperiment,
-    LFContourExperiment,
+    # LFContourExperiment,
     RolloutStateSpaceExperiment,
 )
 from neural_clbf.training.utils import current_git_hash
@@ -151,11 +151,13 @@ def main(args):
         n_sims_per_start=1,
         t_sim=5.0,
     )
-    experiment_suite = ExperimentSuite([
-        h_contour_experiment,
-        # V_contour_experiment,
-        rollout_experiment,
-    ])
+    experiment_suite = ExperimentSuite(
+        [
+            h_contour_experiment,
+            # V_contour_experiment,
+            rollout_experiment,
+        ]
+    )
 
     # Initialize the controller
     bf_controller = NeuralObsBFController(
@@ -164,7 +166,9 @@ def main(args):
         experiment_suite=experiment_suite,
         encoder_hidden_layers=2,
         encoder_hidden_size=48,
-        h_hidden_layers=2,
+        # h_hidden_layers=2,
+        # h_hidden_size=48,
+        h_hidden_layers=4,
         h_hidden_size=48,
         h_alpha=0.3,
         lookahead_dual_penalty=1e3,
@@ -176,7 +180,7 @@ def main(args):
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/lidar_turtlebot",
+        "logs/lidar_turtlebot_state",
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
