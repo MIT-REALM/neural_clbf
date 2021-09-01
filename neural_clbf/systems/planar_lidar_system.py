@@ -528,6 +528,22 @@ class PlanarLidarSystem(ObservableSystem):
 
         return unsafe_mask
 
+    def failure(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating failure (collision)
+
+        args:
+            x: a tensor of points in the state space
+        """
+        # A state is safe if the closest lidar point too close
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        qs = self.planar_configuration(x)
+        min_distances = self.scene.min_distance_to_obstacle(qs).reshape(-1)
+
+        unsafe_mask.logical_or_(min_distances <= 0.0)
+
+        return unsafe_mask
+
     def plot_environment(self, ax: Axes) -> None:
         """
         Add a plot of the environment to the given figure by plotting the underlying
