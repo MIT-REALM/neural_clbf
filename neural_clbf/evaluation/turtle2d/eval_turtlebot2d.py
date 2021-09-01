@@ -99,11 +99,13 @@ def eval_and_plot_turtlebot_bugtrap():
 def eval_and_plot_turtlebot_training():
     # Load the checkpoint file. This should include the experiment suite used during
     # training.
-    log_dir = "saved_models/perception/turtlebot2d/commit_04c9147/"
-    neural_controller = NeuralObsBFController.load_from_checkpoint(log_dir + "v0.ckpt")
+    log_dir = "saved_models/perception/turtlebot2d/commit_8439378/"
+    neural_controller = NeuralObsBFController.load_from_checkpoint(
+        log_dir + "v0_ep72.ckpt"
+    )
 
     # Get the experiment
-    rollout_experiment = neural_controller.experiment_suite.experiments[2]
+    rollout_experiment = neural_controller.experiment_suite.experiments[-1]
 
     # Modify rollout parameters
     rollout_experiment.t_sim = 4

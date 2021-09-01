@@ -1,7 +1,7 @@
 """Plot data gathered for success and collision rates"""
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# import pandas as pd
 
 
 # Define data, gathered from various scripts, in tidy data format
