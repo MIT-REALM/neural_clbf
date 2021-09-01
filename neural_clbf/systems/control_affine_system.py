@@ -238,6 +238,15 @@ class ControlAffineSystem(ABC):
         """
         pass
 
+    def failure(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating failure. This usually matches with the
+        unsafe region
+
+        args:
+            x: a tensor of points in the state space
+        """
+        return self.unsafe_mask(x)
+
     def boundary_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating regions that are neither safe nor unsafe
 

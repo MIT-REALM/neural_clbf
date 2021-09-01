@@ -7,8 +7,10 @@ import pandas as pd
 import seaborn as sns
 import torch
 import tqdm
+import numpy as np
 
 from neural_clbf.experiments import Experiment
+from neural_clbf.systems.planar_lidar_system import Scene
 
 if TYPE_CHECKING:
     from neural_clbf.controllers import Controller, NeuralObsBFController  # noqa
@@ -63,10 +65,32 @@ class RolloutSuccessRateExperiment(Experiment):
         num_goals_reached = 0
         total_time_to_goal = 0.0
 
+        # Back up the original scene
+        if hasattr(controller_under_test.dynamics_model, "scene"):
+            original_scene = controller_under_test.dynamics_model.scene  # type: ignore
+
         prog_bar_range = tqdm.trange(
             0, self.n_sims, desc="Computing Success Rate...", leave=True
         )
         for sim_idx in prog_bar_range:
+            # Generate a random environment
+            if hasattr(controller_under_test.dynamics_model, "scene"):
+                room_size = 10.0
+                num_obstacles = 8
+                box_size_range = (0.75, 1.75)
+                position_range = (-4.0, 4.0)
+                rotation_range = (-np.pi, np.pi)
+                scene = Scene([])
+                scene.add_walls(room_size)
+                scene.add_random_boxes(
+                    num_obstacles,
+                    box_size_range,
+                    position_range,
+                    position_range,
+                    rotation_range,
+                )
+                controller_under_test.dynamics_model.scene = scene  # type: ignore
+
             # Generate a safe starting state
             x = controller_under_test.dynamics_model.sample_safe(1)
             while controller_under_test.dynamics_model.unsafe_mask(x).any():
@@ -93,7 +117,7 @@ class RolloutSuccessRateExperiment(Experiment):
                 x = x + dt * xdot
 
                 # Check if we're safe or not
-                if controller_under_test.dynamics_model.unsafe_mask(x).any():
+                if controller_under_test.dynamics_model.failure(x).any():
                     num_collisions += 1
                     break
 
@@ -123,6 +147,10 @@ class RolloutSuccessRateExperiment(Experiment):
                 },
             ]
         )
+
+        # Restore the original scene
+        if hasattr(controller_under_test.dynamics_model, "scene"):
+            controller_under_test.dynamics_model.scene = original_scene  # type: ignore
 
         return results_df
 
