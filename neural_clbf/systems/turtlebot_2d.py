@@ -101,6 +101,15 @@ class TurtleBot2D(PlanarLidarSystem):
     def n_controls(self) -> int:
         return TurtleBot2D.N_CONTROLS
 
+    def goal_mask(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating goal regions for this system
+
+        args:
+            x: a tensor of points in the state space
+        """
+        # Cartesian distance
+        return x[:, :2].norm(dim=-1) < 0.75
+
     @property
     def state_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -109,9 +118,9 @@ class TurtleBot2D(PlanarLidarSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[TurtleBot2D.X] = 2.0
-        upper_limit[TurtleBot2D.Y] = 2.0
-        upper_limit[TurtleBot2D.THETA] = 2 * np.pi
+        upper_limit[TurtleBot2D.X] = 4.5
+        upper_limit[TurtleBot2D.Y] = 4.5
+        upper_limit[TurtleBot2D.THETA] = np.pi
 
         lower_limit = -1.0 * upper_limit
 

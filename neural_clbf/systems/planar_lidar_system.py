@@ -170,13 +170,10 @@ class Scene:
             noise: if non-zero, apply white Gaussian noise with this standard deviation
                    and zero mean to all measurements.
         returns:
-            an N x 4 x num_rays tensor containing the measurements along each
+            an N x 2 x num_rays tensor containing the measurements along each
                 ray. Rays are ordered in the counter-clockwise direction, and each
-                measurement contains the (x, y) location of the contact point and the
-                velocity (xdot, ydot) (as might be obtained by subtracting the last
-                measurement). These measurements will be in the agent frame. If no
-                contact point is found within max_distance, then a 0.0 will be placed
-                in the corresponding element of the second return tensor (a 1 otherwise)
+                measurement contains the (x, y) location of the contact point.
+                These measurements will be in the agent frame.
         """
         # Sanity check on inputs
         assert field_of_view[1] >= field_of_view[0], "Field of view must be (min, max)"

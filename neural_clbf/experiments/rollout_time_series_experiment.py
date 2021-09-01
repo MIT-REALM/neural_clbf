@@ -1,4 +1,4 @@
-"""A mock experiment for use in testing"""
+"""Simulate a rollout and plot the time series result"""
 from copy import copy
 import random
 from typing import List, Tuple, Optional, TYPE_CHECKING

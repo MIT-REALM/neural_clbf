@@ -1,4 +1,4 @@
-"""A mock experiment for use in testing"""
+"""Verify a CLF by sampling"""
 from typing import cast, List, Tuple, Optional, TYPE_CHECKING
 from itertools import product
 

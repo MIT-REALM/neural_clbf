@@ -1,4 +1,4 @@
-"""A mock experiment for use in testing"""
+"""Plot a barrier function contour"""
 from typing import cast, List, Tuple, Optional, TYPE_CHECKING
 
 import matplotlib.pyplot as plt

@@ -1,4 +1,4 @@
-"""A mock experiment for use in testing"""
+"""Simulate a rollout and plot in state space"""
 import random
 from typing import cast, List, Tuple, Optional, TYPE_CHECKING
 
