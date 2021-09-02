@@ -90,9 +90,9 @@ class ObsMPCController(Controller):
             prob = cp.Problem(
                 cp.Maximize(cp.log_det(P) - 100 * cp.trace(P)), constraints
             )
-            opt_val = prob.solve()
-            # If the problem is unbounded/infeasible, do not do anything
-            if opt_val <= -1e9:
+            prob.solve()
+            # Skip if no solution
+            if prob.status != "optimal":
                 continue
 
             # Otherwise, continue on
@@ -120,6 +120,11 @@ class ObsMPCController(Controller):
             prob = cp.Problem(cp.Minimize(objective), constraints)
             prob.solve()
             x_target_opt = x_target.value
+
+            # Skip if no solution
+            if prob.status != "optimal":
+                continue
+
             # and convert to the global frame
             x_target_opt = rotation_mat @ x_target_opt
 
