@@ -23,11 +23,10 @@ if TYPE_CHECKING:
 
 
 class RealTimeSeriesExperiment(Experiment):
-    """
-    
-    An experiment for running a controller 
-    a on real turtlebot.
+    """An experiment for plotting actual
+    performance of controller on turtlebot.
 
+    Plots trajectories as a function of time.
     """
 
     def __init__(
