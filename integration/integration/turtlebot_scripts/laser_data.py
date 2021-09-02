@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#!/usr/bin/env python3
 distance_to_object = 0.0
 distance_to_object_right = 0.0
 distance_to_object_left = 0.0

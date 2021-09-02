@@ -1,4 +1,4 @@
-#!/usr/bin/env
+#!/usr/bin/env python3
 
 from tf.transformations import euler_from_quaternion
 from geometry_msgs.msg import Point
@@ -23,4 +23,3 @@ def get_odom(listener, odom_frame, base_frame):
         return
     
     return (Point(*trans), rotation[2])
-

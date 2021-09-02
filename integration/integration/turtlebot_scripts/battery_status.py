@@ -1,9 +1,9 @@
-#!/usr/bin/env
+#!/usr/bin/env python3
 
-# initial value to avoid errors
+# have to define variable here to prevent error with ros
 batteryLevel = 100
+import integration.integration.turtlebot_scripts.message_creator as message_creator
 
-# function to get battery life
 def battery(data):
     """
     
@@ -11,8 +11,8 @@ def battery(data):
     converts it into a percentage out of 100. 
     
     """
-
     global batteryLevel
+    message_creator.batteryLevel = batteryLevel
 
     # this function was found empirically through multiple tests
     # with a turtlebot. It is an estimate.
