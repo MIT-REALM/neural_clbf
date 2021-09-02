@@ -23,6 +23,7 @@ def plot_turtle_training_curves():
 
     # Plot!
     sns.set_theme(context="paper", style="white")
+    sns.set_style({"font.family": "serif"})
     ax = sns.lineplot(
         x="Step",
         y="Total Loss",
