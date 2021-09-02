@@ -32,29 +32,27 @@ class RealTimeSeriesExperiment(Experiment):
     """
 
     def __init__(
-            self,
-
-            # turtlebot interface parameters
-            command_publisher,
-            rate,
-            listener,
-            position,
-            move_command,
-            odom_frame,
-            base_frame,
-
-            # clbf parameters
-            name: str,
-            start_x: torch.Tensor,
-            plot_x_indices: List[int],
-            plot_x_labels: List[str],
-            plot_u_indices: List[int],
-            plot_u_labels: List[str],
-            scenarios: Optional[ScenarioList] = None,
-            # n_sims_per_start: int = 5,
-            # placeholder runtime, will likely need to either restructure to avoid a set amount of time
-            # or change this value in some way
-            t_sim: float = 30.0,
+        self,
+        # turtlebot interface parameters
+        command_publisher,
+        rate,
+        listener,
+        position,
+        move_command,
+        odom_frame,
+        base_frame,
+        # clbf parameters
+        name: str,
+        start_x: torch.Tensor,
+        plot_x_indices: List[int],
+        plot_x_labels: List[str],
+        plot_u_indices: List[int],
+        plot_u_labels: List[str],
+        scenarios: Optional[ScenarioList] = None,
+        # n_sims_per_start: int = 5,
+        # placeholder runtime, will likely need to either restructure to avoid a set amount of time
+        # or change this value in some way
+        t_sim: float = 30.0,
     ):
         """Initialize an experiment for controller performance on turtlebot.
         args:
@@ -128,7 +126,7 @@ class RealTimeSeriesExperiment(Experiment):
 
         # since we're only running one simulation for real life, used
         # a hardcoded value for now
-        #TODO see what exactly n_sims_per_start does vs. n_sims
+        # TODO see what exactly n_sims_per_start does vs. n_sims
         n_sims = 1
         self.n_sims_per_start = 1
 
@@ -224,7 +222,7 @@ class RealTimeSeriesExperiment(Experiment):
             is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
 
             for measurement_label, value in zip(
-                    ["goal", "safe", "unsafe"], [is_goal, is_safe, is_unsafe]
+                ["goal", "safe", "unsafe"], [is_goal, is_safe, is_unsafe]
             ):
                 base_log_packet[measurement_label] = value.cpu().numpy().item()
 
@@ -269,13 +267,14 @@ class RealTimeSeriesExperiment(Experiment):
                 x_current[0, :].unsqueeze(0),
                 # TODO need to send commands to turtlebot
                 u_current[0, :].unsqueeze(0),
-
                 random_scenarios[0],
             )
 
             # get x, y position and current rotation from odometry
             # this will need to be fixed when we use a positioning system
-            (self.position, self.rotation) = odometry_status.get_odom(self.listener, self.odom_frame, self.base_frame)
+            (self.position, self.rotation) = odometry_status.get_odom(
+                self.listener, self.odom_frame, self.base_frame
+            )
 
             # check if this matches with what is expected of x_current
             x_current[0, :] = [self.position.x, self.position.y, self.rotation]
@@ -286,14 +285,23 @@ class RealTimeSeriesExperiment(Experiment):
 
             # TODO I think xdot is a list: [xdot, ydot, theta_dot]
             # so make sure the command script handles this properly
-            execute_command(self.command_publisher, self.move_command, command, 0, self.position, self.rotation)
-            rospy.sleep(.001)
+            execute_command(
+                self.command_publisher,
+                self.move_command,
+                command,
+                0,
+                self.position,
+                self.rotation,
+            )
+            rospy.sleep(0.001)
 
         results_df = results_df.set_index("t")
         return results_df
 
     #########################################################################################
     # don't need to worry about plotting for now
+
+
 #     def plot(
 #         self,
 #         controller_under_test: "Controller",

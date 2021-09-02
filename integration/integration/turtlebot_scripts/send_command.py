@@ -3,10 +3,17 @@ from .message_creator import create_message
 from numpy import pi
 
 
-def execute_command(command_publisher, move_command, move_command_translational,
-                    move_command_angular, position, rotation, upper_command_limit):
+def execute_command(
+    command_publisher,
+    move_command,
+    move_command_translational,
+    move_command_angular,
+    position,
+    rotation,
+    upper_command_limit,
+):
     """
-    
+
     Sends movement command created by a control script to a turtlebot.
     Also pushes information to message_creator.py to output a message
     to the console.
@@ -27,7 +34,7 @@ def execute_command(command_publisher, move_command, move_command_translational,
         position: turtlebot's current position
 
         rotation: turtlebot's current attitude
-    
+
     """
     # pull max command values from tensor obtained from turtlebot
     # system file
@@ -49,12 +56,10 @@ def execute_command(command_publisher, move_command, move_command_translational,
 
     # send the command to the turtlebot
     command_publisher.publish(move_command)
-    
+
     # publish turtlebot status to console
-    create_message(
-        move_command, position, rotation*360/(2*pi)
-    )
+    create_message(move_command, position, rotation * 360 / (2 * pi))
 
     # briefly pause to avoid overloading turtlebot with commands, which will
     # cause sync issues
-    rospy.sleep(.001)
+    rospy.sleep(0.001)

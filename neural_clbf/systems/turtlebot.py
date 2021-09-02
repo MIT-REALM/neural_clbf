@@ -21,6 +21,7 @@ class TurtleBot(ControlAffineSystem):
         R: radius of the wheels
         L: radius of rotation, or the distance between the two wheels
     """
+
     # Number of states and controls
     N_DIMS = 3
     N_CONTROLS = 2
@@ -29,7 +30,7 @@ class TurtleBot(ControlAffineSystem):
     X = 0
     Y = 1
     THETA = 2
-    
+
     # Control indices
     V = 0
     THETA_DOT = 1
@@ -58,7 +59,6 @@ class TurtleBot(ControlAffineSystem):
             scenarios=scenarios,
             use_linearized_controller=False,
         )
-
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid

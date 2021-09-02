@@ -95,7 +95,7 @@ def test_turtlebot_dynamics():
     u[0, TurtleBot.THETA_DOT] += 1.0
     xdot = turtlebot.closed_loop_dynamics(x_origin, u)
     # x and y position should be zero
-    assert torch.allclose(xdot[0, :2], torch.zeros(1,2))
+    assert torch.allclose(xdot[0, :2], torch.zeros(1, 2))
     # theta should be negative
     assert xdot[0, TurtleBot.THETA] < 0.0
 
