@@ -30,26 +30,22 @@ class RealTimeSeriesExperiment(Experiment):
     """
 
     def __init__(
-            self,
-
-            # turtlebot interface parameters
-            command_publisher,
-            rate,
-            listener,
-            move_command,
-            odom_frame,
-            base_frame,
-
-            # clbf parameters
-            name: str,
-            start_x: torch.Tensor,
-            scenarios: Optional[ScenarioList] = None,
-
-            # Note on t_sim: actual time taken does not seem
-            # to correspond to this. Raise this value as needed to
-            # make script run long enough for turtlebot
-            # to reach the destination
-            t_sim: float = 300.0,
+        self,
+        # turtlebot interface parameters
+        command_publisher,
+        rate,
+        listener,
+        move_command,
+        odom_frame,
+        base_frame,
+        # clbf parameters
+        name: str,
+        start_x: torch.Tensor,
+        # Note on t_sim: actual time taken does not seem
+        # to correspond to this. Raise this value as needed to
+        # make script run long enough for turtlebot
+        # to reach the destination
+        t_sim: float = 300.0,
     ):
         """Initialize an experiment for controller performance on turtlebot.
         args:
@@ -57,14 +53,13 @@ class RealTimeSeriesExperiment(Experiment):
                        nominal parameters of the controller's dynamical system
             t_sim: the amount of time to simulate for. Note on t_sim: the actual
                         amount of time taken to run the experiment (when it's not a simulation) does
-                        not seem to correspond to this value. Raise t_sim as needed to 
+                        not seem to correspond to this value. Raise t_sim as needed to
                         make the script run long enough for the turtlebot to reach the destination.
         """
         super(RealTimeSeriesExperiment, self).__init__(name)
 
         # clbf parameters
         self.start_x = start_x
-        self.scenarios = scenarios
         self.t_sim = t_sim
 
         # turtlebot interface parameters
@@ -92,30 +87,17 @@ class RealTimeSeriesExperiment(Experiment):
         # reset turtlebot odometry
         os.system("timeout 3 rostopic pub /reset std_msgs/Empty '{}'")
 
-        # Deal with optional parameters
-        if self.scenarios is None:
-            scenarios = [controller_under_test.dynamics_model.nominal_params]
-        else:
-            scenarios = self.scenarios
-
         # Set up a dataframe to store the results
         results_df = pd.DataFrame()
 
-        # Determine the parameter range to sample from
-        # this pulls the min and max values from the turtlebot model script
-        # so no need to modify this
-        parameter_ranges = {}
-        for param_name in scenarios[0].keys():
-            param_max = max([s[param_name] for s in scenarios])
-            param_min = min([s[param_name] for s in scenarios])
-            parameter_ranges[param_name] = (param_min, param_max)
-
-        # Generate a tensor of start states
+        # Save these for convenience
         n_dims = controller_under_test.dynamics_model.n_dims
         n_controls = controller_under_test.dynamics_model.n_controls
 
         # get intial state from odometry
-        (self.position, self.rotation) = odometry_status.get_odom(self.listener, self.odom_frame, self.base_frame)
+        (self.position, self.rotation) = odometry_status.get_odom(
+            self.listener, self.odom_frame, self.base_frame
+        )
 
         # Execute!
         delta_t = controller_under_test.dynamics_model.dt
@@ -128,9 +110,14 @@ class RealTimeSeriesExperiment(Experiment):
         )
 
         for tstep in prog_bar_range:
-            
-            (self.position, self.rotation) = odometry_status.get_odom(self.listener, self.odom_frame, self.base_frame)
-            x_current[0, :] = torch.tensor([self.position.x, self.position.y, self.rotation]) + self.start_x
+
+            (self.position, self.rotation) = odometry_status.get_odom(
+                self.listener, self.odom_frame, self.base_frame
+            )
+            x_current[0, :] = (
+                torch.tensor([self.position.x, self.position.y, self.rotation])
+                + self.start_x
+            )
 
             # Get the control input at the current state if it's time
             if tstep % controller_update_freq == 0:
@@ -143,36 +130,24 @@ class RealTimeSeriesExperiment(Experiment):
                 # set the output command to the command obtained from the
                 # dynamics model
                 linear_command = u_current[0][0].item()
-                print(linear_command)
                 angular_command = u_current[0][1].item()
 
                 # pull the control limits from the turtlebot system file
-                (upper_command_limit, _)= controller_under_test.dynamics_model.control_limits
+                u_max, _ = controller_under_test.dynamics_model.control_limits
 
                 # call the function that sends the commands to the turtlebot
-                execute_command(self.command_publisher, self.move_command, linear_command, angular_command, self.position, self.rotation, upper_command_limit)
+                execute_command(
+                    self.command_publisher,
+                    self.move_command,
+                    linear_command,
+                    angular_command,
+                    self.position,
+                    self.rotation,
+                    u_max,
+                )
 
                 # Log the current state and control
                 base_log_packet = {"t": tstep * delta_t}
-
-                # Include the parameters
-                param_string = ""
-                for param_name, param_value in scenarios[0].items():
-                    param_value_string = "{:.3g}".format(param_value)
-                    param_string += f"{param_name} = {param_value_string}, "
-                    base_log_packet[param_name] = param_value
-                base_log_packet["Parameters"] = param_string[:-2]
-
-                # Log the goal/safe/unsafe/out of bounds status
-                x = x_current[0, :].unsqueeze(0)
-                is_goal = controller_under_test.dynamics_model.goal_mask(x).all()
-                is_safe = controller_under_test.dynamics_model.safe_mask(x).all()
-                is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
-
-                for measurement_label, value in zip(
-                        ["goal", "safe", "unsafe"], [is_goal, is_safe, is_unsafe]
-                ):
-                    base_log_packet[measurement_label] = value.cpu().numpy().item()
 
                 # If this controller supports querying the Lyapunov function, save that
                 if hasattr(controller_under_test, "V"):
@@ -188,10 +163,10 @@ class RealTimeSeriesExperiment(Experiment):
 
     def plot():
         """
-        
+
         plot function here is left empty. It is required
         because of the Experiment class, but has no
         purpose for this script.
-        
+
         """
         pass
