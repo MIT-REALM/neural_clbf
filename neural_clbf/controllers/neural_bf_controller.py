@@ -282,13 +282,19 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
         return u
 
+    def u_from_obs(self, x: torch.Tensor, o: torch.Tensor) -> torch.Tensor:
+        """Returns the control input at a given state. Computes the observations and
+        barrier function value at this state before computing the control.
+        """
+        h = self.h(o)
+        return self.u_(x, o, h)
+
     def u(self, x: torch.Tensor) -> torch.Tensor:
         """Returns the control input at a given state. Computes the observations and
         barrier function value at this state before computing the control.
         """
         obs = self.get_observations(x)
-        h = self.h(obs)
-        return self.u_(x, obs, h)
+        return self.u_from_obs(x, obs)
 
     def forward(self, x):
         """Determine the control input for a given state using a QP
