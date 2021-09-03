@@ -166,9 +166,7 @@ class SingleIntegrator2D(PlanarLidarSystem):
         """Return the x, y, theta configuration of this system at the given states."""
         # This system has constant heading at theta = 0.
         thetas = torch.zeros(x.shape[0], 1).type_as(x)
-        # Set velocities at zero for now
-        velocities = torch.zeros(x.shape[0], 3).type_as(x)
-        q = torch.cat((x, thetas, velocities), dim=-1)
+        q = torch.cat((x, thetas), dim=-1)
         return q
 
     def u_nominal(

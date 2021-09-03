@@ -209,6 +209,7 @@ class TurtleBot(ControlAffineSystem):
     ) -> torch.Tensor:
         """
         Compute the nominal control for the nominal parameters.
+
         args:
             x: bs x self.n_dims tensor of state
             params: the model parameters used
@@ -241,7 +242,7 @@ class TurtleBot(ControlAffineSystem):
         # However, this angle becomes ill-defined as the bot approaches the origin, so
         # so we switch this term off if the bot is too close (and instead just control
         # theta to zero)
-        phi_control_on = bot_to_origin.norm(dim=-1) >= 0.02
+        phi_control_on = bot_to_origin.norm(dim=-1) >= 0.2
         phi_control_on = phi_control_on.reshape(-1)
         omega_scaling = 5.0
         angle_from_origin_to_bot = torch.atan2(x[:, TurtleBot.Y], x[:, TurtleBot.X])

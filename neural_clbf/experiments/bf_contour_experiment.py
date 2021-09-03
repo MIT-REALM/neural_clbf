@@ -1,4 +1,4 @@
-"""A mock experiment for use in testing"""
+"""Plot a barrier function contour"""
 from typing import cast, List, Tuple, Optional, TYPE_CHECKING
 
 import matplotlib.pyplot as plt
@@ -9,7 +9,7 @@ import torch
 import tqdm
 
 from neural_clbf.experiments import Experiment
-from neural_clbf.systems import ObservableSystem
+from neural_clbf.systems import ObservableSystem  # noqa
 
 if TYPE_CHECKING:
     from neural_clbf.controllers import Controller, NeuralObsBFController  # noqa
@@ -124,7 +124,7 @@ class BFContourExperiment(Experiment):
 
                 # Get the value of the BF from observations at this point
                 obs = dynamics_model.get_observations(x)
-                h = controller_under_test.h(obs)
+                h = controller_under_test.h(x, obs)
 
                 # TODO @dawsonc measure violation
 

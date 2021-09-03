@@ -1,4 +1,4 @@
-"""A mock experiment for use in testing"""
+"""S curve experiment for car models"""
 from copy import copy
 from typing import List, Tuple, TYPE_CHECKING
 

@@ -195,6 +195,16 @@ class ControlAffineSystem(ABC):
         """
         pass
 
+    @property
+    def intervention_limits(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Return a tuple (upper, lower) describing the range of allowable changes to
+        control for this system
+        """
+        upper_limit, lower_limit = self.control_limits
+
+        return (upper_limit, lower_limit)
+
     def out_of_bounds_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating whether rows are outside the state limits
         for this system
@@ -227,6 +237,15 @@ class ControlAffineSystem(ABC):
             x: a tensor of points in the state space
         """
         pass
+
+    def failure(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating failure. This usually matches with the
+        unsafe region
+
+        args:
+            x: a tensor of points in the state space
+        """
+        return self.unsafe_mask(x)
 
     def boundary_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating regions that are neither safe nor unsafe
@@ -378,7 +397,7 @@ class ControlAffineSystem(ABC):
     ) -> torch.Tensor:
         """
         Simulate dynamics forward for controller_dt, simulating at self.dt, with control
-        held constant at u, starting from x
+        held constant at u, starting from x.
 
         args:
             x: bs x self.n_dims tensor of state
@@ -390,7 +409,7 @@ class ControlAffineSystem(ABC):
             x_next: bs x self.n_dims tensor of next states
         """
         num_steps = int(controller_dt / self.dt)
-        for tstep in range(1, num_steps):
+        for tstep in range(0, num_steps):
             # Get the derivatives for this control input
             xdot = self.closed_loop_dynamics(x, u, params)
 

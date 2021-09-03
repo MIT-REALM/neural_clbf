@@ -11,6 +11,7 @@ from .kinematic_single_track_car import KSCar
 from .single_track_car import STCar
 from .segway import Segway
 from .turtlebot import TurtleBot
+from .turtlebot_2d import TurtleBot2D
 from .linear_satellite import LinearSatellite
 from .single_integrator_2d import SingleIntegrator2D
 
@@ -25,6 +26,7 @@ __all__ = [
     "KSCar",
     "STCar",
     "TurtleBot",
+    "TurtleBot2D",
     "Segway",
     "LinearSatellite",
     "SingleIntegrator2D",

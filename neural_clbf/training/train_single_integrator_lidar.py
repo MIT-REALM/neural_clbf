@@ -23,17 +23,17 @@ from neural_clbf.training.utils import current_git_hash
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 64
-controller_period = 0.01
+controller_period = 0.1
 
 start_x = torch.tensor(
     [
-        [4.75, 2.5],
-        [-4.75, 2.5],
-        [-4.75, -2.5],
-        [4.75, -2.5],
+        [4.5, 2.5],
+        [-4.5, 2.5],
+        [-4.5, -2.5],
+        [4.5, -2.5],
     ]
 )
-simulation_dt = 0.001
+simulation_dt = 0.01
 
 # Scene parameters
 room_size = 10.0
@@ -147,8 +147,6 @@ def main(args):
         encoder_hidden_size=48,
         h_hidden_layers=2,
         h_hidden_size=48,
-        u_hidden_layers=2,
-        u_hidden_size=48,
         h_alpha=0.1,
         controller_period=controller_period,
         validation_dynamics_model=validation_dynamics_model,
