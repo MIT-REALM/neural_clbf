@@ -1,6 +1,8 @@
 """An experiment on TurtleBot HW with a laser scanner"""
 from typing import cast, List, Tuple, TYPE_CHECKING
 
+import rospy
+
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 import seaborn as sns
@@ -39,7 +41,7 @@ class TurtlebotHWObsFeedbackExperiment(Experiment):
         base_frame,
         lidar_monitor: LidarMonitor,
         start_x: torch.Tensor,
-        t_sim: float = 300.0,
+        t_sim: float = 10.0,
     ):
         """
         Initialize an experiment for controller performance on turtlebot.
@@ -86,17 +88,13 @@ class TurtlebotHWObsFeedbackExperiment(Experiment):
         n_dims = controller_under_test.dynamics_model.n_dims
         assert n_dims == 3, "Dynamics incompatible with TurtleBot"
 
-        # Make sure this is an observation-feedback controller
-        assert isinstance(controller_under_test, NeuralObsBFController)
-        controller_under_test = cast(NeuralObsBFController, controller_under_test)
-
         # get intial state from odometry
         (self.position, self.rotation) = odometry_status.get_odom(
             self.listener, self.odom_frame, self.base_frame
         )
 
         # Execute!
-        delta_t = controller_under_test.dynamics_model.dt
+        delta_t = controller_under_test.controller_period
         num_timesteps = int(self.t_sim // delta_t)
         x_current = torch.zeros(1, n_dims).type_as(self.start_x)
         u_current = torch.zeros(1, n_dims).type_as(self.start_x)
@@ -104,6 +102,11 @@ class TurtlebotHWObsFeedbackExperiment(Experiment):
         prog_bar_range = tqdm.trange(
             0, num_timesteps, desc="Controller Rollout", leave=True
         )
+        r = rospy.Rate(1/delta_t)
+
+        # Reset the controller if necessary
+        if hasattr(controller_under_test, "reset_controller"):
+            controller_under_test.reset_controller(x_current)  # type: ignore
 
         for tstep in prog_bar_range:
             # Get the position from odometry and add the offset
@@ -115,58 +118,61 @@ class TurtlebotHWObsFeedbackExperiment(Experiment):
                 + self.start_x
             )
 
-            # Get the control input at the current state if it's time
-            if tstep % controller_update_freq == 0:
-                obs_current = self.lidar_monitor.last_scan.clone().detach()
-                u_current = controller_under_test.u_from_obs(x_current, obs_current)
+            # Get the control input at the current state
+            obs_current = self.lidar_monitor.last_scan.clone().detach()
+            u_current = controller_under_test.u_from_obs(  # type: ignore
+                x_current, obs_current
+            )
 
-                # set the output command to the command obtained from the
-                # dynamics model
-                linear_command = u_current[0][0].item()
-                angular_command = u_current[0][1].item()
+            # set the output command to the command obtained from the
+            # dynamics model
+            linear_command = u_current[0][0].item()
+            angular_command = u_current[0][1].item()
 
-                # pull the control limits from the turtlebot system file
-                u_max, _ = controller_under_test.dynamics_model.control_limits
+            # pull the control limits from the turtlebot system file
+            u_max, _ = controller_under_test.dynamics_model.control_limits
 
-                # call the function that sends the commands to the turtlebot
-                execute_command(
-                    self.command_publisher,
-                    self.move_command,
-                    linear_command,
-                    angular_command,
-                    self.position,
-                    self.rotation,
-                    u_max,
+            # call the function that sends the commands to the turtlebot
+            execute_command(
+                self.command_publisher,
+                self.move_command,
+                linear_command,
+                angular_command,
+                self.position,
+                self.rotation,
+                u_max,
+            )
+
+            # Log the current state and control
+            log_packet = {"t": tstep * delta_t}
+            log_packet["$x$"] = self.position.x
+            log_packet["$y$"] = self.position.y
+            log_packet["$\\theta$"] = self.rotation
+            log_packet["$v$"] = linear_command
+            log_packet["$\\omega$"] = angular_command
+
+            # If this controller supports querying the Lyapunov function, save that
+            if hasattr(controller_under_test, "V"):
+                V = (
+                    controller_under_test.V(x_current)  # type: ignore
+                    .cpu()
+                    .numpy()
+                    .item()
                 )
+                log_packet["V"] = V
+            # If this controller supports querying the barrier function, save that
+            if hasattr(controller_under_test, "h"):
+                h = (
+                    controller_under_test.h(x_current, obs_current)  # type: ignore
+                    .cpu()
+                    .numpy()
+                    .item()
+                )
+                log_packet["h"] = h
 
-                # Log the current state and control
-                log_packet = {"t": tstep * delta_t}
-                log_packet["$x$"] = self.position.x
-                log_packet["$y$"] = self.position.y
-                log_packet["$\\theta$"] = self.rotation
-                log_packet["$v$"] = linear_command
-                log_packet["$\\omega$"] = angular_command
+            results_df = results_df.append(log_packet, ignore_index=True)
 
-                # If this controller supports querying the Lyapunov function, save that
-                if hasattr(controller_under_test, "V"):
-                    V = (
-                        controller_under_test.V(x_current)  # type: ignore
-                        .cpu()
-                        .numpy()
-                        .item()
-                    )
-                    log_packet["V"] = V
-                # If this controller supports querying the barrier function, save that
-                if hasattr(controller_under_test, "h"):
-                    h = (
-                        controller_under_test.h(x_current)  # type: ignore
-                        .cpu()
-                        .numpy()
-                        .item()
-                    )
-                    log_packet["h"] = h
-
-                results_df = results_df.append(log_packet, ignore_index=True)
+            r.sleep()
 
         results_df = results_df.set_index("t")
         return results_df
