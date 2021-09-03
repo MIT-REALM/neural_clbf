@@ -14,8 +14,11 @@ def eval_turtlebot():
         log_dir + "v0_ep72.ckpt"
     )
 
+    neural_controller.debug_mode_goal_seeking = True
+    neural_controller.debug_mode_exploratory = True
+
     # setup ros nodes and run controller
-    run_turtlebot_node.run_turtlebot(neural_controller, log_dir, obs_feedback=True)
+    run_turtlebot_node.run_turtlebot(neural_controller, log_dir + "hw/", obs_feedback=True)
 
 
 if __name__ == "__main__":
