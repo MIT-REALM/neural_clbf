@@ -557,15 +557,16 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         if self.debug_mode_goal_seeking and torch.allclose(
             self.controller_mode, torch.zeros_like(self.controller_mode)
         ):
-            for state_idx, option_idx in idxs:
+            for idx, idx_tensor in enumerate(idxs):
+                state_idx, option_idx = idx_tensor
                 # Reshape the control option to match the batch size
                 u_option = u_options[option_idx, :].reshape(1, -1)  # 1 x n_controls
 
                 # Get the next state and observation from lookahead
-                x_next = x_nexts[state_idx, option_idx, :]
-                o_next = o_nexts[state_idx, option_idx, :, :]
-                V_next = V_nexts[state_idx, option_idx, :]
-                h_next = h_nexts[state_idx, option_idx, :]
+                x_next = x_nexts[idx, :].unsqueeze(0)
+                o_next = o_nexts[idx, :, :].unsqueeze(0)
+                V_next = V_nexts[idx, :].unsqueeze(0)
+                h_next = h_nexts[idx, :].unsqueeze(0)
 
                 # Get the violation of the barrier decrease constraint
                 barrier_function_violation = F.leaky_relu(
@@ -585,7 +586,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
                 print(f"V_next: {V_next}")
                 print(f"bf violation = {barrier_function_violation}")
                 print(f"lf change = {lyapunov_function_change}")
-                print(f"cost = {costs[:, option_idx]}")
+                print(f"cost = {costs[idx]}")
 
                 fig, ax = plt.subplots()
                 dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
@@ -760,7 +761,8 @@ class NeuralObsBFController(pl.LightningModule, Controller):
             )
             and (h > 0).any()
         ):
-            for state_idx, option_idx in idxs:
+            for idx, idx_tensor in enumerate(idxs):
+                state_idx, option_idx = idx_tensor
                 # Reshape the control option to match the batch size
                 u_option = u_options[option_idx, :].reshape(1, -1)  # 1 x n_controls
 
@@ -768,10 +770,10 @@ class NeuralObsBFController(pl.LightningModule, Controller):
                 u_cost = -(u_option[:, 0] ** 2).sum(dim=-1)
 
                 # Get the next state and observation from lookahead
-                x_next = x_nexts[:, option_idx, :]
-                o_next = o_nexts[:, option_idx, :, :]
-                V_next = V_nexts[:, option_idx, :]
-                h_next = h_nexts[:, option_idx, :]
+                x_next = x_nexts[idx, :].unsqueeze(0)
+                o_next = o_nexts[idx, :, :].unsqueeze(0)
+                V_next = V_nexts[idx, :].unsqueeze(0)
+                h_next = h_nexts[idx, :].unsqueeze(0)
 
                 # Get the violation of the barrier decrease constraint
                 barrier_function_violation = F.leaky_relu(
@@ -795,7 +797,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
                 print(f"V_next: {V_next}")
                 print(f"bf violation = {barrier_function_violation}")
                 print(f"lf change = {lyapunov_function_change}")
-                print(f"cost = {costs[:, option_idx]}")
+                print(f"cost = {costs[idx]}")
 
                 fig, ax = plt.subplots()
                 dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
