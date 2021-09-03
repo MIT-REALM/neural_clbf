@@ -2,7 +2,7 @@
 
 # have to define variable here to prevent error with ros
 batteryLevel = 100
-import integration.integration.turtlebot_scripts.message_creator as message_creator
+import integration.integration.turtlebot_scripts.message_creator as message_creator  # noqa
 
 
 def battery(data):

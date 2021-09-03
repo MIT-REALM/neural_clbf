@@ -1,27 +1,33 @@
-#!/usr/bin/env python3
-distance_to_object = 0.0
-distance_to_object_right = 0.0
-distance_to_object_left = 0.0
+import torch
+from scipy import interpolate
 
 
-def get_laser_data(msg):
-    """
+class LidarMonitor(object):
+    """A class to monitor lidar data and save the most recent set"""
 
-    Outputs readings from the turtlebot's lidar sensor.
-    Currently not in use, but may come in handy if obstacle
-    detection is needed at a later date. Only returns readings
-    in front of the turtlebot (0 degrees), to the left of the
-    turtlebot (90 degrees), and to the right of the turtlebot
-    (270 degrees). Naturally, measurements from all around the
-    turtlebot can be obtained with a small modification to this
-    function by iterating over all angles about the turtlebot.
+    def __init__(
+        self,
+        num_rays: int = 32,
+    ):
+        super(LidarMonitor, self).__init__()
+        self.num_rays = num_rays
 
-    """
-    global distance_to_object
-    global distance_to_object_left
-    global distance_to_object_right
-    distance_to_object = msg.ranges[0]
-    distance_to_object_left = msg.ranges[90]
-    distance_to_object_right = msg.ranges[270]
+        # Create a place to store the sensor data in between callbacks
+        self.last_scan = torch.zeros(1, num_rays, 2)  # x and y in local frame
 
-    return distance_to_object, distance_to_object_left, distance_to_object_right
+    def scan_callback(self, msg):
+        # Make a tensor of angles
+        angles = torch.arange(msg.angle_min, msg.angle_max, msg.angle_increment)
+        # Make a tensor of ranges
+        ranges = torch.tensor(msg.ranges)
+
+        # Downsample to the correct number of rays
+        ray_angles = torch.linspace(msg.angle_min, msg.angle_max, self.num_rays)
+        ray_ranges = interpolate.interp1d(angles, ranges)(ray_angles)
+
+        # Convert to cartesian points
+        x_coords = ray_ranges * torch.cos(ray_angles)
+        y_coords = ray_ranges * torch.cos(ray_angles)
+        self.last_scan[0, :, :] = torch.cat(
+            (x_coords.view(1, -1), y_coords.view(1, -1)), dim=0
+        )

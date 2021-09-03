@@ -28,11 +28,11 @@ def create_message(move_command, position, angle):
 
         Y Position (meters): %f
 
-        Angle (degrees): %f 
+        Angle (degrees): %f
         --------------------------------
         Estimated battery level: %f/100
         --------------------------------
-        
+
         --------------------------------
 
         """
@@ -50,17 +50,18 @@ def create_message(move_command, position, angle):
 
         Y Position (meters): %f
 
-        Angle (degrees): %f 
+        Angle (degrees): %f
         --------------------------------
         Estimated battery level: %f/100
         BATTERY LEVEL LOW. CHARGE SOON.
         --------------------------------
-        
+
         --------------------------------
 
         """
 
-    # write the above message to the console with velocity, position, battery level values
+    # write the above message to the console with velocity, position,
+    # and battery level values
     rospy.loginfo(
         msg,
         round(move_command.linear.x, 2),

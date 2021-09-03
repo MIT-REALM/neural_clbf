@@ -1,62 +1,53 @@
-"""A mock experiment for use in testing"""
-from copy import copy
-from typing import Optional, TYPE_CHECKING
-from unicodedata import name
+"""An experiment on TurtleBot HW with a laser scanner"""
+from typing import cast, List, Tuple, TYPE_CHECKING
 
+import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
+import seaborn as sns
 import pandas as pd
 import torch
-from torch.nn.functional import linear
 import tqdm
 
 from neural_clbf.experiments import Experiment
-from neural_clbf.systems.utils import ScenarioList
 
 # turtlebot script imports
 from integration.integration.turtlebot_scripts import odometry_status
 from integration.integration.turtlebot_scripts.send_command import execute_command
+from integration.integration.turtlebot_scripts.laser_data import LidarMonitor
 import os
 
 
 if TYPE_CHECKING:
     from neural_clbf.controllers import Controller  # noqa
+    from neural_clbf.controllers import NeuralObsBFController  # noqa
 
 
-class RealTimeSeriesExperiment(Experiment):
-    """An experiment for plotting actual
-    performance of controller on turtlebot.
+class TurtlebotHWObsFeedbackExperiment(Experiment):
+    """An experiment for running observation-feedback controllers on the turtlebot.
 
     Plots trajectories as a function of time.
     """
 
     def __init__(
         self,
-        # turtlebot interface parameters
+        name: str,
         command_publisher,
         rate,
         listener,
         move_command,
         odom_frame,
         base_frame,
-        # clbf parameters
-        name: str,
+        lidar_monitor: LidarMonitor,
         start_x: torch.Tensor,
-        # Note on t_sim: actual time taken does not seem
-        # to correspond to this. Raise this value as needed to
-        # make script run long enough for turtlebot
-        # to reach the destination
         t_sim: float = 300.0,
     ):
-        """Initialize an experiment for controller performance on turtlebot.
-        args:
-            scenarios: a list of parameter scenarios to sample from. If None, use the
-                       nominal parameters of the controller's dynamical system
-            t_sim: the amount of time to simulate for. Note on t_sim: the actual
-                        amount of time taken to run the experiment (when it's not a simulation) does
-                        not seem to correspond to this value. Raise t_sim as needed to
-                        make the script run long enough for the turtlebot to reach the destination.
         """
-        super(RealTimeSeriesExperiment, self).__init__(name)
+        Initialize an experiment for controller performance on turtlebot.
+
+        args:
+
+        """
+        super(TurtlebotHWObsFeedbackExperiment, self).__init__(name)
 
         # clbf parameters
         self.start_x = start_x
@@ -69,6 +60,7 @@ class RealTimeSeriesExperiment(Experiment):
         self.move_command = move_command
         self.odom_frame = odom_frame
         self.base_frame = base_frame
+        self.lidar_monitor = lidar_monitor
 
     @torch.no_grad()
     def run(self, controller_under_test: "Controller") -> pd.DataFrame:
@@ -92,7 +84,11 @@ class RealTimeSeriesExperiment(Experiment):
 
         # Save these for convenience
         n_dims = controller_under_test.dynamics_model.n_dims
-        n_controls = controller_under_test.dynamics_model.n_controls
+        assert n_dims == 3, "Dynamics incompatible with TurtleBot"
+
+        # Make sure this is an observation-feedback controller
+        assert isinstance(controller_under_test, NeuralObsBFController)
+        controller_under_test = cast(NeuralObsBFController, controller_under_test)
 
         # get intial state from odometry
         (self.position, self.rotation) = odometry_status.get_odom(
@@ -110,7 +106,7 @@ class RealTimeSeriesExperiment(Experiment):
         )
 
         for tstep in prog_bar_range:
-
+            # Get the position from odometry and add the offset
             (self.position, self.rotation) = odometry_status.get_odom(
                 self.listener, self.odom_frame, self.base_frame
             )
@@ -121,11 +117,8 @@ class RealTimeSeriesExperiment(Experiment):
 
             # Get the control input at the current state if it's time
             if tstep % controller_update_freq == 0:
-
-                # TODO This line currently has issues, and will not work as-is.
-                # Currently only works with u_nominal specifically:
-                # u_current = controller_under_test.dynamics_model.u_nominal(x_current)
-                u_current = controller_under_test.u(x_current)
+                obs_current = self.lidar_monitor.last_scan.clone().detach()
+                u_current = controller_under_test.u_from_obs(x_current, obs_current)
 
                 # set the output command to the command obtained from the
                 # dynamics model
@@ -147,26 +140,77 @@ class RealTimeSeriesExperiment(Experiment):
                 )
 
                 # Log the current state and control
-                base_log_packet = {"t": tstep * delta_t}
+                log_packet = {"t": tstep * delta_t}
+                log_packet["$x$"] = self.position.x
+                log_packet["$y$"] = self.position.y
+                log_packet["$\\theta$"] = self.rotation
+                log_packet["$v$"] = linear_command
+                log_packet["$\\omega$"] = angular_command
 
                 # If this controller supports querying the Lyapunov function, save that
                 if hasattr(controller_under_test, "V"):
-                    V = controller_under_test.V(x).cpu().numpy().item()  # type: ignore
+                    V = (
+                        controller_under_test.V(x_current)  # type: ignore
+                        .cpu()
+                        .numpy()
+                        .item()
+                    )
+                    log_packet["V"] = V
+                # If this controller supports querying the barrier function, save that
+                if hasattr(controller_under_test, "h"):
+                    h = (
+                        controller_under_test.h(x_current)  # type: ignore
+                        .cpu()
+                        .numpy()
+                        .item()
+                    )
+                    log_packet["h"] = h
 
-                    log_packet = copy(base_log_packet)
-                    log_packet["measurement"] = "V"
-                    log_packet["value"] = V
-                    results_df = results_df.append(log_packet, ignore_index=True)
+                results_df = results_df.append(log_packet, ignore_index=True)
 
         results_df = results_df.set_index("t")
         return results_df
 
-    def plot():
+    def plot(
+        self,
+        controller_under_test: "Controller",
+        results_df: pd.DataFrame,
+        display_plots: bool = False,
+    ) -> List[Tuple[str, figure]]:
         """
+        Plot the results, and return the plot handles. Optionally
+        display the plots.
 
-        plot function here is left empty. It is required
-        because of the Experiment class, but has no
-        purpose for this script.
-
+        args:
+            controller_under_test: the controller with which to run the experiment
+            results_df: a DataFrame of results, as returned by `self.run`
+            display_plots: defaults to False. If True, display the plots (blocks until
+                           the user responds).
+        returns: a list of tuples containing the name of each figure and the figure
+                 object.
         """
-        pass
+        # Set the color scheme
+        sns.set_theme(context="talk", style="white")
+
+        # Plot the state trajectories
+        fig, ax = plt.subplots(1, 1)
+        fig.set_size_inches(8, 8)
+        sns.lineplot(
+            ax=ax,
+            x="$x$",
+            y="$y$",
+            style="Parameters",
+            hue="Simulation",
+            data=results_df,
+        )
+
+        # Plot the environment
+        controller_under_test.dynamics_model.plot_environment(ax)
+
+        fig_handle = ("HW Rollout (state space)", fig)
+
+        if display_plots:
+            plt.show()
+            return []
+        else:
+            return [fig_handle]

@@ -1,8 +1,3 @@
-+ Try some training!
-+ Make errors on experiments more interpretable
-
-+ Rename package to something more general.
-    + Neural Control Toolkit.
-    + COntrol VERification Toolkit (covert? cover?).
-    + VErification Controls Toolkit (vecto? vector?)
-    + ConCerT (Control Certification Toolkit)!
++ Make laser data class
++ Modify turtlebot_hw_state... to be observation feedback (make a new experiment)
++ Run and try it!

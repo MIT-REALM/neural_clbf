@@ -4,24 +4,25 @@
 Script combining functionality of all publisher and subscriber
 nodes for the turtlebot into one interface
 """
-
-# import python and ros libraries
 import rospy
 from geometry_msgs.msg import Twist, Point
 from sensor_msgs.msg import BatteryState, LaserScan
-from actionlib_msgs.msg import *
-from numpy import pi
-
-# import other realm-specific scripts
-from .battery_status import battery
-from .laser_data import get_laser_data
-from neural_clbf.experiments import ExperimentSuite, RealTimeSeriesExperiment
-import torch
 import tf
-from neural_clbf.systems import TurtleBot
+
+from typing import Union
+
+import torch
+
+from .battery_status import battery
+from .laser_data import LidarMonitor
+from neural_clbf.experiments import (
+    ExperimentSuite,
+    TurtlebotHWStateFeedbackExperiment,
+    TurtlebotHWObsFeedbackExperiment,
+)
 
 
-class TurtleBot(object):
+class TurtleBotNode(object):
     def __init__(self):
         """
 
@@ -36,7 +37,8 @@ class TurtleBot(object):
         # set update rate; i.e. how often we send commands (Hz)
         self.rate = rospy.Rate(10)
 
-        # create transform listener to transform coords from turtlebot frame to absolute frame
+        # create transform listener to transform coords from turtlebot frame to
+        # global frame
         self.listener = tf.TransformListener()
 
         # create a position of type Point
@@ -53,9 +55,8 @@ class TurtleBot(object):
         self.command_publisher = rospy.Publisher("cmd_vel", Twist, queue_size=10)
 
         # create a subscriber to get measurements from lidar sensor.
-        # currently not used, but is left here in case lidar measurements
-        # are needed in the future. See also the laser_data.py script.
-        rospy.Subscriber("/scan", LaserScan, get_laser_data)
+        self.lidar_monitor = LidarMonitor()
+        rospy.Subscriber("/scan", LaserScan, self.lidar_monitor.scan_callback)
 
         # create a subscriber for battery level
         rospy.Subscriber("battery_state", BatteryState, battery)
@@ -80,7 +81,8 @@ class TurtleBot(object):
                 )
                 rospy.signal_shutdown("tf Exception")
 
-        # bool flag to stop commands from running multiple times (see run_turtlebot() below)
+        # bool flag to stop commands from running multiple times
+        # (see run_turtlebot() below)
         self.first_turn = True
 
     def shutdown(self):
@@ -94,7 +96,7 @@ class TurtleBot(object):
         rospy.sleep(1)
 
 
-def run_turtlebot(controller, log_dir: str):
+def run_turtlebot(controller, log_dir: str, obs_feedback: bool = False):
     """
 
     Creates an experiment and turtlebot object
@@ -103,21 +105,39 @@ def run_turtlebot(controller, log_dir: str):
     args:
         controller: a neural_clbf.controllers.Controller subclass
         log_dir: the directory to save the results
+        obs_feedback: if True, use an observation feedback experiment
     """
     # Initialize an instance of the controller
     start_tensor = torch.tensor([[-1.0, -1.0, 0]])
 
-    turtle = TurtleBot()
-    experiment = RealTimeSeriesExperiment(
-        turtle.command_publisher,
-        turtle.rate,
-        turtle.listener,
-        turtle.move_command,
-        turtle.odom_frame,
-        turtle.base_frame,
-        "turtlebot_hw_experiment",
-        start_x=start_tensor,
-    )
+    turtle = TurtleBotNode()
+    experiment: Union[
+        TurtlebotHWObsFeedbackExperiment, TurtlebotHWStateFeedbackExperiment
+    ]
+    if obs_feedback:
+        experiment = TurtlebotHWObsFeedbackExperiment(
+            "turtlebot_hw_experiment",
+            turtle.command_publisher,
+            turtle.rate,
+            turtle.listener,
+            turtle.move_command,
+            turtle.odom_frame,
+            turtle.base_frame,
+            turtle.lidar_monitor,
+            start_x=start_tensor,
+        )
+    else:
+        # Default to state-feedback
+        experiment = TurtlebotHWStateFeedbackExperiment(
+            "turtlebot_hw_experiment",
+            turtle.command_publisher,
+            turtle.rate,
+            turtle.listener,
+            turtle.move_command,
+            turtle.odom_frame,
+            turtle.base_frame,
+            start_x=start_tensor,
+        )
     experiment_suite = ExperimentSuite([experiment])
 
     while not rospy.is_shutdown():
@@ -128,12 +148,3 @@ def run_turtlebot(controller, log_dir: str):
             experiment_suite.run_all_and_save_to_csv(controller, log_dir)
 
         turtle.first_turn = False
-
-
-def run():
-    # main function; executes the run_turtlebot function until we hit control + C
-    if __name__ == "__main__":
-        try:
-            run_turtlebot()
-        except rospy.ROSInterruptException:
-            pass
