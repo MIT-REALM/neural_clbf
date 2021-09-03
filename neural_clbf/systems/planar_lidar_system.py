@@ -38,7 +38,7 @@ class Scene:
 
     def add_walls(self, room_size: float) -> None:
         """Add walls to the scene (thin boxes)"""
-        wall_width = 0.1
+        wall_width = 0.25
         semi_length = room_size / 2.0
         # Place the walls aligned with the x and y axes
         bottom_wall = box(
@@ -156,12 +156,12 @@ class Scene:
         field_of_view: Tuple[float, float] = (-np.pi / 2, np.pi / 2),
         max_distance: float = 100,
         noise: float = 0.0,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> torch.Tensor:
         """Return a simulated LIDAR measurement of the scene, taken from the specified pose
 
         args:
-            qs: a N x 6 tensor containing the x, y, and theta coordinates for each of N
-                measurements to be taken, along with the velocity in each coordinate.
+            qs: a N x 3 tensor containing the x, y, and theta coordinates for each of N
+                measurements to be taken
             num_rays: the number of equally spaced rays to measure
             field_of_view: a tuple specifying the maximum and minimum angle of the field
                            of view of the LIDAR sensor, measured in the vehicle frame
@@ -170,30 +170,31 @@ class Scene:
             noise: if non-zero, apply white Gaussian noise with this standard deviation
                    and zero mean to all measurements.
         returns:
-            an N x num_rays x 4 tensor containing the measurements along each
+            an N x 2 x num_rays tensor containing the measurements along each
                 ray. Rays are ordered in the counter-clockwise direction, and each
-                measurement contains the (x, y) location of the contact point and the
-                velocity (xdot, ydot) (as might be obtained by subtracting the last
-                measurement). These measurements will be in the agent frame. If no
-                contact point is found within max_distance, then a 0.0 will be placed
-                in the corresponding element of the second return tensor (a 1 otherwise)
-            an N x num_rays tensor indicating which data points are valid
+                measurement contains the (x, y) location of the contact point.
+                These measurements will be in the agent frame.
         """
         # Sanity check on inputs
-        assert field_of_view[1] > field_of_view[0], "Field of view must be (min, max)"
+        assert field_of_view[1] >= field_of_view[0], "Field of view must be (min, max)"
         # Reshape input if necessary
         if qs.ndim == 1:
             qs = torch.reshape(qs, (1, -1))
 
         # Create the array to store the results, then iterate through each sample point
-        measurements = torch.zeros(qs.shape[0], 4, num_rays).type_as(qs)
-        valid = torch.ones(qs.shape[0], num_rays).type_as(qs)
+        measurements = torch.zeros(qs.shape[0], 2, num_rays).type_as(qs)
 
         # Figure out the angles to measure on
         angles = torch.linspace(field_of_view[0], field_of_view[1], num_rays)
 
         for q_idx, q in enumerate(qs):
             agent_point = Point(q[0].item(), q[1].item())
+
+            # Check if we're in collision
+            in_collision = False
+            for obstacle in self.obstacles:
+                in_collision = in_collision or obstacle.intersects(agent_point)
+
             # Sweep through the field of view, checking for an intersection
             # out to max_distance
             for ray_idx in range(num_rays):
@@ -224,7 +225,10 @@ class Scene:
 
                 # Get the nearest distance and save that as the measurement
                 # (with noise if needed)
-                if intersections:
+                if in_collision:
+                    # Handle the special case where we collide with an obstacle
+                    contact_pt = agent_point
+                elif intersections:
                     # Figure out which point is closest
                     closest_idx = np.argmin(
                         [
@@ -234,10 +238,9 @@ class Scene:
                     )
                     contact_pt = intersections[closest_idx]  # type: ignore
                 else:
-                    # If no intersection was found, mark the corresponding element
-                    # of the valid mask tensor and continue
-                    valid[q_idx, ray_idx] = 0.0
-                    continue
+                    # If no intersection was found, set the contact point as the
+                    # end point of the ray
+                    contact_pt = Point(*ray_end)
 
                 # Get the coordinates of that point
                 contact_x, contact_y = contact_pt.coords[0]
@@ -253,38 +256,48 @@ class Scene:
                 # Rotate the point by -theta to bring it into the agent frame
                 rotation_mat = torch.tensor(
                     [
-                        [torch.cos(q[2]), -torch.sin(q[2])],
-                        [torch.sin(q[2]), torch.cos(q[2])],
+                        [torch.cos(q[2]), torch.sin(q[2])],
+                        [-torch.sin(q[2]), torch.cos(q[2])],
                     ]
                 )
                 contact_pt_agent = torch.matmul(rotation_mat, contact_offset_world)
 
-                # Now we need to get the velocity, which we can derive by hand
-                theta = q[2]
-                s_theta = torch.sin(theta)
-                c_theta = torch.cos(theta)
-                theta_dot = q[5]
-                vx = q[3]
-                vy = q[4]
-                contact_vx_agent = (
-                    -theta_dot * s_theta * contact_offset_world[0]
-                    - c_theta * vx
-                    - theta_dot * c_theta * contact_offset_world[1]
-                    + s_theta * vy
-                )
-                contact_vy_agent = (
-                    theta_dot * c_theta * contact_offset_world[0]
-                    - s_theta * vx
-                    - theta_dot * s_theta * contact_offset_world[1]
-                    - c_theta * vy
-                )
-
-                # Save the measurement (we've already marked if this point is valid)
+                # Save the measurement
                 measurements[q_idx, :2, ray_idx] = contact_pt_agent
-                measurements[q_idx, 2, ray_idx] = contact_vx_agent
-                measurements[q_idx, 3, ray_idx] = contact_vy_agent
 
-        return measurements, valid
+        return measurements
+
+    def min_distance_to_obstacle(
+        self,
+        qs: torch.Tensor,
+    ) -> torch.Tensor:
+        """Returns the minimum distance to an obstacle in the scene
+
+        args:
+            qs: a N x 3 tensor containing the x, y, and theta coordinates for each of N
+                measurements to be taken
+        returns:
+            an N x 1 tensor of the minimum distance from the robot to any obstacle at
+            each point
+        """
+        # Reshape input if necessary
+        if qs.ndim == 1:
+            qs = torch.reshape(qs, (1, -1))
+
+        # Create the array to store the results, then iterate through each sample point
+        min_distances = torch.zeros(qs.shape[0], 1).type_as(qs)
+
+        for q_idx, q in enumerate(qs):
+            agent_point = Point(q[0].item(), q[1].item())
+
+            # Check if we're in collision
+            min_distance = float("inf")
+            for obstacle in self.obstacles:
+                min_distance = min(min_distance, obstacle.distance(agent_point))
+
+            min_distances[q_idx, 0] = min_distance
+
+        return min_distances
 
     def plot(self, ax: Axes):
         """Plot the given scene
@@ -372,7 +385,13 @@ class PlanarLidarSystem(ObservableSystem):
 
     @property
     def obs_dim(self) -> int:
-        return 4
+        """Measures (x, y) contact point"""
+        return 2
+
+    @property
+    def r(self) -> float:
+        """Radius of robot"""
+        return 0.2
 
     def get_observations(self, x: torch.Tensor) -> torch.Tensor:
         """Get the vector of measurements at this point
@@ -385,7 +404,7 @@ class PlanarLidarSystem(ObservableSystem):
         """
         # Get the lidar measurements from the scene
         qs = self.planar_configuration(x)
-        measurements, _ = self.scene.lidar_measurement(
+        measurements = self.scene.lidar_measurement(
             qs,
             num_rays=self.num_rays,
             field_of_view=self.field_of_view,
@@ -394,6 +413,86 @@ class PlanarLidarSystem(ObservableSystem):
         )
 
         return measurements
+
+    def approximate_lookahead(
+        self, x: torch.Tensor, o: torch.Tensor, u: torch.Tensor, dt: float
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Given a vector of measurements, approximately project them dt time into the
+        future given control inputs u.
+
+        args:
+            o: N x self.obs_dim x self.n_obs tensor of current observations
+            u: N x self.n_controls tensor of control inputs
+            dt: lookeahead step
+
+        returns:
+            an N x self.n_dims tensor containing the predicted next state
+            an N x self.obs_dim x self.n_obs tensor containing the predicted observation
+        """
+        # We'll make two approximations in computing this approximate lookahead:
+        #   1.) We'll only simulate forward one step at dt (which will reduce the
+        #       accuracy of the forward dynamics if dt is large).
+        #   2.) We'll assume that the lidar points do not move. This is a 2-part
+        #       assumption: it implies first that we assume obstacles don't move, and
+        #       it makes the approximation that lidar rays will hit the same points in
+        #       the global frame each time (instead of moving along the surface of the
+        #       obstacle).
+
+        # Start by getting the anticipated change in state
+        x_next = self.zero_order_hold(x, u, dt)
+        # Use this to get the anticipated next state
+        delta_x = x_next - x
+
+        # We can also extract the planar part of the change in state and use that to
+        # update the observations. Each observation is a point in the current agent
+        # frame, and the change in state changes the agent frame. We can apply this
+        # change in frame to all points to yield the predicted next observation.
+        delta_q = self.planar_configuration(delta_x)
+
+        # The lidar points are expressed in the robot frame, so we need to convert
+        # the change in planar configuration delta_q into the robot frame as well.
+        # Since delta_x is a change, we only need to rotate the x and y change into
+        # the current agent frame.
+        q = self.planar_configuration(x)
+        c_theta = torch.cos(q[:, 2]).view(-1, 1, 1)
+        s_theta = torch.sin(q[:, 2]).view(-1, 1, 1)
+        first_row = torch.cat((c_theta, s_theta), dim=2)
+        second_row = torch.cat((-s_theta, c_theta), dim=2)
+        rotation_mat = torch.cat((first_row, second_row), dim=1)
+        delta_q[:, :2] = torch.bmm(rotation_mat, delta_q[:, :2].unsqueeze(-1)).squeeze()
+
+        # Translate all points by the anticipated translation
+        translation = delta_q[:, :2]  # N x 2
+        translation = translation.unsqueeze(-1)  # N x 2 x 1
+        translation = translation.expand(o.shape)
+        o_next = o - translation
+
+        # Define a rotation matrix for the anticipated rotation and apply to all points
+        c_delta_theta = torch.cos(delta_q[:, 2]).view(-1, 1, 1)
+        s_delta_theta = torch.sin(delta_q[:, 2]).view(-1, 1, 1)
+        # We want to go from these N x 1 x 1 tensors to an N x 2 x 2 tensor of the form
+        # [cos, -sin; sin, cos].
+        first_row = torch.cat((c_delta_theta, s_delta_theta), dim=2)
+        second_row = torch.cat((-s_delta_theta, c_delta_theta), dim=2)
+        rotation_mat = torch.cat((first_row, second_row), dim=1)
+        o_next = torch.bmm(rotation_mat, o_next)
+
+        # Check if a collision is likely to occur (i.e. if the polygon defined by o_next
+        # does not contain the origin). We can check this by checking if the greatest
+        # angle between two points is greater than pi when measured clockwise around
+        # the origin.
+        angles = torch.atan2(o_next[:, 1, :], o_next[:, 0, :])
+        angle_diff = torch.diff(angles, dim=-1, append=angles[:, 0].reshape(-1, 1))
+
+        # Mod 2pi, with some slack for numerical error
+        angle_diff[angle_diff > np.pi] -= 2 * np.pi
+        angle_diff[angle_diff < -np.pi] += 2 * np.pi
+        max_angle_diff, _ = torch.max(angle_diff, dim=-1)
+        in_collision = angle_diff.sum(dim=-1) < 1e-4
+        # import pdb; pdb.set_trace()
+        o_next[in_collision, :, :] = o_next[in_collision, :, :] * 0.0
+
+        return x_next, o_next
 
     def safe_mask(self, x: torch.Tensor) -> torch.Tensor:
         """Return the mask of x indicating safe regions for this system
@@ -405,12 +504,10 @@ class PlanarLidarSystem(ObservableSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
         min_safe_ray_length = 0.5
 
-        measurements = self.get_observations(x)
+        qs = self.planar_configuration(x)
+        min_distances = self.scene.min_distance_to_obstacle(qs).reshape(-1)
 
-        # Get the x and y values
-        ray_lengths = measurements[:, :2, :].norm(dim=1)
-
-        safe_mask.logical_and_(ray_lengths.min(dim=1)[0] >= min_safe_ray_length)
+        safe_mask.logical_and_(min_distances >= min_safe_ray_length)
 
         return safe_mask
 
@@ -422,14 +519,28 @@ class PlanarLidarSystem(ObservableSystem):
         """
         # A state is safe if the closest lidar point too close
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
-        min_safe_ray_length = 0.1
+        min_safe_ray_length = 0.2
 
-        measurements = self.get_observations(x)
+        qs = self.planar_configuration(x)
+        min_distances = self.scene.min_distance_to_obstacle(qs).reshape(-1)
 
-        # Get the x and y values
-        ray_lengths = measurements[:, :2, :].norm(dim=1)
+        unsafe_mask.logical_or_(min_distances <= min_safe_ray_length)
 
-        unsafe_mask.logical_or_(ray_lengths.min(dim=1)[0] <= min_safe_ray_length)
+        return unsafe_mask
+
+    def failure(self, x: torch.Tensor) -> torch.Tensor:
+        """Return the mask of x indicating failure (collision)
+
+        args:
+            x: a tensor of points in the state space
+        """
+        # A state is safe if the closest lidar point too close
+        unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
+
+        qs = self.planar_configuration(x)
+        min_distances = self.scene.min_distance_to_obstacle(qs).reshape(-1)
+
+        unsafe_mask.logical_or_(min_distances <= 0.0)
 
         return unsafe_mask
 

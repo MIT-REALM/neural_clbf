@@ -1,6 +1,6 @@
-"""A mock experiment for use in testing"""
+"""Simulate a rollout and plot in state space"""
 import random
-from typing import List, Tuple, Optional, TYPE_CHECKING
+from typing import cast, List, Tuple, Optional, TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
@@ -13,7 +13,8 @@ from neural_clbf.experiments import Experiment
 from neural_clbf.systems.utils import ScenarioList
 
 if TYPE_CHECKING:
-    from neural_clbf.controllers import Controller  # noqa
+    from neural_clbf.controllers import Controller, NeuralObsBFController  # noqa
+    from neural_clbf.systems import ObservableSystem  # noqa
 
 
 class RolloutStateSpaceExperiment(Experiment):
@@ -116,11 +117,15 @@ class RolloutStateSpaceExperiment(Experiment):
         device = "cpu"
         if hasattr(controller_under_test, "device"):
             device = controller_under_test.device  # type: ignore
+        x_current = x_sim_start.to(device)
+
+        # Reset the controller if necessary
+        if hasattr(controller_under_test, "reset_controller"):
+            controller_under_test.reset_controller(x_current)  # type: ignore
 
         # Simulate!
         delta_t = controller_under_test.dynamics_model.dt
         num_timesteps = int(self.t_sim // delta_t)
-        x_current = x_sim_start.to(device)
         u_current = torch.zeros(x_sim_start.shape[0], n_controls, device=device)
         controller_update_freq = int(controller_under_test.controller_period / delta_t)
         prog_bar_range = tqdm.trange(
@@ -131,9 +136,28 @@ class RolloutStateSpaceExperiment(Experiment):
             if tstep % controller_update_freq == 0:
                 u_current = controller_under_test.u(x_current)
 
+            # Get the barrier function if applicable
+            h: Optional[torch.Tensor] = None
+            if hasattr(controller_under_test, "h") and hasattr(
+                controller_under_test.dynamics_model, "get_observations"
+            ):
+                controller_under_test = cast(
+                    "NeuralObsBFController", controller_under_test
+                )
+                dynamics_model = cast(
+                    "ObservableSystem", controller_under_test.dynamics_model
+                )
+                obs = dynamics_model.get_observations(x_current)
+                h = controller_under_test.h(x_current, obs)
+
+            # Get the Lyapunov function if applicable
+            V: Optional[torch.Tensor] = None
+            if hasattr(controller_under_test, "V"):
+                V = controller_under_test.V(x_current)  # type: ignore
+
             # Log the current state and control for each simulation
             for sim_index in range(n_sims):
-                log_packet = {"t": tstep * delta_t, "Simulation": sim_index}
+                log_packet = {"t": tstep * delta_t, "Simulation": str(sim_index)}
 
                 # Include the parameters
                 param_string = ""
@@ -149,6 +173,13 @@ class RolloutStateSpaceExperiment(Experiment):
                 log_packet[self.plot_x_label] = x_value
                 log_packet[self.plot_y_label] = y_value
 
+                # Log the barrier function if applicable
+                if h is not None:
+                    log_packet["h"] = h[sim_index].cpu().numpy().item()
+                # Log the Lyapunov function if applicable
+                if V is not None:
+                    log_packet["V"] = V[sim_index].cpu().numpy().item()
+
                 results_df = results_df.append(log_packet, ignore_index=True)
 
             # Simulate forward using the dynamics
@@ -160,7 +191,6 @@ class RolloutStateSpaceExperiment(Experiment):
                 )
                 x_current[i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
-        results_df = results_df.set_index("t")
         return results_df
 
     def plot(
@@ -184,20 +214,120 @@ class RolloutStateSpaceExperiment(Experiment):
         # Set the color scheme
         sns.set_theme(context="talk", style="white")
 
+        # Figure out how many plots we need (one for the rollout, one for h if logged,
+        # and one for V if logged)
+        num_plots = 1
+        if "h" in results_df:
+            num_plots += 1
+        if "V" in results_df:
+            num_plots += 1
+
         # Plot the state trajectories
-        fig, ax = plt.subplots(1, 1)
-        fig.set_size_inches(8, 8)
-        sns.lineplot(
-            ax=ax,
-            x=self.plot_x_label,
-            y=self.plot_y_label,
-            style="Parameters",
-            hue="Simulation",
-            data=results_df,
-        )
+        fig, ax = plt.subplots(1, num_plots)
+        fig.set_size_inches(9 * num_plots, 6)
+
+        # Assign plots to axes
+        if num_plots == 1:
+            rollout_ax = ax
+        else:
+            rollout_ax = ax[0]
+
+        if "h" in results_df:
+            h_ax = ax[1]
+        if "V" in results_df:
+            V_ax = ax[num_plots - 1]
+
+        # Plot the rollout
+        # sns.lineplot(
+        #     ax=rollout_ax,
+        #     x=self.plot_x_label,
+        #     y=self.plot_y_label,
+        #     style="Parameters",
+        #     hue="Simulation",
+        #     data=results_df,
+        # )
+        for plot_idx, sim_index in enumerate(results_df["Simulation"].unique()):
+            sim_mask = results_df["Simulation"] == sim_index
+            rollout_ax.plot(
+                results_df[sim_mask][self.plot_x_label].to_numpy(),
+                results_df[sim_mask][self.plot_y_label].to_numpy(),
+                linestyle="-",
+                # marker="+",
+                markersize=5,
+                color=sns.color_palette()[plot_idx],
+            )
+            rollout_ax.set_xlabel(self.plot_x_label)
+            rollout_ax.set_ylabel(self.plot_y_label)
+
+        # Remove the legend -- too much clutter
+        rollout_ax.legend([], [], frameon=False)
 
         # Plot the environment
-        controller_under_test.dynamics_model.plot_environment(ax)
+        controller_under_test.dynamics_model.plot_environment(rollout_ax)
+
+        # Plot the barrier function if applicable
+        if "h" in results_df:
+            # Get the derivatives for each simulation
+            for plot_idx, sim_index in enumerate(results_df["Simulation"].unique()):
+                sim_mask = results_df["Simulation"] == sim_index
+
+                h_ax.plot(
+                    results_df[sim_mask]["t"].to_numpy(),
+                    results_df[sim_mask]["h"].to_numpy(),
+                    linestyle="-",
+                    marker="+",
+                    markersize=5,
+                    color=sns.color_palette()[plot_idx],
+                )
+                h_ax.set_ylabel("$h$")
+                h_ax.set_xlabel("t")
+                # Remove the legend -- too much clutter
+                h_ax.legend([], [], frameon=False)
+
+                # Plot a reference line at h = 0
+                h_ax.plot([0, results_df["t"].max()], [0, 0], color="k")
+
+                # Also plot the derivatives
+                h_next = results_df[sim_mask]["h"][1:].to_numpy()
+                h_now = results_df[sim_mask]["h"][:-1].to_numpy()
+                alpha = controller_under_test.h_alpha  # type: ignore
+                h_violation = h_next - (1 - alpha) * h_now
+
+                h_ax.plot(
+                    results_df[sim_mask]["t"][:-1].to_numpy(),
+                    h_violation,
+                    linestyle=":",
+                    color=sns.color_palette()[plot_idx],
+                )
+                h_ax.set_ylabel("$h$ violation")
+
+        # Plot the lyapunov function if applicable
+        if "V" in results_df:
+            for plot_idx, sim_index in enumerate(results_df["Simulation"].unique()):
+                sim_mask = results_df["Simulation"] == sim_index
+                V_ax.plot(
+                    results_df[sim_mask]["t"].to_numpy(),
+                    results_df[sim_mask]["V"].to_numpy(),
+                    linestyle="-",
+                    marker="+",
+                    markersize=5,
+                    color=sns.color_palette()[plot_idx],
+                )
+            # sns.lineplot(
+            #     ax=V_ax,
+            #     x="t",
+            #     y="V",
+            #     style="Parameters",
+            #     hue="Simulation",
+            #     data=results_df,
+            # )
+            V_ax.set_ylabel("$V$")
+            V_ax.set_xlabel("t")
+            # Remove the legend -- too much clutter
+            V_ax.legend([], [], frameon=False)
+
+            # Plot a reference line at V = 0
+            V_ax.plot([0, results_df.t.max()], [0, 0], color="k")
 
         fig_handle = ("Rollout (state space)", fig)
 

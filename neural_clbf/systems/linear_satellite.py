@@ -145,6 +145,7 @@ class LinearSatellite(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Stay within some maximum distance from the target
+        # TODO @dawsonc is norm the best measure? Maybe just position distance?
         safe_mask.logical_and_(x.norm(dim=-1) <= 1.5)
 
         # Stay at least some minimum distance from the target
