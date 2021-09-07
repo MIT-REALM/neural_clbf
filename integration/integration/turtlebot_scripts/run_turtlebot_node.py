@@ -108,7 +108,7 @@ def run_turtlebot(controller, log_dir: str, obs_feedback: bool = False):
         obs_feedback: if True, use an observation feedback experiment
     """
     # Initialize an instance of the controller
-    start_tensor = torch.tensor([[-1.0, -1.0, 0]])
+    start_tensor = torch.tensor([[-3.0, -3.0, 0]])
 
     turtle = TurtleBotNode()
     experiment: Union[
