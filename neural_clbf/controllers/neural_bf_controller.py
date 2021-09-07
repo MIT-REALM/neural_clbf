@@ -590,7 +590,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
                 fig, ax = plt.subplots()
                 dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
-                dynamics_model.scene.plot(ax)
+                # dynamics_model.scene.plot(ax)
                 ax.set_aspect("equal")
 
                 ax.plot(x[:, 0], x[:, 1], "ko")
@@ -656,7 +656,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
         self.num_exploratory_steps[switch_to_exploratory] = 0.0
 
         # Do nothing for any points that have reached the goal (measured by V)
-        goal_reached = x[:, :2].norm(dim=-1) < 0.75
+        goal_reached = x[:, :2].norm(dim=-1) < 0.1
         u[goal_reached] *= 0.0
         switch_to_exploratory[goal_reached] = False
 
@@ -801,7 +801,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
                 fig, ax = plt.subplots()
                 dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
-                dynamics_model.scene.plot(ax)
+                # dynamics_model.scene.plot(ax)
                 ax.set_aspect("equal")
 
                 ax.plot(x[:, 0], x[:, 1], "ko")

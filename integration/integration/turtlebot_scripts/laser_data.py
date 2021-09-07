@@ -23,6 +23,8 @@ class LidarMonitor(object):
         # By default, rays that don't make contact are set to 0, which we don't want
         # So reset to max_distance
         ranges[ranges < msg.range_min] = msg.range_max
+        # Adjust by a bit of buffer
+        ranges -= 0.08
 
         # Downsample to the correct number of rays
         ray_angles = torch.linspace(msg.angle_min, msg.angle_max, self.num_rays)
@@ -30,7 +32,7 @@ class LidarMonitor(object):
 
         # Convert to cartesian points
         x_coords = ray_ranges * torch.cos(ray_angles)
-        y_coords = ray_ranges * torch.cos(ray_angles)
+        y_coords = ray_ranges * torch.sin(ray_angles)
         self.last_scan[0, :, :] = torch.cat(
             (x_coords.view(1, -1), y_coords.view(1, -1)), dim=0
         )

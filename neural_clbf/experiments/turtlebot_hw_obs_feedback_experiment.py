@@ -95,20 +95,17 @@ class TurtlebotHWObsFeedbackExperiment(Experiment):
 
         # Execute!
         delta_t = controller_under_test.controller_period
-        num_timesteps = int(self.t_sim // delta_t)
         x_current = torch.zeros(1, n_dims).type_as(self.start_x)
-        u_current = torch.zeros(1, n_dims).type_as(self.start_x)
-        controller_update_freq = int(controller_under_test.controller_period / delta_t)
-        prog_bar_range = tqdm.trange(
-            0, num_timesteps, desc="Controller Rollout", leave=True
-        )
-        r = rospy.Rate(1/delta_t)
+        u_current = torch.ones(1, n_dims).type_as(self.start_x)
+        current_time = 0.0
+        # r = rospy.Rate(1/delta_t)
+        r = rospy.Rate(20)
 
         # Reset the controller if necessary
         if hasattr(controller_under_test, "reset_controller"):
             controller_under_test.reset_controller(x_current)  # type: ignore
 
-        for tstep in prog_bar_range:
+        while not rospy.is_shutdown():
             # Get the position from odometry and add the offset
             (self.position, self.rotation) = odometry_status.get_odom(
                 self.listener, self.odom_frame, self.base_frame
@@ -144,7 +141,7 @@ class TurtlebotHWObsFeedbackExperiment(Experiment):
             )
 
             # Log the current state and control
-            log_packet = {"t": tstep * delta_t}
+            log_packet = {"t": current_time}
             log_packet["$x$"] = self.position.x
             log_packet["$y$"] = self.position.y
             log_packet["$\\theta$"] = self.rotation
@@ -173,6 +170,7 @@ class TurtlebotHWObsFeedbackExperiment(Experiment):
             results_df = results_df.append(log_packet, ignore_index=True)
 
             r.sleep()
+            current_time += delta_t
 
         results_df = results_df.set_index("t")
         return results_df
