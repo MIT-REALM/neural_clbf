@@ -31,7 +31,9 @@ def eval_turtlebot():
     # neural_controller.debug_mode_exploratory = True
 
     # setup ros nodes and run controller
-    run_turtlebot_node.run_turtlebot(neural_controller, log_dir + "hw/", obs_feedback=True)
+    run_turtlebot_node.run_turtlebot(
+        neural_controller, log_dir + "hw/", obs_feedback=True
+    )
 
 
 if __name__ == "__main__":

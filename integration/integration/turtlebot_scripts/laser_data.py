@@ -17,7 +17,9 @@ class LidarMonitor(object):
 
     def scan_callback(self, msg):
         # Make a tensor of angles
-        angles = torch.arange(msg.angle_min, msg.angle_max + msg.angle_increment, msg.angle_increment)
+        angles = torch.arange(
+            msg.angle_min, msg.angle_max + msg.angle_increment, msg.angle_increment
+        )
         # Make a tensor of ranges
         ranges = torch.tensor(msg.ranges)
         # By default, rays that don't make contact are set to 0, which we don't want
