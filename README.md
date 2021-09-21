@@ -12,7 +12,7 @@ Conference
 </div>
  
 ## Description
-What it does   
+This repository contains our code for learning robust Lyapunov-style control certificates for safety and stability for nonlinear dynamical systems.
 
 ## How to run
 First, install dependencies   
