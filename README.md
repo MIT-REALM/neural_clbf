@@ -2,23 +2,19 @@
  
 # Nonlinear Control Using Neural Lyapunov-Barrier Functions
 
-[![Conference](http://img.shields.io/badge/TODO-1111-ff5e24.svg)](https://arxiv.org/)
-<!--
-ARXIV   
-[![Paper](http://img.shields.io/badge/arxiv-math.co:1480.1111-B31B1B.svg)](https://www.nature.com/articles/nature14539)
--->
-![CI testing](https://github.com/dawsonc/neural_clbf/workflows/CI%20testing/badge.svg?branch=master&event=push)
-
+[![Conference](https://img.shields.io/badge/CoRL-Accepted-success)](https://openreview.net/forum?id=8K5kisAnb_p)
+   
+[![Arxiv](http://img.shields.io/badge/arxiv-eess.sy:2109.06697-B31B1B.svg)](https://www.nature.com/articles/nature14539)
 
 <!--  
 Conference   
 -->   
 </div>
  
-## Description   
+## Description
 What it does   
 
-## How to run   
+## How to run
 First, install dependencies   
 ```bash
 # clone project   
@@ -32,18 +28,7 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-Next, navigate to any file and run it.   
-```bash
-# module folder
-cd neural_clbf
-
-# run module
-python TODO.py  # TODO @dawsonc fix this  
-```
-
-Training:
-To setup port forwarding for TensorBoard:
-`ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
+Once installed, training examples can be run using e.g. `python neural_clbf/training/train_single_track_car.py`, and pre-trained models can be evaluated using the scripts in the `neural_clbf/evaluation` directory. To run training on a remote server with port forwarding for TensorBoard, connect using `ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
 
 ### External dependencies
 
@@ -57,10 +42,6 @@ pwd
 ```
 Then go to `neural_clbf/setup/aerobench.py` and modify it to point to the path to the aerobench package.
 
-#### Commonroad models
-
-TODO @dawsonc
-
 #### MATLAB Bridge for Robust MPC
 
 ```
@@ -69,35 +50,12 @@ python setup.py install
 ```
 
 
-
-## Imports
-This project is setup as a package which means you can now easily import any file into any other file like so:
-```python
-from pytorch_lightning import Trainer
-
-from neural_clbf.datasets.TODO import TODO
-from neural_clbf.TODO import TODO
-
-# model
-model = TODO()
-
-# data
-train, val, test = TODO()
-
-# train
-trainer = Trainer()
-trainer.fit(model, train, val)
-
-# test using the best model!
-trainer.test(test_dataloaders=test)
+### Citation
 ```
-
-### Citation   
-```
-@article{YourName,
-  title={Your Title},
-  author={Your team},
-  journal={Location},
-  year={Year}
+@article{dawson_neural_clbf_2021,
+  title={Safe Nonlinear Control Using Robust Neural Lyapunov-Barrier Functions},
+  author={Charles Dawson, Zengyi Qin, Sicun Gao, Chuchu Fan},
+  journal={5th Annual Conference on Robot Learning},
+  year={2021}
 }
 ```   
