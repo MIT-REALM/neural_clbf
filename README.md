@@ -4,7 +4,7 @@
 
 [![Conference](https://img.shields.io/badge/CoRL-Accepted-success)](https://openreview.net/forum?id=8K5kisAnb_p)
    
-[![Arxiv](http://img.shields.io/badge/arxiv-eess.sy:2109.06697-B31B1B.svg)](https://www.nature.com/articles/nature14539)
+[![Arxiv](http://img.shields.io/badge/arxiv-eess.sy:2109.06697-B31B1B.svg)](https://arxiv.org/abs/2109.06697)
 
 <!--  
 Conference   
