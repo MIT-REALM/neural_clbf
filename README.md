@@ -6,6 +6,8 @@
    
 [![Arxiv](http://img.shields.io/badge/arxiv-eess.sy:2109.06697-B31B1B.svg)](https://arxiv.org/abs/2109.06697)
 
+This repository contains the most up-to-date code for our CoRL paper, "Safe Nonlinear Control Using Robust Lyapunov-Barrier Functions." This repository contains many of the examples used in our paper, but some (such as the neural lander and 2D quadrotor with obstacles) can be found in [this repository](https://github.com/dawsonc/neural_clbf_experiments), which includes code that is less ready for prime time but may serve as a useful reference.
+
 <!--  
 Conference   
 -->   
