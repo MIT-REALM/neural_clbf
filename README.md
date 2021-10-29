@@ -53,6 +53,8 @@ python setup.py install
 
 
 ### Citation
+If you find this code useful in your own research, please cite our corresponding paper.
+
 ```
 @article{dawson_neural_clbf_2021,
   title={Safe Nonlinear Control Using Robust Neural Lyapunov-Barrier Functions},
