@@ -190,7 +190,7 @@ class STCar(ControlAffineSystem):
 
         # Avoid angles that are too large
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.5
+        max_safe_tracking_error = 0.75
         # tracking_error = x[
         #     :,
         #     [
