@@ -105,7 +105,6 @@ def main(args):
         penalty_scheduling_rate=0,
         num_init_epochs=11,
         epochs_per_episode=200,  # disable new data-gathering
-        barrier=False,  # disable fitting level sets to a safe/unsafe boundary
     )
 
     # Initialize the logger and trainer
