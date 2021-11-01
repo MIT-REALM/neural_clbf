@@ -51,6 +51,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         epochs_per_episode: int = 5,
         penalty_scheduling_rate: float = 0.0,
         num_init_epochs: int = 5,
+        barrier: bool = True,
     ):
         """Initialize the controller.
 
@@ -72,6 +73,8 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
                                      disable penalty scheduling (use constant penalty)
             num_init_epochs: the number of epochs to pretrain the controller on the
                              linear controller
+            barrier: if True, train the CLBF to act as a barrier functions. If false,
+                     effectively trains only a CLF.
         """
         super(NeuralCLBFController, self).__init__(
             dynamics_model=dynamics_model,
@@ -101,6 +104,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         self.epochs_per_episode = epochs_per_episode
         self.penalty_scheduling_rate = penalty_scheduling_rate
         self.num_init_epochs = num_init_epochs
+        self.barrier = barrier
 
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
@@ -241,23 +245,27 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         goal_term = V_goal_pt.mean()
         loss.append(("CLBF goal term", goal_term))
 
-        #   2.) 0 < V <= safe_level in the safe region
-        V_safe = V[safe_mask]
-        safe_violation = F.relu(eps + V_safe - self.safe_level)
-        safe_V_term = 1e2 * safe_violation.mean()
-        loss.append(("CLBF safe region term", safe_V_term))
-        if accuracy:
-            safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
-            loss.append(("CLBF safe region accuracy", safe_V_acc))
+        # Only train these terms if we have a barrier requirement
+        if self.barrier:
+            #   2.) 0 < V <= safe_level in the safe region
+            V_safe = V[safe_mask]
+            safe_violation = F.relu(eps + V_safe - self.safe_level)
+            safe_V_term = 1e2 * safe_violation.mean()
+            loss.append(("CLBF safe region term", safe_V_term))
+            if accuracy:
+                safe_V_acc = (safe_violation <= eps).sum() / safe_violation.nelement()
+                loss.append(("CLBF safe region accuracy", safe_V_acc))
 
-        #   3.) V >= unsafe_level in the unsafe region
-        V_unsafe = V[unsafe_mask]
-        unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
-        unsafe_V_term = 1e2 * unsafe_violation.mean()
-        loss.append(("CLBF unsafe region term", unsafe_V_term))
-        if accuracy:
-            unsafe_V_acc = (unsafe_violation <= eps).sum() / unsafe_violation.nelement()
-            loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
+            #   3.) V >= unsafe_level in the unsafe region
+            V_unsafe = V[unsafe_mask]
+            unsafe_violation = F.relu(eps + self.unsafe_level - V_unsafe)
+            unsafe_V_term = 1e2 * unsafe_violation.mean()
+            loss.append(("CLBF unsafe region term", unsafe_V_term))
+            if accuracy:
+                unsafe_V_acc = (
+                    unsafe_violation <= eps
+                ).sum() / unsafe_violation.nelement()
+                loss.append(("CLBF unsafe region accuracy", unsafe_V_acc))
 
         return loss
 
