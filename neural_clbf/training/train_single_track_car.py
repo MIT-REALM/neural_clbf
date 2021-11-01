@@ -25,7 +25,6 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 start_x = torch.tensor(
     [
         [0.0, 0.0, 0.0, 0.0, -np.pi / 6, 0.0, 0.0],
-        # [0.0, 0.0, 0.0, 0.0, np.pi / 6, 0.0, 0.0],
     ]
 )
 controller_period = 0.01
@@ -57,8 +56,8 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
-        trajectory_length=250,
+        trajectories_per_episode=1,  # disable collecting data from trajectories
+        trajectory_length=1,
         fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
@@ -106,7 +105,7 @@ def main(args):
         primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
         num_init_epochs=11,
-        epochs_per_episode=200,
+        epochs_per_episode=200,  # disable new data-gathering
     )
 
     # Initialize the logger and trainer
@@ -119,7 +118,7 @@ def main(args):
         "logs/stcar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=150
     )
 
     # Train
