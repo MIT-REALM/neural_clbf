@@ -68,7 +68,6 @@ def main(args):
     # Define the scenarios
     scenarios = []
     omega_ref_vals = [-1.5, 1.5]
-    # omega_ref_vals = [0.0]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
@@ -106,6 +105,7 @@ def main(args):
         penalty_scheduling_rate=0,
         num_init_epochs=11,
         epochs_per_episode=200,  # disable new data-gathering
+        barrier=False,  # disable fitting level sets to a safe/unsafe boundary
     )
 
     # Initialize the logger and trainer
