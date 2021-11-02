@@ -242,7 +242,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
 
         #   1.) CLBF should be minimized on the goal point
         V_goal_pt = self.V(self.dynamics_model.goal_point.type_as(x))
-        goal_term = 1e1 * V_goal_pt.mean()
+        goal_term = V_goal_pt.mean()
         loss.append(("CLBF goal term", goal_term))
 
         # Only train these terms if we have a barrier requirement
@@ -302,8 +302,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         # First figure out where this condition needs to hold
         eps = 0.1
         V = self.V(x)
-        # condition_active = torch.sigmoid(10 * (self.safe_level + eps - V))
-        condition_active = torch.ones_like(V)
+        condition_active = torch.sigmoid(10 * (self.safe_level + eps - V))
 
         # Get the control input and relaxation from solving the QP, and aggregate
         # the relaxation across scenarios
