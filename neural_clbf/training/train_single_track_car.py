@@ -100,7 +100,7 @@ def main(args):
         clf_lambda=1.0,
         safe_level=1.0,
         controller_period=controller_period,
-        clf_relaxation_penalty=1e8,
+        clf_relaxation_penalty=1e4,
         primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
         num_init_epochs=11,
