@@ -310,7 +310,9 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         qp_relaxation = torch.mean(qp_relaxation, dim=-1)
 
         # Minimize the qp relaxation to encourage satisfying the decrease condition
-        qp_relaxation_loss = (qp_relaxation * condition_active).mean()
+        qp_relaxation_loss = self.clf_relaxation_penalty(
+            qp_relaxation * condition_active
+        ).mean()
         loss.append(("QP relaxation", qp_relaxation_loss))
 
         # Now compute the decrease using linearization
