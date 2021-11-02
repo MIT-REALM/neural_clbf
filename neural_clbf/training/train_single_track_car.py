@@ -118,7 +118,7 @@ def main(args):
         "logs/stcar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=26
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=25
     )
 
     # Train
