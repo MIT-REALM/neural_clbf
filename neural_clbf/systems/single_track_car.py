@@ -162,7 +162,7 @@ class STCar(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.35
+        max_safe_tracking_error = 0.5
         # tracking_error = x[
         #     :,
         #     [
@@ -190,7 +190,7 @@ class STCar(ControlAffineSystem):
 
         # Avoid angles that are too large
         # Avoid tracking errors that are too large
-        max_safe_tracking_error = 0.75
+        max_safe_tracking_error = 0.8
         # tracking_error = x[
         #     :,
         #     [
