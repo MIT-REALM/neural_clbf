@@ -302,7 +302,8 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         # First figure out where this condition needs to hold
         eps = 0.1
         V = self.V(x)
-        condition_active = torch.sigmoid(10 * (self.safe_level + eps - V))
+        # condition_active = torch.sigmoid(10 * (self.safe_level + eps - V))
+        condition_active = torch.ones_like(V)
 
         # Get the control input and relaxation from solving the QP, and aggregate
         # the relaxation across scenarios
