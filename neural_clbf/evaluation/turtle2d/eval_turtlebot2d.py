@@ -150,22 +150,22 @@ def eval_turtlebot_neural_cbf_mpc_success_rates():
     )
     experiment_suite = ExperimentSuite([rollout_experiment])
 
-    # Run the experiments and save the results
-    experiment_suite.run_all_and_save_to_csv(
-        neural_controller, log_dir + "experiments_neural_ocbf"
-    )
-
-    # # Also run with an MPC controller
-    # mpc_controller = ObsMPCController(
-    #     neural_controller.dynamics_model,
-    #     neural_controller.controller_period,
-    #     neural_controller.experiment_suite,
-    #     neural_controller.validation_dynamics_model,
-    # )
-    # rollout_experiment.algorithm_name = "MPC"
+    # # Run the experiments and save the results
     # experiment_suite.run_all_and_save_to_csv(
-    #     mpc_controller, log_dir + "experiments_mpc"
+    #     neural_controller, log_dir + "experiments_neural_ocbf"
     # )
+
+    # Also run with an MPC controller
+    mpc_controller = ObsMPCController(
+        neural_controller.dynamics_model,
+        neural_controller.controller_period,
+        neural_controller.experiment_suite,
+        neural_controller.validation_dynamics_model,
+    )
+    rollout_experiment.algorithm_name = "MPC"
+    experiment_suite.run_all_and_save_to_csv(
+        mpc_controller, log_dir + "experiments_mpc_contingent"
+    )
 
     # # Also run with a state-based controller
     # log_dir = "saved_models/perception/turtlebot2d_state/commit_f63b307/"
@@ -202,9 +202,9 @@ def eval_and_plot_turtlebot_select_scene():
 
     # Run the experiments and plot
     # rollout_experiment.run_and_plot(neural_controller, display_plots=True)
-    experiment_suite.run_all_and_save_to_csv(
-        neural_controller, log_dir + "experiments_neural_ocbf"
-    )
+    # experiment_suite.run_all_and_save_to_csv(
+    #     neural_controller, log_dir + "experiments_neural_ocbf"
+    # )
 
     # Also run with an MPC controller
     mpc_controller = ObsMPCController(
@@ -213,19 +213,20 @@ def eval_and_plot_turtlebot_select_scene():
         neural_controller.experiment_suite,
         neural_controller.validation_dynamics_model,
     )
+    # rollout_experiment.run_and_plot(mpc_controller, display_plots=True)
     experiment_suite.run_all_and_save_to_csv(
-        mpc_controller, log_dir + "experiments_mpc"
+        mpc_controller, log_dir + "experiments_mpc_contingent"
     )
 
-    # Also run with a state-based controller
-    log_dir = "saved_models/perception/turtlebot2d_state/commit_f63b307/"
-    neural_state_controller = NeuralObsBFController.load_from_checkpoint(
-        log_dir + "v0.ckpt"
-    )
-    neural_state_controller.dynamics_model.scene = scene_utils.saved_random_scene()
-    experiment_suite.run_all_and_save_to_csv(
-        neural_state_controller, log_dir + "experiments_neural_scbf"
-    )
+    # # Also run with a state-based controller
+    # log_dir = "saved_models/perception/turtlebot2d_state/commit_f63b307/"
+    # neural_state_controller = NeuralObsBFController.load_from_checkpoint(
+    #     log_dir + "v0.ckpt"
+    # )
+    # neural_state_controller.dynamics_model.scene = scene_utils.saved_random_scene()
+    # experiment_suite.run_all_and_save_to_csv(
+    #     neural_state_controller, log_dir + "experiments_neural_scbf"
+    # )
 
 
 def plot_select_scene():
@@ -239,7 +240,7 @@ def plot_select_scene():
     scbf_df = pd.read_csv(
         state_log_dir + "experiments_neural_scbf/2021-09-01_17_58_44/Rollout.csv"
     )
-    mpc_df = pd.read_csv(log_dir + "experiments_mpc/2021-09-01_17_58_23/Rollout.csv")
+    mpc_df = pd.read_csv(log_dir + "experiments_mpc_contingent/2021-11-12_14_46_18/Rollout.csv")
     ppo_df = pd.read_csv(log_dir + "experiments_ppo/2021-09-01_21_32_00/trace.csv")
 
     # Add the start point and smooth the ppo trace
@@ -314,6 +315,6 @@ if __name__ == "__main__":
     # eval_and_plot_turtlebot_room()
     # eval_and_plot_turtlebot_bugtrap()
     # eval_and_plot_turtlebot_training()
-    # eval_turtlebot_neural_cbf_mpc_success_rates()
+    eval_turtlebot_neural_cbf_mpc_success_rates()
     # eval_and_plot_turtlebot_select_scene()
-    plot_select_scene()
+    # plot_select_scene()
