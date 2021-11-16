@@ -4,7 +4,7 @@ import seaborn as sns
 import pandas as pd
 
 
-def plot_success_rate()
+def plot_success_rate():
     # Define data, gathered from various scripts, in tidy data format
     data = []
 
@@ -47,13 +47,13 @@ def plot_success_rate()
         {
             "Algorithm": "MPC",
             "Metric": "Goal-reaching rate",
-            "Value": 0.384,
+            "Value": 0.904,
         },
-        {"Algorithm": "MPC", "Metric": "Safety rate", "Value": 1.0},
+        {"Algorithm": "MPC", "Metric": "Safety rate", "Value": 0.996},
         {
             "Algorithm": "MPC",
             "Metric": "Avg. time to goal (s)",
-            "Value": 1.5889062499999984,
+            "Value": 2.093,
         },
     ]
 

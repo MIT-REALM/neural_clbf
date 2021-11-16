@@ -302,7 +302,10 @@ class TurtleBot2D(PlanarLidarSystem):
         return x
 
     def u_nominal(
-        self, x: torch.Tensor, params: Optional[Scenario] = None
+        self,
+        x: torch.Tensor,
+        params: Optional[Scenario] = None,
+        track_zero_angle: Optional[bool] = True,
     ) -> torch.Tensor:
         """
         Compute the nominal control for the nominal parameters.
@@ -310,6 +313,7 @@ class TurtleBot2D(PlanarLidarSystem):
         args:
             x: bs x self.n_dims tensor of state
             params: the model parameters used
+            track_zero_angle: if True, track theta to 0.
         returns:
             u_nominal: bs x self.n_controls tensor of controls
         """
@@ -343,6 +347,7 @@ class TurtleBot2D(PlanarLidarSystem):
         phi_control_on = phi_control_on.reshape(-1)
         omega_scaling = 5.0
         angle_from_origin_to_bot = torch.atan2(x[:, TurtleBot2D.Y], x[:, TurtleBot2D.X])
+
         phi = theta - angle_from_origin_to_bot
         # First, wrap the angle error into [-pi, pi]
         phi = torch.atan2(torch.sin(phi), torch.cos(phi))
@@ -352,13 +357,19 @@ class TurtleBot2D(PlanarLidarSystem):
         phi[phi > np.pi / 2.0] -= np.pi
         phi[phi < -np.pi / 2.0] += np.pi
 
+        # If we're trying to drive backwards and can't, flip the target angle
+        u_upper, u_lower = self.control_limits
+        trying_to_go_backwards = u[:, TurtleBot2D.V] < 0.0
+        if u_lower[0] >= 0.0:
+            phi[trying_to_go_backwards] *= -1.0
+
         # Only apply this P control when the bot is far enough from the origin;
         # default to P control on theta
-        u[:, TurtleBot2D.THETA_DOT] = -omega_scaling * theta
+        if track_zero_angle:
+            u[:, TurtleBot2D.THETA_DOT] = -omega_scaling * theta
         u[phi_control_on, TurtleBot2D.THETA_DOT] = -omega_scaling * phi[phi_control_on]
 
         # Clamp given the control limits
-        u_upper, u_lower = self.control_limits
         u = torch.clamp(u, u_lower, u_upper)
 
         return u
