@@ -100,7 +100,7 @@ def main(args):
         clf_lambda=1.0,
         safe_level=1.0,
         controller_period=controller_period,
-        clf_relaxation_penalty=1e4,
+        clf_relaxation_penalty=1e3,
         primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
         num_init_epochs=11,
@@ -118,7 +118,7 @@ def main(args):
         "logs/stcar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=25
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=26
     )
 
     # Train

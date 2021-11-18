@@ -55,8 +55,8 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
-        trajectory_length=250,
+        trajectories_per_episode=1,  # disable collecting data from trajectories
+        trajectory_length=1,
         fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
@@ -104,7 +104,8 @@ def main(args):
         primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
         num_init_epochs=11,
-        epochs_per_episode=200,
+        epochs_per_episode=200,  # disable new data-gathering
+        barrier=False,  # disable fitting level sets to a safe/unsafe boundary
     )
 
     # Initialize the logger and trainer
@@ -115,6 +116,7 @@ def main(args):
         args,
         logger=tb_logger,
         reload_dataloaders_every_epoch=True,
+        max_epochs=26,
     )
 
     # Train
