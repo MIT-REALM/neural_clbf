@@ -228,12 +228,10 @@ class RolloutTimeSeriesExperiment(Experiment):
         for i, state_label in enumerate(self.plot_x_labels):
             ax = axs[i]
             state_mask = results_df["measurement"] == state_label
-            print("plotting")
             sns.lineplot(
                 ax=ax, x="t", y="value", hue="Parameters", data=results_df[state_mask]
             )
             ax.set_ylabel(state_label)
-            print("plotted")
             # Clear the x label since the plots are stacked
             ax.set_xlabel("")
 
