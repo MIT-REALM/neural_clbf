@@ -1,4 +1,4 @@
-"""Test the 2D quadrotor dynamics"""
+"""Test the F16 dynamics"""
 import pytest
 from warnings import warn
 
@@ -10,7 +10,7 @@ try:
 except ImportError:
     warn("Could not import F16 module")
     pytest.skip(
-        "Could not import F16 module; is AeroBench installed?", allow_module_level=True
+        "Could not import F16 module; is AeroBench installed?", allow_module_level=False
     )
 
 
