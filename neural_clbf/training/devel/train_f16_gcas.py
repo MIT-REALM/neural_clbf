@@ -1,3 +1,4 @@
+from warnings import warn
 from argparse import ArgumentParser
 
 import torch
@@ -15,9 +16,17 @@ from neural_clbf.experiments import (
     CLFContourExperiment,
     RolloutTimeSeriesExperiment,
 )
-from neural_clbf.systems import F16
+
 from neural_clbf.training.utils import current_git_hash
 
+
+imported_F16 = False
+try:
+    from neural_clbf.systems import F16
+
+    imported_F16 = True
+except ImportError:
+    warn("Could not import F16 module")
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
@@ -135,7 +144,7 @@ def main(args):
     trainer.fit(clbf_controller)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and imported_F16:
     parser = ArgumentParser()
     parser = pl.Trainer.add_argparse_args(parser)
     args = parser.parse_args()
