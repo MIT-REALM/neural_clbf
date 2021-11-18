@@ -201,7 +201,7 @@ def eval_and_plot_turtlebot_select_scene():
     neural_controller.dynamics_model.scene = scene_utils.saved_random_scene()
 
     # Run the experiments and plot
-    # rollout_experiment.run_and_plot(neural_controller, display_plots=True)
+    rollout_experiment.run_and_plot(neural_controller, display_plots=True)
     # experiment_suite.run_all_and_save_to_csv(
     #     neural_controller, log_dir + "experiments_neural_ocbf"
     # )
@@ -213,10 +213,10 @@ def eval_and_plot_turtlebot_select_scene():
         neural_controller.experiment_suite,
         neural_controller.validation_dynamics_model,
     )
-    # rollout_experiment.run_and_plot(mpc_controller, display_plots=True)
-    experiment_suite.run_all_and_save_to_csv(
-        mpc_controller, log_dir + "experiments_mpc_contingent"
-    )
+    rollout_experiment.run_and_plot(mpc_controller, display_plots=True)
+    # experiment_suite.run_all_and_save_to_csv(
+    #     mpc_controller, log_dir + "experiments_mpc_contingent"
+    # )
 
     # # Also run with a state-based controller
     # log_dir = "saved_models/perception/turtlebot2d_state/commit_f63b307/"
@@ -315,6 +315,6 @@ if __name__ == "__main__":
     # eval_and_plot_turtlebot_room()
     # eval_and_plot_turtlebot_bugtrap()
     # eval_and_plot_turtlebot_training()
-    eval_turtlebot_neural_cbf_mpc_success_rates()
-    # eval_and_plot_turtlebot_select_scene()
+    # eval_turtlebot_neural_cbf_mpc_success_rates()
+    eval_and_plot_turtlebot_select_scene()
     # plot_select_scene()
