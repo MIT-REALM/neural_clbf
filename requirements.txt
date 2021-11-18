@@ -11,14 +11,13 @@ flake8
 brunette
 
 # Learning libraries
-# pytorch >= 1.8.0
-torch >= 1.9.0
+torch == 1.9.1
 pytorch-lightning == 1.3.4
 
 # Optimization
 cvxpy >= 1.1.14
 cvxpylayers
-gurobipy
+gurobipy == 9.1.2
 osqp
 ecos
 scs
