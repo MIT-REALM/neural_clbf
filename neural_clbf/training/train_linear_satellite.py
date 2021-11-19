@@ -76,7 +76,7 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=0,
         trajectory_length=1,
-        fixed_samples=50000,
+        fixed_samples=10000,
         max_points=50000,
         val_split=0.1,
         batch_size=64,
@@ -86,7 +86,7 @@ def main(args):
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
         "V_Contour",
-        domain=[(-2.5, 2.5), (-2.5, 2.5)],
+        domain=[(-1.5, 1.5), (-1.5, 1.5)],
         n_grid=50,
         x_axis_index=LinearSatellite.X,
         y_axis_index=LinearSatellite.Y,
@@ -131,7 +131,7 @@ def main(args):
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=25
     )
 
     # Train
