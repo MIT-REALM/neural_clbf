@@ -30,7 +30,12 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-Once installed, training examples can be run using e.g. `python neural_clbf/training/train_single_track_car.py`, and pre-trained models can be evaluated using the scripts in the `neural_clbf/evaluation` directory. To run training on a remote server with port forwarding for TensorBoard, connect using `ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
+Once installed, training examples can be run using e.g. `python neural_clbf/training/train_single_track_car.py`, and pre-trained models can be evaluated using the scripts in the `neural_clbf/evaluation` directory. To run training on a remote server with port forwarding for TensorBoard, connect using `ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`. To view the training progress (including plots of simulated controller performance), run `tensorboard --logdir=logs` from a new terminal window.
+
+If you're new to the codebase, try starting with these training examples, which should work with no tuning.
+- `python neural_clbf/training/train_inverted_pendulum.py`: everyone's favorite toy problem! Can be completely visualized in 2D, and provides a good introduction to the `NeuralCLBFController` class and the `ControlAffineSystem` abstract base class, as implemented in `InvertedPendulum`.
+- `python neural_clbf/training/train_kinematic_car.py` and `python neural_clbf/training/train_single_track_car.py`: same control architecture as the inverted pendulum, but with more complex dynamics. Both of these use robust controllers to track a-priori unknown paths using different car models.
+- `python neural_clbf/training/train_linear_satellite.py`: trains a neural control barrier function (CBF), with no Lyapunov component, for satellite collision avoidance.
 
 ### External dependencies
 
