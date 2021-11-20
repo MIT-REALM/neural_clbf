@@ -107,8 +107,8 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=20,
-        trajectory_length=100,
+        trajectories_per_episode=1,
+        trajectory_length=1,
         fixed_samples=2000,
         max_points=20000,
         val_split=0.1,
@@ -161,7 +161,7 @@ def main(args):
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=25
     )
 
     # Train
