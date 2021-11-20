@@ -82,6 +82,7 @@ def main(args):
         y_axis_index=STCar.SYE,
         x_axis_label="$x - x_{ref}$",
         y_axis_label="$y - y_{ref}$",
+        plot_unsafe_region=False,
     )
     s_curve_experiment = CarSCurveExperiment(
         "S-Curve Tracking",
