@@ -10,6 +10,7 @@ from .rollout_norm_experiment import RolloutNormExperiment
 from .rollout_state_space_experiment import RolloutStateSpaceExperiment
 from .rollout_success_rate_experiment import RolloutSuccessRateExperiment
 from .car_s_curve_experiment import CarSCurveExperiment
+from .obs_bf_verification_experiment import ObsBFVerificationExperiment
 
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "RolloutSuccessRateExperiment",
     "RolloutNormExperiment",
     "CarSCurveExperiment",
+    "ObsBFVerificationExperiment",
 ]

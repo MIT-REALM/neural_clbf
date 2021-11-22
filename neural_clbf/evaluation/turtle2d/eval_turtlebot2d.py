@@ -6,7 +6,11 @@ from scipy import interpolate
 import torch
 
 from neural_clbf.controllers import NeuralObsBFController, ObsMPCController
-from neural_clbf.experiments import RolloutSuccessRateExperiment, ExperimentSuite
+from neural_clbf.experiments import (
+    RolloutSuccessRateExperiment,
+    ExperimentSuite,
+    ObsBFVerificationExperiment,
+)
 import neural_clbf.evaluation.turtle2d.scenes as scene_utils
 
 
@@ -240,7 +244,9 @@ def plot_select_scene():
     scbf_df = pd.read_csv(
         state_log_dir + "experiments_neural_scbf/2021-09-01_17_58_44/Rollout.csv"
     )
-    mpc_df = pd.read_csv(log_dir + "experiments_mpc_contingent/2021-11-12_14_46_18/Rollout.csv")
+    mpc_df = pd.read_csv(
+        log_dir + "experiments_mpc_contingent/2021-11-12_14_46_18/Rollout.csv"
+    )
     ppo_df = pd.read_csv(log_dir + "experiments_ppo/2021-09-01_21_32_00/trace.csv")
 
     # Add the start point and smooth the ppo trace
@@ -311,10 +317,40 @@ def plot_select_scene():
     plt.show()
 
 
+def validate_neural_cbf():
+    # Load the checkpoint file. This should include the experiment suite used during
+    # training.
+    log_dir = "saved_models/perception/turtlebot2d/commit_8439378/"
+    neural_controller = NeuralObsBFController.load_from_checkpoint(
+        log_dir + "v0_ep72.ckpt"
+    )
+
+    # Make the verification experiment
+    verification_experiment = ObsBFVerificationExperiment(
+        "verification",
+        1000
+    )
+
+    # Increase the dual penalty so any violations of the CBF condition are clear
+    neural_controller.lookahead_dual_penalty = 1e8
+
+    # Run the experiments and save the results. Gotta do this multiple times
+    # to accomodate memory
+    num_infeasible = 0
+    for i in range(100):
+        df = verification_experiment.run(
+            neural_controller
+        )
+        num_infeasible += df["# infeasible"][0]
+
+    print(f"Total samples {100 * 1000}, # infeasible: {num_infeasible}")
+
+
 if __name__ == "__main__":
     # eval_and_plot_turtlebot_room()
     # eval_and_plot_turtlebot_bugtrap()
     # eval_and_plot_turtlebot_training()
     # eval_turtlebot_neural_cbf_mpc_success_rates()
-    eval_and_plot_turtlebot_select_scene()
+    # eval_and_plot_turtlebot_select_scene()
     # plot_select_scene()
+    validate_neural_cbf()
