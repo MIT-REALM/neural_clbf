@@ -4,6 +4,7 @@ import seaborn as sns
 import pandas as pd
 from scipy import interpolate
 import torch
+import tqdm
 
 from neural_clbf.controllers import NeuralObsBFController, ObsMPCController
 from neural_clbf.experiments import (
@@ -337,7 +338,8 @@ def validate_neural_cbf():
     # Run the experiments and save the results. Gotta do this multiple times
     # to accomodate memory
     num_infeasible = 0
-    for i in range(100):
+    prog_bar_range = tqdm.trange(100, desc="Validating BF", leave=True)
+    for i in prog_bar_range:
         df = verification_experiment.run(
             neural_controller
         )
