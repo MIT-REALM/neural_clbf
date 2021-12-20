@@ -125,7 +125,10 @@ class InvertedPendulum(ControlAffineSystem):
         """Return the mask of x indicating safe regions for the obstacle task
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         safe_mask = x.norm(dim=-1) <= 0.8
 
@@ -135,7 +138,10 @@ class InvertedPendulum(ControlAffineSystem):
         """Return the mask of x indicating unsafe regions for the obstacle task
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         unsafe_mask = x.norm(dim=-1) >= 1.5
 
@@ -145,7 +151,10 @@ class InvertedPendulum(ControlAffineSystem):
         """Return the mask of x indicating points in the goal set
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         goal_mask = x.norm(dim=-1) <= 0.3
 

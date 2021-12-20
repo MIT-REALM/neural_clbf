@@ -210,7 +210,10 @@ class ControlAffineSystem(ABC):
         for this system
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         upper_lim, lower_lim = self.state_limits
         out_of_bounds_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
@@ -225,7 +228,10 @@ class ControlAffineSystem(ABC):
         """Return the mask of x indicating safe regions for this system
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         pass
 
@@ -234,7 +240,10 @@ class ControlAffineSystem(ABC):
         """Return the mask of x indicating unsafe regions for this system
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         pass
 
@@ -243,7 +252,10 @@ class ControlAffineSystem(ABC):
         unsafe region
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         return self.unsafe_mask(x)
 
@@ -251,7 +263,10 @@ class ControlAffineSystem(ABC):
         """Return the mask of x indicating regions that are neither safe nor unsafe
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         return torch.logical_not(
             torch.logical_or(
@@ -264,7 +279,10 @@ class ControlAffineSystem(ABC):
         """Return the mask of x indicating goal regions for this system
 
         args:
-            x: a tensor of points in the state space
+            x: a tensor of (batch_size, self.n_dims) points in the state space
+        returns:
+            a tensor of (batch_size,) booleans indicating whether the corresponding
+            point is in this region.
         """
         # Include a sensible default
         goal_tolerance = 0.1
