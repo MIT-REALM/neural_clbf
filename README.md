@@ -14,12 +14,18 @@ ARXIV
 Conference   
 -->   
 </div>
- 
-## Description   
-What it does   
 
-## How to run   
-First, install dependencies   
+This repository includes code accompany several REALM papers (see below for references). 
+
+## How to run
+
+First, install Git LFS if you have not already
+```bash
+sudo apt-get install git-lfs
+git lfs install
+```
+
+Then, clone the repository and install dependencies   
 ```bash
 # clone project   
 git clone https://github.com/dawsonc/neural_clbf
