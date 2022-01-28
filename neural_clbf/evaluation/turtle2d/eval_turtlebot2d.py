@@ -200,7 +200,7 @@ def eval_and_plot_turtlebot_select_scene():
             [-4.0, 4.0, 0.0],
         ]
     )
-    experiment_suite = ExperimentSuite([rollout_experiment])
+    # experiment_suite = ExperimentSuite([rollout_experiment])
 
     # Load the selected scene
     neural_controller.dynamics_model.scene = scene_utils.saved_random_scene()
@@ -327,10 +327,7 @@ def validate_neural_cbf():
     )
 
     # Make the verification experiment
-    verification_experiment = ObsBFVerificationExperiment(
-        "verification",
-        1000
-    )
+    verification_experiment = ObsBFVerificationExperiment("verification", 1000)
 
     # Increase the dual penalty so any violations of the CBF condition are clear
     neural_controller.lookahead_dual_penalty = 1e8
@@ -340,9 +337,7 @@ def validate_neural_cbf():
     num_infeasible = 0
     prog_bar_range = tqdm.trange(100, desc="Validating BF", leave=True)
     for i in prog_bar_range:
-        df = verification_experiment.run(
-            neural_controller
-        )
+        df = verification_experiment.run(neural_controller)
         num_infeasible += df["# infeasible"][0]
 
     print(f"Total samples {100 * 1000}, # infeasible: {num_infeasible}")
@@ -354,5 +349,5 @@ if __name__ == "__main__":
     # eval_and_plot_turtlebot_training()
     # eval_turtlebot_neural_cbf_mpc_success_rates()
     # eval_and_plot_turtlebot_select_scene()
-    # plot_select_scene()
-    validate_neural_cbf()
+    plot_select_scene()
+    # validate_neural_cbf()

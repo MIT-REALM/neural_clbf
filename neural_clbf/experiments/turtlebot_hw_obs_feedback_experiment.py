@@ -1,5 +1,5 @@
 """An experiment on TurtleBot HW with a laser scanner"""
-from typing import cast, List, Tuple, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING
 
 import rospy
 
@@ -8,7 +8,6 @@ from matplotlib.pyplot import figure
 import seaborn as sns
 import pandas as pd
 import torch
-import tqdm
 
 from neural_clbf.experiments import Experiment
 

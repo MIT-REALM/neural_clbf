@@ -115,7 +115,10 @@ def main(args):
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=21,
+        args,
+        logger=tb_logger,
+        reload_dataloaders_every_epoch=True,
+        max_epochs=21,
     )
 
     # Train

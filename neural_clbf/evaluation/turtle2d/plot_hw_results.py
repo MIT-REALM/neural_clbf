@@ -23,7 +23,7 @@ def plot_animated_traces():
     h_ax, V_ax = axs
 
     # Set up h plot
-    h_line, = h_ax.plot([], [])
+    (h_line,) = h_ax.plot([], [])
     h_ax.set_xlim([0, 35])
     h_ax.set_ylim([-2, 0.2])
     h_ax.plot([0, 35], [0, 0], "k:")
@@ -31,7 +31,7 @@ def plot_animated_traces():
     h_ax.set_ylabel("$h$")
 
     # Set up V plot
-    V_line, = V_ax.plot([], [])
+    (V_line,) = V_ax.plot([], [])
     V_ax.set_xlim([0, 35])
     V_ax.set_ylim([0.0, 20.0])
     # V_ax.plot(t, 0 * t, "k:")
@@ -45,9 +45,7 @@ def plot_animated_traces():
 
         return h_line, V_line
 
-    ani = animation.FuncAnimation(
-        fig, animate, 3500, interval=1000.0 / 20.0, blit=True
-    )
+    ani = animation.FuncAnimation(fig, animate, 3500, interval=1000.0 / 20.0, blit=True)
     # plt.show()
     writervideo = animation.FFMpegWriter(fps=20)
     ani.save(run + "_h_V.mp4", writer=writervideo)

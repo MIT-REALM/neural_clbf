@@ -8,7 +8,6 @@ from matplotlib.offsetbox import (
     AnnotationBbox,
 )
 from celluloid import Camera
-import torch
 
 from neural_clbf.controllers import NeuralCBFController
 from neural_clbf.experiments import (
@@ -277,4 +276,4 @@ if __name__ == "__main__":
     # verify_linear_satellite()
     # eval_linear_satellite_rollout()
     # plot_linear_satellite_rollout()
-    # animate_linear_satellite()
+    animate_linear_satellite()

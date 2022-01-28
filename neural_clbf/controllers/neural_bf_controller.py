@@ -590,7 +590,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
                 fig, ax = plt.subplots()
                 dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
-                # dynamics_model.scene.plot(ax)
+                dynamics_model.scene.plot(ax)
                 ax.set_aspect("equal")
 
                 ax.plot(x[:, 0], x[:, 1], "ko")
@@ -801,7 +801,7 @@ class NeuralObsBFController(pl.LightningModule, Controller):
 
                 fig, ax = plt.subplots()
                 dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
-                # dynamics_model.scene.plot(ax)
+                dynamics_model.scene.plot(ax)
                 ax.set_aspect("equal")
 
                 ax.plot(x[:, 0], x[:, 1], "ko")

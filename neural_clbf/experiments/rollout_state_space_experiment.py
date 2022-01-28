@@ -126,7 +126,7 @@ class RolloutStateSpaceExperiment(Experiment):
 
         # See how long controller took
         controller_calls = 0
-        controller_time = 0.
+        controller_time = 0.0
 
         # Simulate!
         delta_t = controller_under_test.dynamics_model.dt

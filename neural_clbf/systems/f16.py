@@ -19,7 +19,7 @@ try:
     # make sure that the import worked
     assert aerobench_loader
 except ImportError:
-    warn("Could not import F16 module")
+    warn("Could not import F16 module; is AeroBench installed?")
 
 
 class F16(ControlAffineSystem):

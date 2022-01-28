@@ -1,9 +1,8 @@
-from typing import Tuple, Optional, cast
+from typing import Tuple, Optional
 
 import cvxpy as cp
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
 
 from neural_clbf.systems import ObservableSystem, PlanarLidarSystem  # noqa
 from neural_clbf.controllers.controller import Controller
@@ -134,7 +133,7 @@ class ObsMPCController(Controller):
             x_shifted = torch.tensor(-x_target_opt).type_as(x)
             x_shifted = torch.cat((x_shifted, x[batch_idx, 2].unsqueeze(-1)))
             u[batch_idx, :] = self.dynamics_model.u_nominal(
-                x_shifted.reshape(1, -1), track_zero_angle=False
+                x_shifted.reshape(1, -1), track_zero_angle=False  # type: ignore
             ).squeeze()
 
             # If we are not at the goal and stuck by a wall, then steer towards the
@@ -169,58 +168,8 @@ class ObsMPCController(Controller):
                 x_shifted = torch.tensor(-x_target_opt).type_as(x)
                 x_shifted = torch.cat((x_shifted, x[batch_idx, 2].unsqueeze(-1)))
                 u[batch_idx, :] = self.dynamics_model.u_nominal(
-                    x_shifted.reshape(1, -1), track_zero_angle=False
+                    x_shifted.reshape(1, -1), track_zero_angle=False  # type: ignore
                 ).squeeze()
-
-                # # DEBUG
-                # fig, ax = plt.subplots()
-                # dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
-                # dynamics_model.scene.plot(ax)
-                # ax.set_aspect("equal")
-
-                # ax.plot(x[batch_idx, 0], x[batch_idx, 1], "ro")
-                # ax.plot(batch_x[0] + x_target_opt[0], batch_x[1] + x_target_opt[1], "bo")
-                # ax.plot(x_shifted[0], x_shifted[1], "rx")
-                # ax.plot(0 * x_shifted[0], 0 * x_shifted[1], "r^")
-
-                # x_nexts, _ = self.approximate_lookahead(
-                #     x[batch_idx, :].unsqueeze(0),
-                #     batch_obs.unsqueeze(0),
-                #     u[batch_idx, :].unsqueeze(0),
-                #     self.controller_period,
-                # )
-                # ax.plot(x_nexts[0, 0], x_nexts[0, 1], "go")
-
-                # lidar_pts = obs[batch_idx, :, :]
-                # rotation_mat = torch.tensor(
-                #     [
-                #         [torch.cos(x[batch_idx, 2]), -torch.sin(x[batch_idx, 2])],
-                #         [torch.sin(x[batch_idx, 2]), torch.cos(x[batch_idx, 2])],
-                #     ]
-                # )
-                # lidar_pts = rotation_mat @ lidar_pts
-                # lidar_pts[0, :] += x[batch_idx, 0]
-                # lidar_pts[1, :] += x[batch_idx, 1]
-                # ax.plot(lidar_pts[0, :], lidar_pts[1, :], "k-o")
-
-                # x_plt = -np.linspace(-5.0, 5.0, 300)
-                # y_plt = np.linspace(-5.0, 5.0, 300)
-
-                # X_plt, Y_plt = np.meshgrid(x_plt, y_plt)
-
-                # P_plot = rotation_mat.numpy() @ P_opt @ rotation_mat.numpy().T
-                # ellipse_val = (
-                #    P_plot[0, 0] * X_plt ** 2 + 2 * P_plot[1, 0] * X_plt * Y_plt
-                #    + P_plot[1, 1] * Y_plt ** 2
-                # )
-                # Z = 1
-
-                # plt.contour(X_plt + batch_x[0], Y_plt + batch_x[1], ellipse_val, [Z])
-
-                # mng = plt.get_current_fig_manager()
-                # mng.resize(*mng.window.maxsize())
-                # plt.show()
-                # # DEBUG
 
         # Scale the velocities a bit
         u[:, 0] *= 2.0

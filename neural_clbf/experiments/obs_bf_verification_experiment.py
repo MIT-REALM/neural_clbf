@@ -1,13 +1,8 @@
-from typing import cast, List, Tuple, Optional, TYPE_CHECKING
-from itertools import product
+from typing import cast, List, Tuple, TYPE_CHECKING
 
-import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
 import pandas as pd
-import seaborn as sns
 import torch
-import torch.nn.functional as F
-import tqdm
 
 from neural_clbf.experiments import Experiment
 
@@ -75,9 +70,7 @@ class ObsBFVerificationExperiment(Experiment):
         results_df = results_df.append(
             {
                 "# Samples": x.shape[0],
-                "# infeasible": (
-                    u_cost > 0
-                ).sum().item(),
+                "# infeasible": (u_cost > 0).sum().item(),
             },
             ignore_index=True,
         )
