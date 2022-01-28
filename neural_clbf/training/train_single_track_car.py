@@ -25,7 +25,6 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 start_x = torch.tensor(
     [
         [0.0, 0.0, 0.0, 0.0, -np.pi / 6, 0.0, 0.0],
-        # [0.0, 0.0, 0.0, 0.0, np.pi / 6, 0.0, 0.0],
     ]
 )
 controller_period = 0.01
@@ -57,8 +56,8 @@ def main(args):
     data_module = EpisodicDataModule(
         dynamics_model,
         initial_conditions,
-        trajectories_per_episode=100,
-        trajectory_length=250,
+        trajectories_per_episode=1,  # disable collecting data from trajectories
+        trajectory_length=1,
         fixed_samples=10000,
         max_points=100000,
         val_split=0.1,
@@ -69,7 +68,6 @@ def main(args):
     # Define the scenarios
     scenarios = []
     omega_ref_vals = [-1.5, 1.5]
-    # omega_ref_vals = [0.0]
     for omega_ref in omega_ref_vals:
         s = copy(nominal_params)
         s["omega_ref"] = omega_ref
@@ -84,6 +82,7 @@ def main(args):
         y_axis_index=STCar.SYE,
         x_axis_label="$x - x_{ref}$",
         y_axis_label="$y - y_{ref}$",
+        plot_unsafe_region=False,
     )
     s_curve_experiment = CarSCurveExperiment(
         "S-Curve Tracking",
@@ -102,11 +101,12 @@ def main(args):
         clf_lambda=1.0,
         safe_level=1.0,
         controller_period=controller_period,
-        clf_relaxation_penalty=1e2,
+        clf_relaxation_penalty=1e3,
         primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
         num_init_epochs=11,
-        epochs_per_episode=200,
+        epochs_per_episode=200,  # disable new data-gathering
+        barrier=False,  # disable fitting level sets to a safe/unsafe boundary
     )
 
     # Initialize the logger and trainer
@@ -119,7 +119,7 @@ def main(args):
         "logs/stcar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=26
     )
 
     # Train

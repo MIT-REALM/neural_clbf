@@ -181,6 +181,7 @@ class RolloutStateSpaceExperiment(Experiment):
                 y_value = x_current[sim_index, self.plot_y_index].cpu().numpy().item()
                 log_packet[self.plot_x_label] = x_value
                 log_packet[self.plot_y_label] = y_value
+                log_packet["state"] = x_current[sim_index, :].cpu().detach().numpy()
 
                 # Log the barrier function if applicable
                 if h is not None:
@@ -199,9 +200,6 @@ class RolloutStateSpaceExperiment(Experiment):
                     random_scenarios[i],
                 )
                 x_current[i, :] = x_current[i, :] + delta_t * xdot.squeeze()
-
-        print(f"{controller_calls} calls to controller in {controller_time} seconds")
-        print(f"{controller_time / controller_calls} s/call")
 
         return results_df
 

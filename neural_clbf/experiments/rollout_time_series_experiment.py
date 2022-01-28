@@ -193,7 +193,6 @@ class RolloutTimeSeriesExperiment(Experiment):
                 )
                 x_current[i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
-        results_df = results_df.set_index("t")
         return results_df
 
     def plot(

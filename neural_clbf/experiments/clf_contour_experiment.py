@@ -185,7 +185,9 @@ class CLFContourExperiment(Experiment):
 
         # Also overlay the relaxation region
         if results_df["QP relaxation"].max() > 1e-5:
-            ax.plot([], [], c=(1.0, 1.0, 1.0, 0.3), label="QP relaxation")
+            ax.plot(
+                [], [], c=(1.0, 1.0, 1.0, 0.3), label="Certificate Conditions Violated"
+            )
             contours = ax.tricontourf(
                 results_df[self.x_axis_label],
                 results_df[self.y_axis_label],
