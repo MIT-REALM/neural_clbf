@@ -8,6 +8,8 @@
 
 This repository includes code accompany several REALM papers (see below for references). Specifically, it hosts our framework for using neural networks to learn certificates (usually Lyapunov, Barrier, or Lyapunov-Barrier functions) to robustly control nonlinear dynamical systems.
 
+Disclaimer: this code is research-grade, and should not be used in any production setting. It may contain outdated dependencies or security bugs, and of course we cannot guarantee the safety of our controllers on your specific autonomous system. If you have a particular application in mind, please reach out and we'll be happy to discuss with you.
+
 ## How to run
 
 First, install Git LFS if you have not already
