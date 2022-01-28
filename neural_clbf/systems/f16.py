@@ -1,20 +1,25 @@
 """Define a dynamical system for the F16 AeroBench model"""
+from warnings import warn
 from typing import Tuple, Optional, List
 
 import torch
 import numpy as np
 
-import neural_clbf.setup.aerobench as aerobench_loader  # type: ignore
-from aerobench.highlevel.controlled_f16 import controlled_f16  # type: ignore
-from aerobench.examples.gcas.gcas_autopilot import GcasAutopilot  # type: ignore
-from aerobench.lowlevel.low_level_controller import LowLevelController  # type: ignore
-
 from neural_clbf.systems.control_affine_system import ControlAffineSystem
 from neural_clbf.systems.utils import Scenario
 
+try:
+    import neural_clbf.setup.aerobench as aerobench_loader  # type: ignore
+    from aerobench.highlevel.controlled_f16 import controlled_f16  # type: ignore
+    from aerobench.examples.gcas.gcas_autopilot import GcasAutopilot  # type: ignore
+    from aerobench.lowlevel.low_level_controller import (
+        LowLevelController,  # type: ignore
+    )
 
-# make sure that the import worked
-assert aerobench_loader
+    # make sure that the import worked
+    assert aerobench_loader
+except ImportError:
+    warn("Could not import F16 module")
 
 
 class F16(ControlAffineSystem):
