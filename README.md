@@ -1,21 +1,12 @@
-<div align="center">    
- 
+<div align="center">
+
 # Nonlinear Control Using Neural Lyapunov-Barrier Functions
 
-[![Conference](http://img.shields.io/badge/TODO-1111-ff5e24.svg)](https://arxiv.org/)
-<!--
-ARXIV   
-[![Paper](http://img.shields.io/badge/arxiv-math.co:1480.1111-B31B1B.svg)](https://www.nature.com/articles/nature14539)
--->
-![CI testing](https://github.com/dawsonc/neural_clbf/workflows/CI%20testing/badge.svg?branch=master&event=push)
-
-
-<!--  
-Conference   
--->   
+[![Conference](https://img.shields.io/badge/CoRL%20'21-Accepted-success)](https://openreview.net/forum?id=8K5kisAnb_p)
+[![Paper](https://img.shields.io/badge/RAL%20'21-Accepted-success)](https://ieeexplore.ieee.org/abstract/document/9676477)
 </div>
 
-This repository includes code accompany several REALM papers (see below for references). 
+This repository includes code accompany several REALM papers (see below for references). Specifically, it hosts our framework for using neural networks to learn certificates (usually Lyapunov, Barrier, or Lyapunov-Barrier functions) to robustly control nonlinear dynamical systems.
 
 ## How to run
 
@@ -25,16 +16,16 @@ sudo apt-get install git-lfs
 git lfs install
 ```
 
-Then, clone the repository and install dependencies   
+Then, clone the repository and install dependencies
 ```bash
-# clone project   
+# clone project
 git clone https://github.com/dawsonc/neural_clbf
 
-# install project   
+# install project
 cd neural_clbf
 conda create --name neural_clbf python=3.9
 conda activate neural_clbf
-pip install -e .   
+pip install -e .
 pip install -r requirements.txt
 ```
 
@@ -75,12 +66,32 @@ pwd
 ```
 Then go to `neural_clbf/setup/aerobench.py` and modify it to point to the path to the aerobench package.
 
-### Citation   
+### Citation
+
+If you find this code useful in your own research, please cite our relevant papers:
+
+Learning robust control Lyapunov-Barrier functions (rCLBFs) using neural networks:
 ```
-@article{YourName,
-  title={Your Title},
-  author={Your team},
-  journal={Location},
-  year={Year}
+@inproceedings{
+  dawson2021safe,
+  title={Safe Nonlinear Control Using Robust Neural Lyapunov-Barrier Functions},
+  author={Charles Dawson and Zengyi Qin and Sicun Gao and Chuchu Fan},
+  booktitle={5th Annual Conference on Robot Learning },
+  year={2021},
+  url={https://openreview.net/forum?id=8K5kisAnb_p}
 }
-```   
+```
+
+Perception-based barrier functions for safe control from observations:
+```
+@ARTICLE{9676477,
+  author={Dawson, Charles and Lowenkamp, Bethany and Goff, Dylan and Fan, Chuchu},
+  journal={IEEE Robotics and Automation Letters},
+  title={Learning Safe,
+  Generalizable Perception-Based Hybrid Control With Certificates},
+  year={2022},
+  volume={7},
+  number={2},
+  pages={1904-1911},
+  doi={10.1109/LRA.2022.3141657}}
+```

@@ -22,8 +22,8 @@ def test_turtlebot_init():
     # Check control limits
     upper_lim, lower_lim = turtlebot.control_limits
     expected_upper = torch.ones(2)
-    expected_upper[0] = 1000.0
-    expected_upper[1] = 4.0 * np.pi
+    expected_upper[0] = 3
+    expected_upper[1] = 3.0 * np.pi
     expected_lower = -1 * expected_upper
     assert torch.allclose(upper_lim, expected_upper, atol=0.1)
     assert torch.allclose(lower_lim, expected_lower, atol=0.1)
