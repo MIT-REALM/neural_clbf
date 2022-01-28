@@ -12,6 +12,7 @@ from .rollout_success_rate_experiment import RolloutSuccessRateExperiment
 from .car_s_curve_experiment import CarSCurveExperiment
 from .turtlebot_hw_state_feedback_experiment import TurtlebotHWStateFeedbackExperiment
 from .turtlebot_hw_obs_feedback_experiment import TurtlebotHWObsFeedbackExperiment
+from .obs_bf_verification_experiment import ObsBFVerificationExperiment
 
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "CarSCurveExperiment",
     "TurtlebotHWStateFeedbackExperiment",
     "TurtlebotHWObsFeedbackExperiment",
+    "ObsBFVerificationExperiment",
 ]

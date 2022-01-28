@@ -48,13 +48,13 @@ def plot_success_rate():
         {
             "Algorithm": "MPC",
             "Metric": "Goal-reaching rate",
-            "Value": 0.384,
+            "Value": 0.904,
         },
-        {"Algorithm": "MPC", "Metric": "Safety rate", "Value": 1.0},
+        {"Algorithm": "MPC", "Metric": "Safety rate", "Value": 0.996},
         {
             "Algorithm": "MPC",
             "Metric": "Avg. time to goal (s)",
-            "Value": 1.5889062499999984,
+            "Value": 2.093,
         },
     ]
 

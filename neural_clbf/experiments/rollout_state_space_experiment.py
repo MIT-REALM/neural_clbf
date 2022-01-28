@@ -1,5 +1,6 @@
 """Simulate a rollout and plot in state space"""
 import random
+import time
 from typing import cast, List, Tuple, Optional, TYPE_CHECKING
 
 import matplotlib.pyplot as plt
@@ -123,6 +124,10 @@ class RolloutStateSpaceExperiment(Experiment):
         if hasattr(controller_under_test, "reset_controller"):
             controller_under_test.reset_controller(x_current)  # type: ignore
 
+        # See how long controller took
+        controller_calls = 0
+        controller_time = 0.
+
         # Simulate!
         delta_t = controller_under_test.dynamics_model.dt
         num_timesteps = int(self.t_sim // delta_t)
@@ -134,7 +139,11 @@ class RolloutStateSpaceExperiment(Experiment):
         for tstep in prog_bar_range:
             # Get the control input at the current state if it's time
             if tstep % controller_update_freq == 0:
+                start_time = time.time()
                 u_current = controller_under_test.u(x_current)
+                end_time = time.time()
+                controller_calls += 1
+                controller_time += end_time - start_time
 
             # Get the barrier function if applicable
             h: Optional[torch.Tensor] = None
@@ -190,6 +199,9 @@ class RolloutStateSpaceExperiment(Experiment):
                     random_scenarios[i],
                 )
                 x_current[i, :] = x_current[i, :] + delta_t * xdot.squeeze()
+
+        print(f"{controller_calls} calls to controller in {controller_time} seconds")
+        print(f"{controller_time / controller_calls} s/call")
 
         return results_df
 

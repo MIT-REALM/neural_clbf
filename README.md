@@ -41,6 +41,22 @@ Training:
 To setup port forwarding for TensorBoard:
 `ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
 
+### Defining new examples
+
+If you want to apply the Neural CLBF control method to your own problems, you need to start by defining a subclass of `neural_clbf.systems.ControlAffineSystem` for your control problem. For an example, see `neural_clbf.systems.InvertedPendulum`. This subclass should specify:
+
+- The dynamics in control-affine form. Recall that control-affine means $dx/dt = f(x) + g(x)u$, so if $x$ is `(batch_size, n_dims)`, then $f$ is `(batch_size, n_dims)` and $g$ is `(batch_size, n_dims, n_controls)`. $f$ and $g$ should be implemented in the `_f` and `_g` functions, respectively.
+- The parameters of the dynamics (in `validate_params`). These can include any parameters that have uncertainty you want to be robust to; for example, mass.
+- The dimension of the system's state ('n_dims'), control input ('n_controls'), and the indices of any state dimensions that are angles ('angle_dims', so that we can normalize these angles appropriately).
+- Limits on states (to define the training region, in `state_limits`) and controls (these are enforced in the controller, set in `control_limits`).
+- Definitions of the safe, unsafe, and goal regions ('safe_mask', 'unsafe_mask', and 'goal_mask'). Each of these functions should behave as described in the docstring; the high-level is that these functions return a tensor of booleans, and each row is True if the corresponding row in the input is in the region.
+- The goal point in `goal_point` and the control input needed to make that a fixed point `u_eq`.
+- All `ControlAffineSystem` subclasses by default have a nominal controller (the controller that feeds into the CLBF filter) using LQR feedback gains obtained automatically by linearizing `_f` and `_g`. If you want a different nominal controller, you can define it by overriding `u_nominal`.
+
+There are a few more advanced/experimental features you can explore if needed, but these are the basics that any new application should need.
+
+Once you've defined your new `ControlAffineSystem` subclass, you can write a training script (start by copying the example in `neural_clbf.training.train_inverted_pendulum`). This script defines the scenarios for robust control, any experiments you want to run during training, the range of training data, and some hyperparameters for training. Run it and observe the results using TensorBoard :D!
+
 ### External dependencies
 
 #### F16 Model
@@ -52,41 +68,6 @@ cd AeroBenchVVPython
 pwd
 ```
 Then go to `neural_clbf/setup/aerobench.py` and modify it to point to the path to the aerobench package.
-
-#### Commonroad models
-
-TODO @dawsonc
-
-#### MATLAB Bridge for Robust MPC
-
-```
-cd "matlabroot/extern/engines/python"
-python setup.py install
-```
-
-
-
-## Imports
-This project is setup as a package which means you can now easily import any file into any other file like so:
-```python
-from pytorch_lightning import Trainer
-
-from neural_clbf.datasets.TODO import TODO
-from neural_clbf.TODO import TODO
-
-# model
-model = TODO()
-
-# data
-train, val, test = TODO()
-
-# train
-trainer = Trainer()
-trainer.fit(model, train, val)
-
-# test using the best model!
-trainer.test(test_dataloaders=test)
-```
 
 ### Citation   
 ```
