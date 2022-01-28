@@ -1,8 +1,9 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, cast
 
 import cvxpy as cp
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 
 from neural_clbf.systems import ObservableSystem, PlanarLidarSystem  # noqa
 from neural_clbf.controllers.controller import Controller
@@ -133,62 +134,101 @@ class ObsMPCController(Controller):
             x_shifted = torch.tensor(-x_target_opt).type_as(x)
             x_shifted = torch.cat((x_shifted, x[batch_idx, 2].unsqueeze(-1)))
             u[batch_idx, :] = self.dynamics_model.u_nominal(
-                x_shifted.reshape(1, -1)
+                x_shifted.reshape(1, -1), track_zero_angle=False
             ).squeeze()
 
-            # # DEBUG
-            # fig, ax = plt.subplots()
-            # dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
-            # dynamics_model.scene.plot(ax)
-            # ax.set_aspect("equal")
+            # If we are not at the goal and stuck by a wall, then steer towards the
+            # furthest point in the safe ellipse
+            P_eigenvals, P_eigenvectors = np.linalg.eigh(P_opt)
+            minor_axis_length = 1 / P_eigenvals[-1]
+            stuck = minor_axis_length < 0.1
+            at_goal = np.linalg.norm(batch_x) < 1e-1
+            if not at_goal and stuck:
+                major_axis = P_eigenvectors[:, 0]
 
-            # ax.plot(x[batch_idx, 0], x[batch_idx, 1], "ro")
-            # ax.plot(batch_x[0] + x_target_opt[0], batch_x[1] + x_target_opt[1], "bo")
-            # ax.plot(x_shifted[0], x_shifted[1], "rx")
-            # ax.plot(0 * x_shifted[0], 0 * x_shifted[1], "rx")
+                # Pick a direction for the major axis arbitrarily (so that we don't turn
+                # around unnecessarily).
+                if major_axis[0] < 0:
+                    major_axis *= -1
 
-            # x_nexts, _ = self.approximate_lookahead(
-            #     x[batch_idx, :].unsqueeze(0),
-            #     batch_obs.unsqueeze(0),
-            #     u[batch_idx, :].unsqueeze(0),
-            #     self.controller_period,
-            # )
-            # ax.plot(x_nexts[0, 0], x_nexts[0, 1], "go")
+                # Re-solve the problem steering towards this point
+                objective = cp.sum_squares(x_target - major_axis)
+                prob = cp.Problem(cp.Minimize(objective), constraints)
+                prob.solve()
+                x_target_opt = x_target.value
 
-            # lidar_pts = obs[batch_idx, :, :]
-            # rotation_mat = torch.tensor(
-            #     [
-            #         [torch.cos(x[batch_idx, 2]), -torch.sin(x[batch_idx, 2])],
-            #         [torch.sin(x[batch_idx, 2]), torch.cos(x[batch_idx, 2])],
-            #     ]
-            # )
-            # lidar_pts = rotation_mat @ lidar_pts
-            # lidar_pts[0, :] += x[batch_idx, 0]
-            # lidar_pts[1, :] += x[batch_idx, 1]
-            # ax.plot(lidar_pts[0, :], lidar_pts[1, :], "k-o")
+                # Skip if no solution
+                if prob.status != "optimal":
+                    continue
 
-            # x_plt = -np.linspace(-5.0, 5.0, 300)
-            # y_plt = np.linspace(-5.0, 5.0, 300)
+                # and convert to the global frame
+                x_target_opt = rotation_mat @ x_target_opt
 
-            # X_plt, Y_plt = np.meshgrid(x_plt, y_plt)
+                # Now navigate towards that point by offsetting x from this target point
+                # (shifting the origin) and applying the nominal controller
+                x_shifted = torch.tensor(-x_target_opt).type_as(x)
+                x_shifted = torch.cat((x_shifted, x[batch_idx, 2].unsqueeze(-1)))
+                u[batch_idx, :] = self.dynamics_model.u_nominal(
+                    x_shifted.reshape(1, -1), track_zero_angle=False
+                ).squeeze()
 
-            # P_plot = rotation_mat.numpy() @ P_opt @ rotation_mat.numpy().T
-            # ellipse_val = (
-            #    P_plot[0, 0] * X_plt ** 2 + 2 * P_plot[1, 0] * X_plt * Y_plt
-            #    + P_plot[1, 1] * Y_plt ** 2
-            # )
-            # Z = 1
+                # # DEBUG
+                # fig, ax = plt.subplots()
+                # dynamics_model = cast("PlanarLidarSystem", self.dynamics_model)
+                # dynamics_model.scene.plot(ax)
+                # ax.set_aspect("equal")
 
-            # plt.contour(X_plt + batch_x[0], Y_plt + batch_x[1], ellipse_val, [Z])
+                # ax.plot(x[batch_idx, 0], x[batch_idx, 1], "ro")
+                # ax.plot(batch_x[0] + x_target_opt[0], batch_x[1] + x_target_opt[1], "bo")
+                # ax.plot(x_shifted[0], x_shifted[1], "rx")
+                # ax.plot(0 * x_shifted[0], 0 * x_shifted[1], "r^")
 
-            # mng = plt.get_current_fig_manager()
-            # mng.resize(*mng.window.maxsize())
-            # plt.show()
-            # # DEBUG
+                # x_nexts, _ = self.approximate_lookahead(
+                #     x[batch_idx, :].unsqueeze(0),
+                #     batch_obs.unsqueeze(0),
+                #     u[batch_idx, :].unsqueeze(0),
+                #     self.controller_period,
+                # )
+                # ax.plot(x_nexts[0, 0], x_nexts[0, 1], "go")
+
+                # lidar_pts = obs[batch_idx, :, :]
+                # rotation_mat = torch.tensor(
+                #     [
+                #         [torch.cos(x[batch_idx, 2]), -torch.sin(x[batch_idx, 2])],
+                #         [torch.sin(x[batch_idx, 2]), torch.cos(x[batch_idx, 2])],
+                #     ]
+                # )
+                # lidar_pts = rotation_mat @ lidar_pts
+                # lidar_pts[0, :] += x[batch_idx, 0]
+                # lidar_pts[1, :] += x[batch_idx, 1]
+                # ax.plot(lidar_pts[0, :], lidar_pts[1, :], "k-o")
+
+                # x_plt = -np.linspace(-5.0, 5.0, 300)
+                # y_plt = np.linspace(-5.0, 5.0, 300)
+
+                # X_plt, Y_plt = np.meshgrid(x_plt, y_plt)
+
+                # P_plot = rotation_mat.numpy() @ P_opt @ rotation_mat.numpy().T
+                # ellipse_val = (
+                #    P_plot[0, 0] * X_plt ** 2 + 2 * P_plot[1, 0] * X_plt * Y_plt
+                #    + P_plot[1, 1] * Y_plt ** 2
+                # )
+                # Z = 1
+
+                # plt.contour(X_plt + batch_x[0], Y_plt + batch_x[1], ellipse_val, [Z])
+
+                # mng = plt.get_current_fig_manager()
+                # mng.resize(*mng.window.maxsize())
+                # plt.show()
+                # # DEBUG
 
         # Scale the velocities a bit
         u[:, 0] *= 2.0
         u_upper, u_lower = self.dynamics_model.control_limits
         u = torch.clamp(u, u_lower, u_upper)
+
+        # Stop if goal reached
+        goal_reached = x[:, :2].norm(dim=-1) < 0.75
+        u[goal_reached] *= 0.0
 
         return u
