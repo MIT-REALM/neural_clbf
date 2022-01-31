@@ -14,7 +14,7 @@ from neural_clbf.systems import InvertedPendulum
 from neural_clbf.experiments import (
     ExperimentSuite,
     CLFContourExperiment,
-    RolloutTimeSeriesExperiment,
+    RolloutStateSpaceExperiment,
 )
 from neural_clbf.training.utils import current_git_hash
 
@@ -22,17 +22,17 @@ from neural_clbf.training.utils import current_git_hash
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 64
-controller_period = 0.01
+controller_period = 0.05
 
 start_x = torch.tensor(
     [
         [0.5, 0.5],
-        # [-0.2, 1.0],
-        # [0.2, -1.0],
-        # [-0.2, -1.0],
+        [-0.2, 1.0],
+        [0.2, -1.0],
+        [-0.2, -1.0],
     ]
 )
-simulation_dt = 0.001
+simulation_dt = 0.01
 
 
 def main(args):
@@ -40,9 +40,9 @@ def main(args):
     nominal_params = {"m": 1.0, "L": 1.0, "b": 0.01}
     scenarios = [
         nominal_params,
-        {"m": 1.25, "L": 1.0, "b": 0.01},
-        {"m": 1.0, "L": 1.25, "b": 0.01},
-        {"m": 1.25, "L": 1.25, "b": 0.01},
+        # {"m": 1.25, "L": 1.0, "b": 0.01},  # uncomment to add robustness
+        # {"m": 1.0, "L": 1.25, "b": 0.01},
+        # {"m": 1.25, "L": 1.25, "b": 0.01},
     ]
 
     # Define the dynamics model
@@ -67,28 +67,29 @@ def main(args):
         max_points=100000,
         val_split=0.1,
         batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
+        # quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
     )
 
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
         "V_Contour",
         domain=[(-2.0, 2.0), (-2.0, 2.0)],
-        n_grid=20,
+        n_grid=30,
         x_axis_index=InvertedPendulum.THETA,
         y_axis_index=InvertedPendulum.THETA_DOT,
         x_axis_label="$\\theta$",
         y_axis_label="$\\dot{\\theta}$",
+        plot_unsafe_region=False,
     )
-    rollout_experiment = RolloutTimeSeriesExperiment(
+    rollout_experiment = RolloutStateSpaceExperiment(
         "Rollout",
         start_x,
-        plot_x_indices=[InvertedPendulum.THETA, InvertedPendulum.THETA_DOT],
-        plot_x_labels=["$\\theta$", "$\\dot{\\theta}$"],
-        plot_u_indices=[],
-        plot_u_labels=[],
+        InvertedPendulum.THETA,
+        "$\\theta$",
+        InvertedPendulum.THETA_DOT,
+        "$\\dot{\\theta}$",
         scenarios=scenarios,
-        n_sims_per_start=2,
+        n_sims_per_start=1,
         t_sim=5.0,
     )
     experiment_suite = ExperimentSuite([V_contour_experiment, rollout_experiment])
@@ -104,9 +105,10 @@ def main(args):
         clf_lambda=1.0,
         safe_level=1.0,
         controller_period=controller_period,
-        clf_relaxation_penalty=1e3,
+        clf_relaxation_penalty=1e2,
         num_init_epochs=5,
         epochs_per_episode=100,
+        barrier=False,
     )
 
     # Initialize the logger and trainer
@@ -118,7 +120,7 @@ def main(args):
         args,
         logger=tb_logger,
         reload_dataloaders_every_epoch=True,
-        max_epochs=21,
+        max_epochs=51,
     )
 
     # Train

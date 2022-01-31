@@ -130,7 +130,7 @@ class InvertedPendulum(ControlAffineSystem):
             a tensor of (batch_size,) booleans indicating whether the corresponding
             point is in this region.
         """
-        safe_mask = x.norm(dim=-1) <= 0.8
+        safe_mask = x.norm(dim=-1) <= 0.5
 
         return safe_mask
 
@@ -187,7 +187,7 @@ class InvertedPendulum(ControlAffineSystem):
 
         # Acceleration in theta depends on theta via gravity and theta_dot via damping
         f[:, InvertedPendulum.THETA_DOT, 0] = (
-            grav / L * (theta) - b / (m * L ** 2) * theta_dot
+            grav / L * torch.sin(theta) - b / (m * L ** 2) * theta_dot
         )
 
         return f

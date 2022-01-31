@@ -276,6 +276,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         safe_mask: torch.Tensor,
         unsafe_mask: torch.Tensor,
         accuracy: bool = False,
+        requires_grad: bool = False,
     ) -> List[Tuple[str, torch.Tensor]]:
         """
         Evaluate the loss on the CLBF due to the descent condition
@@ -286,6 +287,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             safe_mask: the points in x marked safe
             unsafe_mask: the points in x marked unsafe
             accuracy: if True, return the accuracy (from 0 to 1) as well as the losses
+            requires_grad: if True, use a differentiable QP solver
         returns:
             loss: a list of tuples containing ("category_name", loss_value).
         """
@@ -302,11 +304,14 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         # First figure out where this condition needs to hold
         eps = 0.1
         V = self.V(x)
-        condition_active = torch.sigmoid(10 * (self.safe_level + eps - V))
+        if self.barrier:
+            condition_active = torch.sigmoid(10 * (self.safe_level + eps - V))
+        else:
+            condition_active = 1.0
 
         # Get the control input and relaxation from solving the QP, and aggregate
         # the relaxation across scenarios
-        u_qp, qp_relaxation = self.solve_CLF_QP(x)
+        u_qp, qp_relaxation = self.solve_CLF_QP(x, requires_grad=requires_grad)
         qp_relaxation = torch.mean(qp_relaxation, dim=-1)
 
         # Minimize the qp relaxation to encourage satisfying the decrease condition
@@ -401,7 +406,9 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         component_losses.update(
             self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask)
         )
-        component_losses.update(self.descent_loss(x, goal_mask, safe_mask, unsafe_mask))
+        component_losses.update(
+            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, requires_grad=True)
+        )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)

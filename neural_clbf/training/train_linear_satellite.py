@@ -20,21 +20,21 @@ from neural_clbf.training.utils import current_git_hash
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-batch_size = 64
-controller_period = 0.01
+batch_size = 512
+controller_period = 0.05
 
 start_x = torch.tensor(
     [
-        [1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0, -0.1, -0.1, 0.0],
     ]
 )
-simulation_dt = 0.001
+simulation_dt = 0.01
 
 
 def main(args):
     # Define the scenarios
     nominal_params = {
-        "a": 6871,
+        "a": 42164e3,
         "ux_target": 0.0,
         "uy_target": 0.0,
         "uz_target": 0.0,
@@ -42,17 +42,19 @@ def main(args):
     scenarios = [
         nominal_params,
     ]
-    for ux in [-0.01, 0.01]:
-        for uy in [-0.01, 0.01]:
-            for uz in [-0.01, 0.01]:
-                scenarios.append(
-                    {
-                        "a": 6871,
-                        "ux_target": ux,
-                        "uy_target": uy,
-                        "uz_target": uz,
-                    }
-                )
+    # # If we want robustness, then we can account for some uncertain accelerations
+    # # from the target satellite.
+    # for ux in [-0.01, 0.01]:
+    #     for uy in [-0.01, 0.01]:
+    #         for uz in [-0.01, 0.01]:
+    #             scenarios.append(
+    #                 {
+    #                     "a": 6871,
+    #                     "ux_target": ux,
+    #                     "uy_target": uy,
+    #                     "uz_target": uz,
+    #                 }
+    #             )
 
     # Define the dynamics model
     dynamics_model = LinearSatellite(
@@ -76,18 +78,18 @@ def main(args):
         initial_conditions,
         trajectories_per_episode=0,
         trajectory_length=1,
-        fixed_samples=10000,
+        fixed_samples=100000,
         max_points=50000,
         val_split=0.1,
-        batch_size=64,
-        quotas={"safe": 0.2, "unsafe": 0.2, "goal": 0.4},
+        batch_size=batch_size,
+        quotas={"goal": 0.4, "safe": 0.2},
     )
 
     # Define the experiment suite
     V_contour_experiment = CLFContourExperiment(
         "V_Contour",
         domain=[(-1.5, 1.5), (-1.5, 1.5)],
-        n_grid=50,
+        n_grid=25,
         x_axis_index=LinearSatellite.X,
         y_axis_index=LinearSatellite.Y,
         x_axis_label="$x$",
@@ -117,12 +119,14 @@ def main(args):
         scenarios,
         data_module,
         experiment_suite=experiment_suite,
-        cbf_hidden_layers=4,
-        cbf_hidden_size=128,
+        cbf_hidden_layers=2,
+        cbf_hidden_size=256,
         cbf_lambda=1.0,
         controller_period=controller_period,
-        cbf_relaxation_penalty=1e2,
+        cbf_relaxation_penalty=1e4,
         scale_parameter=10.0,
+        primal_learning_rate=1e-3,
+        learn_shape_epochs=100,
     )
 
     # Initialize the logger and trainer
@@ -131,7 +135,7 @@ def main(args):
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=25
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=201
     )
 
     # Train

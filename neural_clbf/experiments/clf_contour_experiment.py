@@ -180,6 +180,7 @@ class CLFContourExperiment(Experiment):
             results_df[self.y_axis_label],
             results_df["V"],
             cmap=sns.color_palette("rocket", as_cmap=True),
+            levels=20,
         )
         plt.colorbar(contours, ax=ax, orientation="vertical")
 

@@ -45,6 +45,7 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         controller_period: float = 0.01,
         primal_learning_rate: float = 1e-3,
         scale_parameter: float = 10.0,
+        learn_shape_epochs: int = 0,
     ):
         """Initialize the controller.
 
@@ -60,6 +61,7 @@ class NeuralCBFController(pl.LightningModule, CBFController):
             primal_learning_rate: the learning rate for SGD for the network weights,
                                   applied to the CLBF decrease loss
             scale_parameter: normalize non-angle data points to between +/- this value.
+            learn_shape_epochs: number of epochs to spend just learning the shape
         """
         super(NeuralCBFController, self).__init__(
             dynamics_model=dynamics_model,
@@ -84,6 +86,7 @@ class NeuralCBFController(pl.LightningModule, CBFController):
 
         # Save the other parameters
         self.primal_learning_rate = primal_learning_rate
+        self.learn_shape_epochs = learn_shape_epochs
 
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
@@ -247,6 +250,7 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         safe_mask: torch.Tensor,
         unsafe_mask: torch.Tensor,
         accuracy: bool = False,
+        requires_grad: bool = False,
     ) -> List[Tuple[str, torch.Tensor]]:
         """
         Evaluate the loss on the CLBF due to the descent condition
@@ -269,7 +273,7 @@ class NeuralCBFController(pl.LightningModule, CBFController):
 
         # Get the control input and relaxation from solving the QP, and aggregate
         # the relaxation across scenarios
-        u_qp, qp_relaxation = self.solve_CLF_QP(x)
+        u_qp, qp_relaxation = self.solve_CLF_QP(x, requires_grad=requires_grad)
         qp_relaxation = torch.mean(qp_relaxation, dim=-1)
 
         # Minimize the qp relaxation to encourage satisfying the decrease condition
@@ -288,7 +292,12 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         component_losses.update(
             self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask)
         )
-        component_losses.update(self.descent_loss(x, goal_mask, safe_mask, unsafe_mask))
+        if self.current_epoch > self.learn_shape_epochs:
+            component_losses.update(
+                self.descent_loss(
+                    x, goal_mask, safe_mask, unsafe_mask, requires_grad=True
+                )
+            )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -345,7 +354,10 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         component_losses.update(
             self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask)
         )
-        component_losses.update(self.descent_loss(x, goal_mask, safe_mask, unsafe_mask))
+        if self.current_epoch > self.learn_shape_epochs:
+            component_losses.update(
+                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask)
+            )
 
         # Compute the overall loss by summing up the individual losses
         total_loss = torch.tensor(0.0).type_as(x)
@@ -358,9 +370,10 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         component_losses.update(
             self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask, accuracy=True)
         )
-        component_losses.update(
-            self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, accuracy=True)
-        )
+        if self.current_epoch > self.learn_shape_epochs:
+            component_losses.update(
+                self.descent_loss(x, goal_mask, safe_mask, unsafe_mask, accuracy=True)
+            )
 
         batch_dict = {"val_loss": total_loss, **component_losses}
 
@@ -398,9 +411,9 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         # **Now entering spicetacular automation zone**
         # We automatically run experiments every few epochs
 
-        # # Only plot every 5 epochs
-        # if self.current_epoch % 5 != 0:
-        #     return
+        # Only plot every 5 epochs
+        if self.current_epoch % 5 != 0:
+            return
 
         self.experiment_suite.run_all_and_log_plots(
             self, self.logger, self.current_epoch

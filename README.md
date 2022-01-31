@@ -86,7 +86,7 @@ Learning robust control Lyapunov-Barrier functions (rCLBFs) using neural network
 
 Perception-based barrier functions for safe control from observations:
 ```
-@ARTICLE{9676477,
+@ARTICLE{dawson2022perception,
   author={Dawson, Charles and Lowenkamp, Bethany and Goff, Dylan and Fan, Chuchu},
   journal={IEEE Robotics and Automation Letters},
   title={Learning Safe,

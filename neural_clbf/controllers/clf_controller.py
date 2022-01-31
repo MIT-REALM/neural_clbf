@@ -331,13 +331,19 @@ class CLFController(Controller):
         # The differentiable solver must allow relaxation
         relaxation_penalty = min(relaxation_penalty, 1e6)
 
+        # Assemble list of params
+        params = []
+        for i in range(self.n_scenarios):
+            params.append(Lf_V[:, i, :])
+        for i in range(self.n_scenarios):
+            params.append(Lg_V[:, i, :])
+        params.append(V.reshape(-1, 1))
+        params.append(u_ref)
+        params.append(torch.tensor([relaxation_penalty]))
+
         # We've already created a parameterized QP solver, so we can use that
         result = self.differentiable_qp_solver(
-            *Lf_V,
-            *Lg_V,
-            V,
-            u_ref,
-            torch.tensor([relaxation_penalty]),
+            *params,
             solver_args={"max_iters": 50000000},
         )
 
@@ -352,6 +358,7 @@ class CLFController(Controller):
         x,
         relaxation_penalty: Optional[float] = None,
         u_ref: Optional[torch.Tensor] = None,
+        requires_grad: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Determine the control input for a given state using a QP
 
@@ -363,6 +370,7 @@ class CLFController(Controller):
                    bypass the self.u_reference function. If provided, must have
                    dimensions bs x self.dynamics_model.n_controls. If not provided,
                    default to calling self.u_reference.
+            requires_grad: if True, use a differentiable layer
         returns:
             u: bs x self.dynamics_model.n_controls tensor of control inputs
             relaxation: bs x 1 tensor of how much the CLF had to be relaxed in each
@@ -388,7 +396,7 @@ class CLFController(Controller):
 
         # Figure out if we need to use a differentiable solver (determined by whether
         # the input x requires a gradient or not)
-        if x.requires_grad:
+        if requires_grad:
             return self._solve_CLF_QP_cvxpylayers(
                 x, u_ref, V, Lf_V, Lg_V, relaxation_penalty
             )

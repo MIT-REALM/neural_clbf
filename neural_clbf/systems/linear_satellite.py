@@ -50,7 +50,7 @@ class LinearSatellite(ControlAffineSystem):
     UZ = 2
 
     # Constant parameters
-    MU = 398600.0  # Earth's gravitational parameter
+    MU = 3.986e14  # Earth's gravitational parameter
 
     def __init__(
         self,
@@ -113,9 +113,9 @@ class LinearSatellite(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[LinearSatellite.X] = 1.5
-        upper_limit[LinearSatellite.Y] = 1.5
-        upper_limit[LinearSatellite.Z] = 1.5
+        upper_limit[LinearSatellite.X] = 2.0
+        upper_limit[LinearSatellite.Y] = 2.0
+        upper_limit[LinearSatellite.Z] = 2.0
         upper_limit[LinearSatellite.XDOT] = 1
         upper_limit[LinearSatellite.YDOT] = 1
         upper_limit[LinearSatellite.ZDOT] = 1
@@ -131,7 +131,7 @@ class LinearSatellite(ControlAffineSystem):
         limits for this system
         """
         # define upper and lower limits based around the nominal equilibrium input
-        upper_limit = torch.tensor([0.03, 0.03, 0.03])
+        upper_limit = torch.tensor([0.1, 0.1, 0.1])
         lower_limit = -1.0 * upper_limit
 
         return (upper_limit, lower_limit)
@@ -146,7 +146,7 @@ class LinearSatellite(ControlAffineSystem):
 
         # Stay within some maximum distance from the target
         distance = x[:, : LinearSatellite.Z + 1].norm(dim=-1)
-        # safe_mask.logical_and_(distance <= 1.5)
+        safe_mask.logical_and_(distance <= 1.0)
 
         # Stay at least some minimum distance from the target
         safe_mask.logical_and_(distance >= 0.75)
@@ -163,10 +163,10 @@ class LinearSatellite(ControlAffineSystem):
 
         # Maximum distance
         distance = x[:, : LinearSatellite.Z + 1].norm(dim=-1)
-        # unsafe_mask.logical_or_(distance >= 2.0)
+        unsafe_mask.logical_or_(distance >= 1.5)
 
         # Minimum distance
-        unsafe_mask.logical_or_(distance <= 0.3)
+        unsafe_mask.logical_or_(distance <= 0.25)
 
         return unsafe_mask
 
@@ -176,7 +176,7 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = x.norm(dim=-1) <= 0.5
+        goal_mask = x[:, : LinearSatellite.Z + 1].norm(dim=-1) <= 0.5
 
         return goal_mask
 
