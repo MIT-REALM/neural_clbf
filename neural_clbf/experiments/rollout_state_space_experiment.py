@@ -161,7 +161,7 @@ class RolloutStateSpaceExperiment(Experiment):
 
             # Get the Lyapunov function if applicable
             V: Optional[torch.Tensor] = None
-            if hasattr(controller_under_test, "V"):
+            if hasattr(controller_under_test, "V") and h is None:
                 V = controller_under_test.V(x_current)  # type: ignore
 
             # Log the current state and control for each simulation
@@ -285,7 +285,7 @@ class RolloutStateSpaceExperiment(Experiment):
                     results_df[sim_mask]["t"].to_numpy(),
                     results_df[sim_mask]["h"].to_numpy(),
                     linestyle="-",
-                    marker="+",
+                    # marker="+",
                     markersize=5,
                     color=sns.color_palette()[plot_idx],
                 )
@@ -319,7 +319,7 @@ class RolloutStateSpaceExperiment(Experiment):
                     results_df[sim_mask]["t"].to_numpy(),
                     results_df[sim_mask]["V"].to_numpy(),
                     linestyle="-",
-                    marker="+",
+                    # marker="+",
                     markersize=5,
                     color=sns.color_palette()[plot_idx],
                 )

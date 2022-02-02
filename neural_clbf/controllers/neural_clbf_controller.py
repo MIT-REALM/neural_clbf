@@ -52,6 +52,8 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         penalty_scheduling_rate: float = 0.0,
         num_init_epochs: int = 5,
         barrier: bool = True,
+        add_nominal: bool = False,
+        normalize_V_nominal: bool = False,
     ):
         """Initialize the controller.
 
@@ -75,6 +77,8 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
                              linear controller
             barrier: if True, train the CLBF to act as a barrier functions. If false,
                      effectively trains only a CLF.
+            add_nominal: if True, add the nominal V
+            normalize_V_nominal: if True, normalize V_nominal so that its average is 1
         """
         super(NeuralCLBFController, self).__init__(
             dynamics_model=dynamics_model,
@@ -105,6 +109,9 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         self.penalty_scheduling_rate = penalty_scheduling_rate
         self.num_init_epochs = num_init_epochs
         self.barrier = barrier
+        self.add_nominal = add_nominal
+        self.normalize_V_nominal = normalize_V_nominal
+        self.V_nominal_mean = 1.0
 
         # Compute and save the center and range of the state variables
         x_max, x_min = dynamics_model.state_limits
@@ -201,6 +208,25 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         # Compute the final activation
         JV = torch.bmm(V.unsqueeze(1), JV)
         V = 0.5 * (V * V).sum(dim=1)
+
+        if self.add_nominal:
+            # Get the nominal Lyapunov function
+            P = self.dynamics_model.P.type_as(x)
+            x0 = self.dynamics_model.goal_point.type_as(x)
+            # Reshape to use pytorch's bilinear function
+            P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+            V_nominal = 0.5 * F.bilinear(x - x0, x - x0, P).squeeze()
+            # Reshape again to calculate the gradient
+            P = P.reshape(self.dynamics_model.n_dims, self.dynamics_model.n_dims)
+            JV_nominal = F.linear(x - x0, P)
+            JV_nominal = JV_nominal.reshape(x.shape[0], 1, self.dynamics_model.n_dims)
+
+            if self.normalize_V_nominal:
+                V_nominal /= self.V_nominal_mean
+                JV_nominal /= self.V_nominal_mean
+
+            V = V + V_nominal
+            JV = JV + JV_nominal
 
         return V, JV
 
@@ -307,7 +333,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         if self.barrier:
             condition_active = torch.sigmoid(10 * (self.safe_level + eps - V))
         else:
-            condition_active = 1.0
+            condition_active = torch.tensor(1.0)
 
         # Get the control input and relaxation from solving the QP, and aggregate
         # the relaxation across scenarios
@@ -315,9 +341,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         qp_relaxation = torch.mean(qp_relaxation, dim=-1)
 
         # Minimize the qp relaxation to encourage satisfying the decrease condition
-        qp_relaxation_loss = (
-            self.clf_relaxation_penalty * (qp_relaxation * condition_active).mean()
-        )
+        qp_relaxation_loss = (qp_relaxation * condition_active).mean()
         loss.append(("QP relaxation", qp_relaxation_loss))
 
         # Now compute the decrease using linearization
@@ -384,9 +408,14 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
 
         # Get the nominal Lyapunov function
         P = self.dynamics_model.P.type_as(x)
+        x0 = self.dynamics_model.goal_point.type_as(x)
         # Reshape to use pytorch's bilinear function
         P = P.reshape(1, self.dynamics_model.n_dims, self.dynamics_model.n_dims)
-        V_nominal = 0.5 * F.bilinear(x, x, P).squeeze()
+        V_nominal = 0.5 * F.bilinear(x - x0, x - x0, P).squeeze()
+
+        if self.normalize_V_nominal:
+            self.V_nominal_mean = V_nominal.mean()
+            V_nominal /= self.V_nominal_mean
 
         # Compute the error between the two
         clbf_mse_loss = (V - V_nominal) ** 2

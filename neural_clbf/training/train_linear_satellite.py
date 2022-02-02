@@ -21,11 +21,11 @@ from neural_clbf.training.utils import current_git_hash
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 batch_size = 512
-controller_period = 0.05
+controller_period = 0.01
 
 start_x = torch.tensor(
     [
-        [1.0, 1.0, 0.0, -0.1, -0.1, 0.0],
+        [0.5, 0.5, 0.0, -0.1, -0.1, 0.0],
     ]
 )
 simulation_dt = 0.01
@@ -121,7 +121,7 @@ def main(args):
         experiment_suite=experiment_suite,
         cbf_hidden_layers=2,
         cbf_hidden_size=256,
-        cbf_lambda=1.0,
+        cbf_lambda=0.1,
         controller_period=controller_period,
         cbf_relaxation_penalty=1e4,
         scale_parameter=10.0,

@@ -339,7 +339,7 @@ class CLFController(Controller):
             params.append(Lg_V[:, i, :])
         params.append(V.reshape(-1, 1))
         params.append(u_ref)
-        params.append(torch.tensor([relaxation_penalty]))
+        params.append(torch.tensor([relaxation_penalty]).type_as(x))
 
         # We've already created a parameterized QP solver, so we can use that
         result = self.differentiable_qp_solver(

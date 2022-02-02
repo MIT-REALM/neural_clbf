@@ -546,13 +546,16 @@ class ControlAffineSystem(ABC):
         """
         pass
 
-    def u_nominal(self, x: torch.Tensor) -> torch.Tensor:
+    def u_nominal(
+        self, x: torch.Tensor, params: Optional[Scenario] = None
+    ) -> torch.Tensor:
         """
         Compute the nominal control for the nominal parameters, using LQR unless
         overridden
 
         args:
             x: bs x self.n_dims tensor of state
+            params: the model parameters used
         returns:
             u_nominal: bs x self.n_controls tensor of controls
         """

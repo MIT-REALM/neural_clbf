@@ -11,7 +11,7 @@ import torch
 import tqdm
 
 from neural_clbf.experiments import Experiment
-from neural_clbf.systems import STCar, KSCar
+from neural_clbf.systems import STCar, KSCar, AutoRally
 
 if TYPE_CHECKING:
     from neural_clbf.controllers import Controller  # noqa
@@ -51,9 +51,11 @@ class CarSCurveExperiment(Experiment):
             experiment).
         """
         # Make sure that the controller under test has a car dynamics model
-        assert isinstance(controller_under_test.dynamics_model, KSCar) or isinstance(
-            controller_under_test.dynamics_model, STCar
-        ), "Controller must have a KSCar or STCar dynamics model"
+        assert (
+            isinstance(controller_under_test.dynamics_model, KSCar)
+            or isinstance(controller_under_test.dynamics_model, STCar)
+            or isinstance(controller_under_test.dynamics_model, AutoRally)
+        ), "Controller must have a KSCar, STCar, or AutoRally dynamics model"
 
         # Set up a dataframe to store the results
         results_df = pd.DataFrame()
@@ -69,6 +71,7 @@ class CarSCurveExperiment(Experiment):
         n_dims = controller_under_test.dynamics_model.n_dims
         n_controls = controller_under_test.dynamics_model.n_controls
         x_current = torch.zeros(1, n_dims, device=device)
+        x_current += controller_under_test.dynamics_model.goal_point.type_as(x_current)
         u_current = torch.zeros(1, n_controls).type_as(x_current)
 
         # And create a place to store the reference path
@@ -122,6 +125,13 @@ class CarSCurveExperiment(Experiment):
                 log_packet["value"] = value
                 results_df = results_df.append(log_packet, ignore_index=True)
 
+            log_packet = copy(base_log_packet)
+            log_packet["measurement"] = "V"
+            log_packet["value"] = (
+                controller_under_test.V(x_current).cpu().numpy().item()
+            )
+            results_df = results_df.append(log_packet, ignore_index=True)
+
         results_df = results_df.set_index("t")
         return results_df
 
@@ -147,15 +157,15 @@ class CarSCurveExperiment(Experiment):
         sns.set_theme(context="talk", style="white")
 
         # Plot the reference and tracking trajectories
-        fig, ax = plt.subplots(1, 1)
-        fig.set_size_inches(8, 8)
+        fig, axs = plt.subplots(1, 2)
+        fig.set_size_inches(16, 8)
 
+        ax = axs[0]
         tracking_trajectory_color = sns.color_palette("pastel")[1]
         x_ref = results_df[results_df.measurement == "$x_{ref}$"]
         y_ref = results_df[results_df.measurement == "$y_{ref}$"]
         x = results_df[results_df.measurement == "$x$"]
         y = results_df[results_df.measurement == "$y$"]
-        # import pdb; pdb.set_trace()
         ax.plot(
             x_ref.value,
             y_ref.value,
@@ -174,6 +184,12 @@ class CarSCurveExperiment(Experiment):
         ax.set_ylabel("$y$")
         ax.legend()
         ax.set_aspect("equal")
+
+        ax = axs[1]
+        masked_df = results_df[results_df.measurement == "V"]
+        ax.plot(masked_df.index, masked_df.value)
+        ax.set_xlabel("t")
+        ax.set_ylabel("V")
 
         fig_handle = ("S-Curve Tracking", fig)
 
