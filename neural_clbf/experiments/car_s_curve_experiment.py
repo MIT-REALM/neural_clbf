@@ -108,16 +108,26 @@ class CarSCurveExperiment(Experiment):
 
             # Log the position at this state to the dataframe
             base_log_packet = {"t": tstep * delta_t}
-            measurement_labels = ["$x_{ref}$", "$y_{ref}$", "$x$", "$y$"]
+            measurement_labels = [
+                "$x_{ref}$",
+                "$y_{ref}$",
+                "$x$",
+                "$y$",
+                "Tracking error",
+            ]
             x_err = x_current[0, controller_under_test.dynamics_model.SXE]
             y_err = x_current[0, controller_under_test.dynamics_model.SYE]
+            psi_err = x_current[0, controller_under_test.dynamics_model.PSI_E]
             x = x_ref + x_err * np.cos(psi_ref) - y_err * np.sin(psi_ref)
             y = y_ref + x_err * np.sin(psi_ref) + y_err * np.cos(psi_ref)
+            err2 = x_err ** 2 + y_err ** 2 + psi_err ** 2
+            err = torch.sqrt(err2)
             measurements = [
                 x_ref,
                 y_ref,
                 x.cpu().numpy().item(),
                 y.cpu().numpy().item(),
+                err.cpu().numpy().item(),
             ]
             for label, value in zip(measurement_labels, measurements):
                 log_packet = copy(base_log_packet)
@@ -186,10 +196,10 @@ class CarSCurveExperiment(Experiment):
         ax.set_aspect("equal")
 
         ax = axs[1]
-        masked_df = results_df[results_df.measurement == "V"]
+        masked_df = results_df[results_df.measurement == "Tracking error"]
         ax.plot(masked_df.index, masked_df.value)
         ax.set_xlabel("t")
-        ax.set_ylabel("V")
+        ax.set_ylabel("Tracking Error")
 
         fig_handle = ("S-Curve Tracking", fig)
 
