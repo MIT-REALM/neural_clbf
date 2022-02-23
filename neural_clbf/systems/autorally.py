@@ -180,7 +180,7 @@ class AutoRally(ControlAffineSystem):
         # Avoid tracking errors that are too large
         max_safe_tracking_error = 0.5
         tracking_error = x - self.goal_point.type_as(x)
-        tracking_error = tracking_error[:, :AutoRally.PSI_E + 1]
+        tracking_error = tracking_error[:, : AutoRally.PSI_E + 1]
         tracking_error_small_enough = (
             tracking_error.norm(dim=-1) <= max_safe_tracking_error
         )
@@ -200,7 +200,7 @@ class AutoRally(ControlAffineSystem):
         # Avoid tracking errors that are too large
         max_safe_tracking_error = 0.8
         tracking_error = x - self.goal_point.type_as(x)
-        tracking_error = tracking_error[:, :AutoRally.PSI_E + 1]
+        tracking_error = tracking_error[:, : AutoRally.PSI_E + 1]
         tracking_error_too_big = tracking_error.norm(dim=-1) >= max_safe_tracking_error
         unsafe_mask.logical_or_(tracking_error_too_big)
 
