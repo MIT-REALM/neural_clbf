@@ -1,11 +1,10 @@
 """Define a dynamical system for turtlebot and quadrotor multiagent system"""
-from msilib.schema import Control
+# from msilib.schema import Control
 from typing import Tuple, List, Optional
 
 import torch
 import numpy as np
 
-from .planar_lidar_system import PlanarLidarSystem, Scene
 from .control_affine_system import ControlAffineSystem
 from .utils import grav, Scenario
 
@@ -61,19 +60,18 @@ class Multiagent(ControlAffineSystem):
 
     #Turtlebot 
     V_T = 0
-    THETA_DOT = 1
+    THETA_DOT_T = 1
 
     # Crazyflie
     F = 2
     PHI_DOT = 3
-    THETA_DOT = 4
+    THETA_DOT_C = 4
     PSI_DOT = 5
 
 
     def __init__(
             self,
             nominal_params: Scenario,
-            scene = Scene,
             dt: float = 0.01,
             controller_dt: Optional[float] = None,
         ):
@@ -159,11 +157,13 @@ class Multiagent(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.N_CONTROLS)
+        # TurtleBot
         upper_limit[Multiagent.V_T] = 3
-        upper_limit[Multiagent.THETA_DOT] = 3.0 * np.pi
+        upper_limit[Multiagent.THETA_DOT_T] = 3.0 * np.pi
+        # Crazyflie
         upper_limit[Multiagent.F] = 100
         upper_limit[Multiagent.PHI_DOT] = 50
-        upper_limit[Multiagent.THETA_DOT] = 50
+        upper_limit[Multiagent.THETA_DOT_C] = 50
         upper_limit[Multiagent.PSI_DOT] = 50
 
         lower_limit = -1.0 * upper_limit
@@ -220,6 +220,13 @@ class Multiagent(ControlAffineSystem):
         )
 
         return unsafe_mask
+
+    def goal_point(self):
+        goal_set = torch.zeros((1, self.n_dims))
+        goal_set[:, Multiagent.PX] = -2.0
+        goal_set[:, Multiagent.PY] = 0.0
+        goal_set[:, Multiagent.PZ] = -2.0
+        return goal_set
 
     def goal_mask(self, x):
         """Return the mask of x indicating points in the goal set (within 0.2 m of the
@@ -282,7 +289,7 @@ class Multiagent(ControlAffineSystem):
 
     def _g(self, x: torch.Tensor, params: Scenario): #TODO @bethlow
         """
-        Return the control-independent part of the control-affine dynamics.
+        Return the control-dependent part of the control-affine dynamics.
 
         args:
             x: bs x self.n_dims tensor of state
@@ -308,7 +315,7 @@ class Multiagent(ControlAffineSystem):
         g[:, Multiagent.Y_T, Multiagent.V_T] = torch.sin(theta)
 
         # Effect on theta
-        g[:, Multiagent.THETA, Multiagent.THETA_DOT] = 1.0
+        g[:, Multiagent.THETA_T, Multiagent.THETA_DOT_T] = 1.0
 
         # Derivatives of linear velocities depend on thrust f
         s_theta = torch.sin(x[:, Multiagent.THETA_C])
@@ -332,6 +339,19 @@ class Multiagent(ControlAffineSystem):
 
     #TODO @bethlow how to combine the two
     def u_nominal(self, x: torch.Tensor, params: Optional[Scenario] = None) -> torch.Tensor:
+        # Crazyflie linearization using LQR, but implemented here to allow 
+        # turtlebot linerization override
+        print("got to u_nom!")
+        u = torch.zeros(x.shape[0], self.n_controls).type_as(x)
+
+        # Insert A + B method calls
+        A = Multiagent.compute_A_matrix
+        B = Multiagent.compute_B_matrix
+        # Add to u vector at crazyflie control indices
+        Multiagent.compute_linearized_controller
+        
+
+
         # The turtlebot linearization is not well-behaved, so we create our own
         # P and K matrices (mainly as placeholders)
         self.P = torch.eye(self.n_dims)
@@ -343,7 +363,6 @@ class Multiagent(ControlAffineSystem):
         # the turtlebot. If the bot is pointing away from the origin, this inner product
         # will be negative, so we'll drive backwards towards the goal. If the bot
         # is pointing towards the origin, it will drive forwards.
-        u = torch.zeros(x.shape[0], self.n_controls).type_as(x)
 
         v_scaling = 1.0
         bot_to_origin = -x[:, : Multiagent.Y + 1].reshape(-1, 1, 2)
