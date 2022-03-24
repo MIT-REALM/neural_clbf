@@ -6,7 +6,11 @@
 [![Paper](https://img.shields.io/badge/RAL%20'21-Accepted-success)](https://ieeexplore.ieee.org/abstract/document/9676477)
 </div>
 
-This repository includes code accompany several REALM papers (see below for references). Specifically, it hosts our framework for using neural networks to learn certificates (usually Lyapunov, Barrier, or Lyapunov-Barrier functions) to robustly control nonlinear dynamical systems.
+This repository includes code accompany several REALM papers (see below for references). Specifically, it hosts our framework for using neural networks to learn certificates (usually Lyapunov, Barrier, or Lyapunov-Barrier functions) to robustly control nonlinear dynamical systems. Papers that reference this code include:
+
+- ["Safe Nonlinear Control Using Robust Neural Lyapunov-Barrier Functions" in CoRL 2021](https://openreview.net/forum?id=8K5kisAnb_p)
+- ["Learning Safe, Generalizable Perception-Based Hybrid Control With Certificates" in RA-L & ICRA 2022](https://ieeexplore.ieee.org/abstract/document/9676477)
+- 
 
 Disclaimer: this code is research-grade, and should not be used in any production setting. It may contain outdated dependencies or security bugs, and of course we cannot guarantee the safety of our controllers on your specific autonomous system. If you have a particular application in mind, please reach out and we'll be happy to discuss with you.
 

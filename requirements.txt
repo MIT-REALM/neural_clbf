@@ -21,6 +21,7 @@ gurobipy == 9.1.2
 osqp
 ecos
 scs
+casadi
 
 # Geometry
 shapely
