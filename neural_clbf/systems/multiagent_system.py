@@ -350,7 +350,7 @@ class Multiagent(ControlAffineSystem):
         # Add to u vector at crazyflie control indices
         Multiagent.compute_linearized_controller
         
-
+        
 
         # The turtlebot linearization is not well-behaved, so we create our own
         # P and K matrices (mainly as placeholders)
