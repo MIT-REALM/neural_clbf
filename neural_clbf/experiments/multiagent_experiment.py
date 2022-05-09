@@ -5,6 +5,7 @@ from typing import cast, List, Tuple, Optional, TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
+from numpy import zeros
 import pandas as pd
 import seaborn as sns
 import torch
@@ -35,7 +36,7 @@ class RolloutMultiagentStateSpaceExperiment(Experiment):
         plot_z_index: int,
         plot_z_label: str,
         scenarios: Optional[ScenarioList] = None,
-        n_sims_per_start: int = 5,
+        n_sims_per_start: int = 1,
         t_sim: float = 5.0,
     ):
         """Initialize an experiment for simulating controller performance.
@@ -183,8 +184,10 @@ class RolloutMultiagentStateSpaceExperiment(Experiment):
                 # Pick out the states to log and save them
                 x_value = x_current[sim_index, self.plot_x_index].cpu().numpy().item()
                 y_value = x_current[sim_index, self.plot_y_index].cpu().numpy().item()
+                z_value = x_current[sim_index, self.plot_z_index].cpu().numpy().item()
                 log_packet[self.plot_x_label] = x_value
                 log_packet[self.plot_y_label] = y_value
+                log_packet[self.plot_z_label] = z_value
                 log_packet["state"] = x_current[sim_index, :].cpu().detach().numpy()
 
                 # Log the barrier function if applicable
@@ -224,7 +227,8 @@ class RolloutMultiagentStateSpaceExperiment(Experiment):
         returns: a list of tuples containing the name of each figure and the figure
                  object.
         """
-
+        # import pdb
+        # pdb.set_trace()
         # Set the color scheme
         sns.set_theme(context="talk", style="white")
 
@@ -237,7 +241,9 @@ class RolloutMultiagentStateSpaceExperiment(Experiment):
             num_plots += 1
 
         # Plot the state trajectories
-        fig, ax = plt.subplots(1, num_plots, projection="3d")
+        fig = plt.figure()
+        ax = plt.axes(projection='3d')
+        # fig, ax = plt.subplots(1, num_plots, projection="3d")
         fig.set_size_inches(9 * num_plots, 6)
 
         # Assign plots to axes

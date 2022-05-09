@@ -7,7 +7,7 @@ import numpy as np
 
 from .control_affine_system import ControlAffineSystem
 from .utils import grav, Scenario
-
+from neural_clbf.systems.utils import lqr
 
 class Multiagent(ControlAffineSystem):
     """
@@ -86,7 +86,7 @@ class Multiagent(ControlAffineSystem):
             raises:
                 ValueError if nominal_params are not valid for this system
             """
-            super().__init__(nominal_params, dt, controller_dt)
+            super(Multiagent, self).__init__(nominal_params, dt, controller_dt, use_linearized_controller=False)
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -182,13 +182,13 @@ class Multiagent(ControlAffineSystem):
                                 \      /
                                  \    /
                                   \__/
-                where the max height is ___ above the platform 
-                r_upper = ...
-                r_lower = ...
-                slant height = ...
+        where the max height is ___ above the platform 
+        r_upper = ...
+        r_lower = ...
+        slant height = ...
 
-                #TODO measure actual hardware, create landing platform (fixed to tb)
-                # rough guess for now - 
+        #TODO measure actual hardware, create landing platform (fixed to tb)
+        # rough guess for now - 
         Safe landing is >= height of trailer platform i.e. 0 point
         """
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
@@ -221,6 +221,7 @@ class Multiagent(ControlAffineSystem):
 
         return unsafe_mask
 
+    @property
     def goal_point(self):
         goal_set = torch.zeros((1, self.n_dims))
         goal_set[:, Multiagent.PX] = -2.0
@@ -251,7 +252,7 @@ class Multiagent(ControlAffineSystem):
 
         return goal_mask
 
-    def _f(self, x: torch.Tensor, params: Scenario): #TODO @bethlow
+    def _f(self, x: torch.Tensor, params: Scenario): 
         """
         Return the control-independent part of the control-affine dynamics.
 
@@ -287,7 +288,7 @@ class Multiagent(ControlAffineSystem):
 
         return f
 
-    def _g(self, x: torch.Tensor, params: Scenario): #TODO @bethlow
+    def _g(self, x: torch.Tensor, params: Scenario): 
         """
         Return the control-dependent part of the control-affine dynamics.
 
@@ -327,35 +328,46 @@ class Multiagent(ControlAffineSystem):
         g[:, Multiagent.VZ, Multiagent.F] = -c_theta * c_phi / m
 
         # Derivatives of all orientations are control variables
-        g[:, Multiagent.PHI :, Multiagent.PHI_DOT :] = torch.eye(self.n_controls - 1)
+        g[:, Multiagent.PHI :, Multiagent.PHI_DOT :] = torch.eye(3)
 
         return g
 
     @property
-    def u_eq(self): #TODO update? @bethlow
+    def u_eq(self):
         u_eq = torch.zeros((1, self.n_controls))
         u_eq[0, Multiagent.F] = self.nominal_params["m"] * grav
         return u_eq
 
-    #TODO @bethlow how to combine the two
     def u_nominal(self, x: torch.Tensor, params: Optional[Scenario] = None) -> torch.Tensor:
         # Crazyflie linearization using LQR, but implemented here to allow 
         # turtlebot linerization override
-        print("got to u_nom!")
         u = torch.zeros(x.shape[0], self.n_controls).type_as(x)
 
         # Insert A + B method calls
-        A = Multiagent.compute_A_matrix
-        B = Multiagent.compute_B_matrix
+    
+        A = self.compute_A_matrix(params)
+        B = self.compute_B_matrix(params)
+
         # Add to u vector at crazyflie control indices
-        Multiagent.compute_linearized_controller
-        
-        
+        # Multiagent.compute_linearized_controller(params)
 
         # The turtlebot linearization is not well-behaved, so we create our own
         # P and K matrices (mainly as placeholders)
         self.P = torch.eye(self.n_dims)
-        self.K = torch.zeros(self.n_controls, self.n_dims)
+        # self.K = torch.zeros(self.n_controls, self.n_dims)
+
+
+        Q = np.eye(self.n_dims)
+        R = np.eye(self.n_controls)
+
+        # Get feedback matrix
+        K_cf = torch.tensor(lqr(A[3:,3:], B[3:,3:], Q[3:,3:], R[3:,3:]))
+        K_cf = K_cf.type_as(x)
+        goal = self.goal_point.squeeze().type_as(x)
+        # import pdb 
+        # pdb.set_trace()
+        u_nominal = -(K_cf @ (x[:,3:] - goal[3:]).T).T
+
 
         # This controller should navigate us towards the origin. We can do this by
         # setting a velocity proportional to the inner product of the vector
@@ -365,10 +377,10 @@ class Multiagent(ControlAffineSystem):
         # is pointing towards the origin, it will drive forwards.
 
         v_scaling = 1.0
-        bot_to_origin = -x[:, : Multiagent.Y + 1].reshape(-1, 1, 2)
-        theta = x[:, Multiagent.THETA]
+        bot_to_origin = -x[:, : Multiagent.Y_T + 1].reshape(-1, 1, 2)
+        theta = x[:, Multiagent.THETA_T]
         bot_facing = torch.stack((torch.cos(theta), torch.sin(theta))).T.unsqueeze(-1)
-        u[:, Multiagent.V] = v_scaling * torch.bmm(bot_to_origin, bot_facing).squeeze()
+        u[:, Multiagent.V_T] = v_scaling * torch.bmm(bot_to_origin, bot_facing).squeeze()
 
         # In addition to setting the velocity towards the origin, we also need to steer
         # towards the origin. We can do this via P control on the angle between the
@@ -392,11 +404,14 @@ class Multiagent(ControlAffineSystem):
 
         # Only apply this P control when the bot is far enough from the origin;
         # default to P control on theta
-        u[:, Multiagent.THETA_DOT] = -omega_scaling * theta
-        u[phi_control_on, Multiagent.THETA_DOT] = -omega_scaling * phi[phi_control_on]
+        u[:, Multiagent.THETA_DOT_T] = -omega_scaling * theta
+        u[phi_control_on, Multiagent.THETA_DOT_T] = -omega_scaling * phi[phi_control_on]
 
         # Clamp given the control limits
         u_upper, u_lower = self.control_limits
         u = torch.clamp(u, u_lower.type_as(u), u_upper.type_as(u))
 
+ 
+        u[:, 3:] = u_nominal
+        u = u + self.u_eq.type_as(x)
         return u
