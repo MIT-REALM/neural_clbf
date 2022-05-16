@@ -145,6 +145,8 @@ class RolloutMultiagentStateSpaceExperiment(Experiment):
             # Get the control input at the current state if it's time
             if tstep % controller_update_freq == 0:
                 start_time = time.time()
+                # import pdb
+                # pdb.set_trace()
                 u_current = controller_under_test.u(x_current)
                 end_time = time.time()
                 controller_calls += 1

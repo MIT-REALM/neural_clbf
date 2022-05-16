@@ -5,6 +5,7 @@ import torch
 from neural_clbf.controllers.multiagent_controller import MultiagentController
 from neural_clbf.experiments import RolloutMultiagentStateSpaceExperiment
 
+# Can be implemented once training script is written
 # def eval_multiagent():
 #     # Load the checkpoint file. This should include the experiment suite used during
 #     # training.
@@ -27,7 +28,7 @@ def plot_multiagent():
     neural_controller = MultiagentController()
     #Turtlebot array of zeros
     #Crazyflie 
-    experiment = RolloutMultiagentStateSpaceExperiment("Crazyflie", torch.tensor([[1.0,1,1,1,1,1,0,1,0,0,0,0]]), 3, "x", 4, "y", 5, "z")
+    experiment = RolloutMultiagentStateSpaceExperiment("Crazyflie", torch.tensor([[1.0,1,1,1,1,0,0,0,2.0,0,0,0]]), 3, "x", 4, "y", 5, "z")
     # Set the path to load from
 
     experiment.run_and_plot(neural_controller, display_plots=True)

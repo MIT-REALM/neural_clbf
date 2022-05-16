@@ -345,8 +345,8 @@ class Multiagent(ControlAffineSystem):
 
         # Insert A + B method calls
     
-        A = self.compute_A_matrix(params)
-        B = self.compute_B_matrix(params)
+        A, B = self.linearized_dt_dynamics_matrices(params)
+        # B = self.compute_B_matrix(params)
 
         # Add to u vector at crazyflie control indices
         # Multiagent.compute_linearized_controller(params)
@@ -361,13 +361,12 @@ class Multiagent(ControlAffineSystem):
         R = np.eye(self.n_controls)
 
         # Get feedback matrix
-        K_cf = torch.tensor(lqr(A[3:,3:], B[3:,3:], Q[3:,3:], R[3:,3:]))
+        K_cf = torch.tensor(lqr(A[3:,3:], B[3:,2:], Q[3:,3:], R[2:,2:]))
+        # import pdb
+        # pdb.set_trace()
         K_cf = K_cf.type_as(x)
         goal = self.goal_point.squeeze().type_as(x)
-        # import pdb 
-        # pdb.set_trace()
         u_nominal = -(K_cf @ (x[:,3:] - goal[3:]).T).T
-
 
         # This controller should navigate us towards the origin. We can do this by
         # setting a velocity proportional to the inner product of the vector
@@ -412,6 +411,6 @@ class Multiagent(ControlAffineSystem):
         u = torch.clamp(u, u_lower.type_as(u), u_upper.type_as(u))
 
  
-        u[:, 3:] = u_nominal
+        u[:, 2:] = u_nominal
         u = u + self.u_eq.type_as(x)
         return u
