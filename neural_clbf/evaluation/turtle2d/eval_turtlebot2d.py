@@ -13,6 +13,7 @@ from neural_clbf.experiments import (
     ObsBFVerificationExperiment,
 )
 import neural_clbf.evaluation.turtle2d.scenes as scene_utils
+from neural_clbf.systems.planar_lidar_system import Scene
 
 
 @torch.no_grad()
@@ -128,14 +129,63 @@ def eval_and_plot_turtlebot_training():
     # Run the experiments and plot
     rollout_experiment.run_and_plot(neural_controller, display_plots=True)
 
-    # Also run with an MPC controller
-    mpc_controller = ObsMPCController(
-        neural_controller.dynamics_model,
-        neural_controller.controller_period,
-        neural_controller.experiment_suite,
-        neural_controller.validation_dynamics_model,
+    # # Also run with an MPC controller
+    # mpc_controller = ObsMPCController(
+    #     neural_controller.dynamics_model,
+    #     neural_controller.controller_period,
+    #     neural_controller.experiment_suite,
+    #     neural_controller.validation_dynamics_model,
+    # )
+    # rollout_experiment.run_and_plot(mpc_controller, display_plots=True)
+
+
+def eval_and_plot_turtlebot_random_scene():
+    # Load the checkpoint file. This should include the experiment suite used during
+    # training.
+    log_dir = "saved_models/perception/turtlebot2d/commit_8439378/"
+    neural_controller = NeuralObsBFController.load_from_checkpoint(
+        log_dir + "v0_ep72.ckpt"
     )
-    rollout_experiment.run_and_plot(mpc_controller, display_plots=True)
+
+    # Get the experiment
+    rollout_experiment = neural_controller.experiment_suite.experiments[-1]
+
+    # Modify rollout parameters
+    rollout_experiment.t_sim = 4
+    neural_controller.lookahead_grid_n = 8
+    neural_controller.controller_period = 0.1
+    neural_controller.dynamics_model.dt = 0.01
+    neural_controller.lookahead_dual_penalty = 1e3
+    # neural_controller.debug_mode_exploratory = True
+    # neural_controller.debug_mode_goal_seeking = True
+
+    room_size = 10.0
+    num_obstacles = 8
+    box_size_range = (0.75, 1.75)
+    position_range = (-4.0, 4.0)
+    rotation_range = (-np.pi, np.pi)
+    scene = Scene([])
+    scene.add_walls(room_size)
+    scene.add_random_boxes(
+        num_obstacles,
+        box_size_range,
+        position_range,
+        position_range,
+        rotation_range,
+    )
+    neural_controller.dynamics_model.scene = scene  # type: ignore
+
+    # Run the experiments and plot
+    rollout_experiment.run_and_plot(neural_controller, display_plots=True)
+
+    # # Also run with an MPC controller
+    # mpc_controller = ObsMPCController(
+    #     neural_controller.dynamics_model,
+    #     neural_controller.controller_period,
+    #     neural_controller.experiment_suite,
+    #     neural_controller.validation_dynamics_model,
+    # )
+    # rollout_experiment.run_and_plot(mpc_controller, display_plots=True)
 
 
 def eval_turtlebot_neural_cbf_mpc_success_rates():
@@ -347,7 +397,8 @@ if __name__ == "__main__":
     # eval_and_plot_turtlebot_room()
     # eval_and_plot_turtlebot_bugtrap()
     # eval_and_plot_turtlebot_training()
+    eval_and_plot_turtlebot_random_scene()
     # eval_turtlebot_neural_cbf_mpc_success_rates()
     # eval_and_plot_turtlebot_select_scene()
-    plot_select_scene()
+    # plot_select_scene()
     # validate_neural_cbf()

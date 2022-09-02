@@ -310,6 +310,8 @@ class Scene:
             x_pts, y_pts = obstacle.exterior.xy
             ax.fill(x_pts, y_pts, alpha=0.3, fc="k", ec="none")
 
+        ax.set_aspect('equal')
+
 
 class PlanarLidarSystem(ObservableSystem):
     """
