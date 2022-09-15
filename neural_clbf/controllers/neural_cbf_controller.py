@@ -46,6 +46,7 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         primal_learning_rate: float = 1e-3,
         scale_parameter: float = 10.0,
         learn_shape_epochs: int = 0,
+        use_relu: bool = False,
     ):
         """Initialize the controller.
 
@@ -62,6 +63,7 @@ class NeuralCBFController(pl.LightningModule, CBFController):
                                   applied to the CLBF decrease loss
             scale_parameter: normalize non-angle data points to between +/- this value.
             learn_shape_epochs: number of epochs to spend just learning the shape
+            use_relu: if True, use a ReLU network instead of Tanh
         """
         super(NeuralCBFController, self).__init__(
             dynamics_model=dynamics_model,
@@ -108,18 +110,19 @@ class NeuralCBFController(pl.LightningModule, CBFController):
         # Define the CLBF network, which we denote V
         self.cbf_hidden_layers = cbf_hidden_layers
         self.cbf_hidden_size = cbf_hidden_size
+        activation = nn.ReLU() if use_relu else nn.Tanh()
         # We're going to build the network up layer by layer, starting with the input
         self.V_layers: OrderedDict[str, nn.Module] = OrderedDict()
         self.V_layers["input_linear"] = nn.Linear(
             self.n_dims_extended, self.cbf_hidden_size
         )
-        self.V_layers["input_activation"] = nn.Tanh()
+        self.V_layers["input_activation"] = activation
         for i in range(self.cbf_hidden_layers):
             self.V_layers[f"layer_{i}_linear"] = nn.Linear(
                 self.cbf_hidden_size, self.cbf_hidden_size
             )
             if i < self.cbf_hidden_layers - 1:
-                self.V_layers[f"layer_{i}_activation"] = nn.Tanh()
+                self.V_layers[f"layer_{i}_activation"] = activation
         self.V_layers["output_linear"] = nn.Linear(self.cbf_hidden_size, 1)
         self.V_nn = nn.Sequential(self.V_layers)
 

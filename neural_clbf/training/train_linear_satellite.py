@@ -34,7 +34,7 @@ simulation_dt = 0.01
 def main(args):
     # Define the scenarios
     nominal_params = {
-        "a": 42164e3,
+        "a": 500e3,
         "ux_target": 0.0,
         "uy_target": 0.0,
         "uz_target": 0.0,
@@ -62,6 +62,7 @@ def main(args):
         dt=simulation_dt,
         controller_dt=controller_period,
         scenarios=scenarios,
+        use_l1_norm=True,
     )
 
     # Initialize the DataModule
@@ -127,11 +128,12 @@ def main(args):
         scale_parameter=10.0,
         primal_learning_rate=1e-3,
         learn_shape_epochs=100,
+        use_relu=True,
     )
 
     # Initialize the logger and trainer
     tb_logger = pl_loggers.TensorBoardLogger(
-        "logs/linear_satellite_cbf",
+        "logs/linear_satellite_cbf/relu",
         name=f"commit_{current_git_hash()}",
     )
     trainer = pl.Trainer.from_argparse_args(

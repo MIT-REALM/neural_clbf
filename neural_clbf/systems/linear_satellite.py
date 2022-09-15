@@ -58,6 +58,7 @@ class LinearSatellite(ControlAffineSystem):
         dt: float = 0.01,
         controller_dt: Optional[float] = None,
         scenarios: Optional[ScenarioList] = None,
+        use_l1_norm: bool = False,
     ):
         """
         Initialize the inverted pendulum.
@@ -66,12 +67,14 @@ class LinearSatellite(ControlAffineSystem):
             nominal_params: a dictionary giving the parameter values for the system.
             dt: the timestep to use for the simulation
             controller_dt: the timestep for the LQR discretization. Defaults to dt
+            use_l1_norm: if True, use L1 norm for safety zones; otherwise, use L2
         raises:
             ValueError if nominal_params are not valid for this system
         """
         super().__init__(
             nominal_params, dt=dt, controller_dt=controller_dt, scenarios=scenarios
         )
+        self.use_l1_norm = use_l1_norm
 
     def validate_params(self, params: Scenario) -> bool:
         """Check if a given set of parameters is valid
@@ -145,8 +148,9 @@ class LinearSatellite(ControlAffineSystem):
         safe_mask = torch.ones_like(x[:, 0], dtype=torch.bool)
 
         # Stay within some maximum distance from the target
-        distance = x[:, : LinearSatellite.Z + 1].norm(dim=-1)
-        safe_mask.logical_and_(distance <= 1.0)
+        order = 1 if hasattr(self, "use_l1_norm") and self.use_l1_norm else 2
+        distance = x[:, : LinearSatellite.Z + 1].norm(dim=-1, p=order)
+        # safe_mask.logical_and_(distance <= 1.0)
 
         # Stay at least some minimum distance from the target
         safe_mask.logical_and_(distance >= 0.75)
@@ -162,8 +166,9 @@ class LinearSatellite(ControlAffineSystem):
         unsafe_mask = torch.zeros_like(x[:, 0], dtype=torch.bool)
 
         # Maximum distance
-        distance = x[:, : LinearSatellite.Z + 1].norm(dim=-1)
-        unsafe_mask.logical_or_(distance >= 1.5)
+        order = 1 if hasattr(self, "use_l1_norm") and self.use_l1_norm else 2
+        distance = x[:, : LinearSatellite.Z + 1].norm(dim=-1, p=order)
+        # unsafe_mask.logical_or_(distance >= 1.5)
 
         # Minimum distance
         unsafe_mask.logical_or_(distance <= 0.25)
@@ -176,7 +181,8 @@ class LinearSatellite(ControlAffineSystem):
         args:
             x: a tensor of points in the state space
         """
-        goal_mask = x[:, : LinearSatellite.Z + 1].norm(dim=-1) <= 0.5
+        order = 1 if hasattr(self, "use_l1_norm") and self.use_l1_norm else 2
+        goal_mask = x[:, : LinearSatellite.Z + 1].norm(dim=-1, p=order) <= 0.5
 
         return goal_mask
 

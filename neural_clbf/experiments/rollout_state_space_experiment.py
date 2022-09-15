@@ -32,6 +32,8 @@ class RolloutStateSpaceExperiment(Experiment):
         plot_x_label: str,
         plot_y_index: int,
         plot_y_label: str,
+        other_index: Optional[List[int]] = None,
+        other_label: Optional[List[str]] = None,
         scenarios: Optional[ScenarioList] = None,
         n_sims_per_start: int = 5,
         t_sim: float = 5.0,
@@ -44,6 +46,8 @@ class RolloutStateSpaceExperiment(Experiment):
             plot_x_label: the label of the state dimension to plot on the x axis,
             plot_y_index: the index of the state dimension to plot on the y axis,
             plot_y_label: the label of the state dimension to plot on the y axis,
+            other_index: the indices of the state dimensions to save
+            other_label: the labels of the state dimensions to save
             scenarios: a list of parameter scenarios to sample from. If None, use the
                        nominal parameters of the controller's dynamical system
             n_sims_per_start: the number of simulations to run (with random parameters),
@@ -61,6 +65,8 @@ class RolloutStateSpaceExperiment(Experiment):
         self.scenarios = scenarios
         self.n_sims_per_start = n_sims_per_start
         self.t_sim = t_sim
+        self.other_index = [] if other_index is None else other_index
+        self.other_label = [] if other_label is None else other_label
 
     @torch.no_grad()
     def run(self, controller_under_test: "Controller") -> pd.DataFrame:
@@ -182,6 +188,10 @@ class RolloutStateSpaceExperiment(Experiment):
                 log_packet[self.plot_x_label] = x_value
                 log_packet[self.plot_y_label] = y_value
                 log_packet["state"] = x_current[sim_index, :].cpu().detach().numpy()
+
+                for i, save_index in enumerate(self.other_index):
+                    value = x_current[sim_index, save_index].cpu().numpy().item()
+                    log_packet[self.other_label[i]] = value
 
                 # Log the barrier function if applicable
                 if h is not None:

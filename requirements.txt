@@ -13,6 +13,7 @@ brunette
 # Learning libraries
 torch == 1.9.1
 pytorch-lightning == 1.3.4
+torchmetrics == 0.5.1
 
 # Optimization
 cvxpy >= 1.1.14
@@ -25,3 +26,6 @@ casadi
 
 # Geometry
 shapely
+
+# Freeze versions to avoid bugs
+setuptools==59.5.0

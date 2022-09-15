@@ -33,7 +33,7 @@ def test_init_neuralcbfcontroller():
     assert controller.controller_period > 0
 
 
-def test_V_jacobian():
+def test_V_jacobian_tanh():
     """Test computation of Lie Derivatives"""
     # Set a random seed for repeatability
     random.seed(0)
@@ -57,6 +57,61 @@ def test_V_jacobian():
         experiment_suite,
         cbf_hidden_layers=2,
         cbf_hidden_size=64,
+    )
+
+    # Create the points and perturbations with which to test the Jacobian
+    N_test = 10
+    x = torch.Tensor(N_test, system.n_dims).uniform_(-1.0, 1.0)
+    dx = torch.Tensor(N_test, system.n_dims).uniform_(1e-3, 2e-3)
+
+    # Compute V and its Jacobian
+    V, gradV = controller.V_with_jacobian(x)
+    # and use these to get the expected change
+    deltaV_expected = torch.bmm(gradV, dx.unsqueeze(-1))
+
+    # Compare first with the autodiff Jacobian
+    J_V_x = torch.zeros(N_test, 1, x.shape[1])
+    for i in range(N_test):
+        J_V_x[i, :, :] = jacobian(controller.V, x[i, :].unsqueeze(0))
+
+    assert torch.allclose(gradV.squeeze(), J_V_x.squeeze())
+
+    # To validate the Jacobian, approximate with finite difference
+    x_next = x + dx
+    V_next = controller.V(x_next)
+    deltaV_simulated = V_next - V
+
+    # Make sure they're close
+    assert torch.allclose(
+        deltaV_expected.squeeze(), deltaV_simulated.squeeze(), rtol=1e-2, atol=1e-4
+    )
+
+
+def test_V_jacobian_relu():
+    """Test computation of Lie Derivatives"""
+    # Set a random seed for repeatability
+    random.seed(0)
+    torch.manual_seed(0)
+
+    # Create the controller
+    params = {}
+    system = MockSystem(params)
+    scenarios = [params]
+    # Define the datamodule
+    initial_domain = [
+        (-1.0, 1.0),
+        (-1.0, 1.0),
+    ]
+    dm = EpisodicDataModule(system, initial_domain)
+    experiment_suite = ExperimentSuite([])
+    controller = NeuralCBFController(
+        system,
+        scenarios,
+        dm,
+        experiment_suite,
+        cbf_hidden_layers=2,
+        cbf_hidden_size=64,
+        use_relu=True
     )
 
     # Create the points and perturbations with which to test the Jacobian
