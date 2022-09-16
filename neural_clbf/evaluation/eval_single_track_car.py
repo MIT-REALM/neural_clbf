@@ -4,7 +4,7 @@ from neural_clbf.controllers import NeuralCLBFController
 def plot_stcar():
     # Load the checkpoint file. This should include the experiment suite used during
     # training.
-    log_file = "saved_models/corl/stcar/774ba0b.ckpt"
+    log_file = "saved_models/corl/stcar/f6473d0_v0.ckpt"
     neural_controller = NeuralCLBFController.load_from_checkpoint(log_file)
 
     # # Tweak controller params
