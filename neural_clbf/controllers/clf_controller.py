@@ -30,6 +30,7 @@ class CLFController(Controller):
         clf_lambda: float = 1.0,
         clf_relaxation_penalty: float = 50.0,
         controller_period: float = 0.01,
+        disable_gurobi: bool = False,
     ):
         """Initialize the controller.
 
@@ -40,12 +41,16 @@ class CLFController(Controller):
             clf_lambda: convergence rate for the CLF
             clf_relaxation_penalty: the penalty for relaxing CLF conditions.
             controller_period: the timestep to use in simulating forward Vdot
+            disable_gurobi: if True, gurobi will not be used
         """
         super(CLFController, self).__init__(
             dynamics_model=dynamics_model,
             experiment_suite=experiment_suite,
             controller_period=controller_period,
         )
+
+        # Save gurobi attribute to disable if needed
+        self.disable_gurobi = disable_gurobi
 
         # Save the provided model
         # self.dynamics_model = dynamics_model
@@ -395,8 +400,9 @@ class CLFController(Controller):
             relaxation_penalty = self.clf_relaxation_penalty
 
         # Figure out if we need to use a differentiable solver (determined by whether
-        # the input x requires a gradient or not)
-        if requires_grad:
+        # the input x requires a gradient or not) or if cvx should be used regardless
+        # (e.g. due to gurobi licensing issues)
+        if requires_grad or self.disable_gurobi:
             return self._solve_CLF_QP_cvxpylayers(
                 x, u_ref, V, Lf_V, Lg_V, relaxation_penalty
             )

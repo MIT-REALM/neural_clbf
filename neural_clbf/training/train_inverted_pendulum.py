@@ -109,6 +109,7 @@ def main(args):
         num_init_epochs=5,
         epochs_per_episode=100,
         barrier=False,
+        disable_gurobi=True,
     )
 
     # Initialize the logger and trainer
