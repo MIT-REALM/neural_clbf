@@ -85,7 +85,7 @@ class BFContourExperiment(Experiment):
         dynamics_model = cast("ObservableSystem", controller_under_test.dynamics_model)
 
         # Set up a dataframe to store the results
-        results_df = pd.DataFrame()
+        results = []
 
         # Set up the plotting grid
         device = "cpu"
@@ -133,18 +133,17 @@ class BFContourExperiment(Experiment):
                 is_unsafe = controller_under_test.dynamics_model.unsafe_mask(x).all()
 
                 # Store the results
-                results_df = results_df.append(
+                results.append(
                     {
                         self.x_axis_label: x_vals[i].cpu().numpy().item(),
                         self.y_axis_label: y_vals[j].cpu().numpy().item(),
                         "h": h.cpu().numpy().item(),
                         "Safe region": is_safe.cpu().numpy().item(),
                         "Unsafe region": is_unsafe.cpu().numpy().item(),
-                    },
-                    ignore_index=True,
+                    }
                 )
 
-        return results_df
+        return pd.DataFrame(results)
 
     def plot(
         self,

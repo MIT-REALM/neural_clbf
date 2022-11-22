@@ -1,4 +1,8 @@
+import matplotlib
 from neural_clbf.controllers import NeuralCLBFController
+
+
+matplotlib.use('TkAgg')
 
 
 def plot_autorally():

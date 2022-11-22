@@ -76,7 +76,7 @@ class TurtlebotHWStateFeedbackExperiment(Experiment):
         os.system("timeout 3 rostopic pub /reset std_msgs/Empty '{}'")
 
         # Set up a dataframe to store the results
-        results_df = pd.DataFrame()
+        results = []
 
         # Save these for convenience
         n_dims = controller_under_test.dynamics_model.n_dims
@@ -156,8 +156,9 @@ class TurtlebotHWStateFeedbackExperiment(Experiment):
                     )
                     log_packet["h"] = h
 
-                results_df = results_df.append(log_packet, ignore_index=True)
+                results.append(log_packet)
 
+        results_df = pd.DataFrame(results)
         results_df = results_df.set_index("t")
         return results_df
 

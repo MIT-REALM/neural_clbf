@@ -58,7 +58,7 @@ class CarSCurveExperiment(Experiment):
         ), "Controller must have a KSCar, STCar, or AutoRally dynamics model"
 
         # Set up a dataframe to store the results
-        results_df = pd.DataFrame()
+        results = []
 
         device = "cpu"
         if hasattr(controller_under_test, "device"):
@@ -133,15 +133,16 @@ class CarSCurveExperiment(Experiment):
                 log_packet = copy(base_log_packet)
                 log_packet["measurement"] = label
                 log_packet["value"] = value
-                results_df = results_df.append(log_packet, ignore_index=True)
+                results.append(log_packet)
 
             log_packet = copy(base_log_packet)
             log_packet["measurement"] = "V"
             log_packet["value"] = (
                 controller_under_test.V(x_current).cpu().numpy().item()
             )
-            results_df = results_df.append(log_packet, ignore_index=True)
+            results.append(log_packet)
 
+        results_df = pd.DataFrame(results)
         results_df = results_df.set_index("t")
         return results_df
 

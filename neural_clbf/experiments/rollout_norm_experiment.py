@@ -71,7 +71,7 @@ class RolloutNormExperiment(Experiment):
             scenarios = self.scenarios
 
         # Set up a dataframe to store the results
-        results_df = pd.DataFrame()
+        results = []
 
         # Compute the number of simulations to run
         n_sims = self.n_sims_per_start * self.start_x.shape[0]
@@ -161,7 +161,7 @@ class RolloutNormExperiment(Experiment):
                 if V is not None:
                     log_packet["V"] = V.cpu().numpy().item()
 
-                results_df = results_df.append(log_packet, ignore_index=True)
+                results.append(log_packet)
 
             # Simulate forward using the dynamics
             for i in range(n_sims):
@@ -172,7 +172,7 @@ class RolloutNormExperiment(Experiment):
                 )
                 x_current[i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
-        return results_df
+        return pd.DataFrame(results)
 
     def plot(
         self,

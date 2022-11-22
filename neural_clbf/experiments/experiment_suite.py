@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from matplotlib.pyplot import figure
 import matplotlib.pyplot as plt
+import matplotlib
 import pandas as pd
 from pytorch_lightning.loggers import LightningLoggerBase
 
@@ -14,6 +15,9 @@ from .experiment import Experiment
 
 if TYPE_CHECKING:
     from neural_clbf.controllers import Controller  # noqa
+
+
+matplotlib.use('Agg')
 
 
 class ExperimentSuite(object):

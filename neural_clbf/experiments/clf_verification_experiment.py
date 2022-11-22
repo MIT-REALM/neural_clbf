@@ -69,7 +69,7 @@ class CLFVerificationExperiment(Experiment):
         controller_under_test = cast("CLFController", controller_under_test)
 
         # Set up a dataframe to store the results
-        results_df = pd.DataFrame()
+        results = []
 
         # Set up the plotting grid
         device = "cpu"
@@ -118,9 +118,9 @@ class CLFVerificationExperiment(Experiment):
             for state_idx, state in enumerate(state_list):
                 log_packet[str(state_idx)] = state
 
-            results_df = results_df.append(log_packet, ignore_index=True)
+            results.append(log_packet)
 
-        return results_df
+        return pd.DataFrame(results)
 
     def plot(
         self,

@@ -2,8 +2,12 @@ import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import matplotlib
 
 from neural_clbf.controllers import NeuralCBFController
+
+
+matplotlib.use('TkAgg')
 
 
 def plot_linear_satellite():

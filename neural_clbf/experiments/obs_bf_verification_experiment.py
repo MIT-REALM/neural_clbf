@@ -52,7 +52,7 @@ class ObsBFVerificationExperiment(Experiment):
         controller_under_test = cast("NeuralObsBFController", controller_under_test)
 
         # Set up a dataframe to store the results
-        results_df = pd.DataFrame()
+        results = []
 
         # Sample a bunch of points to check from the safe region of state space
         x = controller_under_test.dynamics_model.sample_safe(self.n_samples)
@@ -67,15 +67,14 @@ class ObsBFVerificationExperiment(Experiment):
         controller_under_test.reset_controller(x)
         u, u_cost = controller_under_test.u_(x, obs, h, V)
 
-        results_df = results_df.append(
+        results.append(
             {
                 "# Samples": x.shape[0],
                 "# infeasible": (u_cost > 0).sum().item(),
-            },
-            ignore_index=True,
+            }
         )
 
-        return results_df
+        return pd.DataFrame(results)
 
     def plot(
         self,

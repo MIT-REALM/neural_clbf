@@ -6,6 +6,7 @@ from matplotlib.pyplot import figure
 import pandas as pd
 import seaborn as sns
 import torch
+import torch.nn.functional as F
 import tqdm
 
 from neural_clbf.experiments import Experiment
@@ -86,7 +87,7 @@ class CLFContourExperiment(Experiment):
         controller_under_test = cast("CLFController", controller_under_test)
 
         # Set up a dataframe to store the results
-        results_df = pd.DataFrame()
+        results = []
 
         # Set up the plotting grid
         device = "cpu"
@@ -135,8 +136,18 @@ class CLFContourExperiment(Experiment):
                 _, r = controller_under_test.solve_CLF_QP(x)
                 relaxation = r.max()
 
+                # Get the linearized CLF value
+                P = controller_under_test.dynamics_model.P.type_as(x)
+                x0 = controller_under_test.dynamics_model.goal_point.type_as(x)
+                P = P.reshape(
+                    1,
+                    controller_under_test.dynamics_model.n_dims,
+                    controller_under_test.dynamics_model.n_dims,
+                )
+                V_nominal = 0.5 * F.bilinear(x - x0, x - x0, P).squeeze()
+
                 # Store the results
-                results_df = results_df.append(
+                results.append(
                     {
                         self.x_axis_label: x_vals[i].cpu().numpy().item(),
                         self.y_axis_label: y_vals[j].cpu().numpy().item(),
@@ -145,11 +156,11 @@ class CLFContourExperiment(Experiment):
                         "Goal region": is_goal.cpu().numpy().item(),
                         "Safe region": is_safe.cpu().numpy().item(),
                         "Unsafe region": is_unsafe.cpu().numpy().item(),
-                    },
-                    ignore_index=True,
+                        "Linearized V": V_nominal.cpu().numpy().item(),
+                    }
                 )
 
-        return results_df
+        return pd.DataFrame(results)
 
     def plot(
         self,
@@ -183,6 +194,24 @@ class CLFContourExperiment(Experiment):
             levels=20,
         )
         plt.colorbar(contours, ax=ax, orientation="vertical")
+
+        # Plot the linearized CLF
+        ax.tricontour(
+            results_df[self.x_axis_label],
+            results_df[self.y_axis_label],
+            results_df["Linearized V"],
+            cmap=sns.color_palette("winter", as_cmap=True),
+            levels=[0.1],
+            linestyles="--",
+        )
+        ax.tricontour(
+            results_df[self.x_axis_label],
+            results_df[self.y_axis_label],
+            results_df["V"],
+            cmap=sns.color_palette("spring", as_cmap=True),
+            levels=[0.1],
+            linestyles="--",
+        )
 
         # Also overlay the relaxation region
         if results_df["QP relaxation"].max() > 1e-5:
@@ -235,13 +264,13 @@ class CLFContourExperiment(Experiment):
                 )
 
         # Make the legend
-        ax.legend(
-            bbox_to_anchor=(0, 1.02, 1, 0.2),
-            loc="lower left",
-            mode="expand",
-            borderaxespad=0,
-            ncol=4,
-        )
+        # ax.legend(
+        #     bbox_to_anchor=(0, 1.02, 1, 0.2),
+        #     loc="lower left",
+        #     mode="expand",
+        #     borderaxespad=0,
+        #     ncol=4,
+        # )
         ax.set_xlabel(self.x_axis_label)
         ax.set_ylabel(self.y_axis_label)
 

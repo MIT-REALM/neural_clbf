@@ -83,7 +83,7 @@ class RolloutTimeSeriesExperiment(Experiment):
             scenarios = self.scenarios
 
         # Set up a dataframe to store the results
-        results_df = pd.DataFrame()
+        results = []
 
         # Compute the number of simulations to run
         n_sims = self.n_sims_per_start * self.start_x.shape[0]
@@ -163,7 +163,7 @@ class RolloutTimeSeriesExperiment(Experiment):
                     log_packet = copy(base_log_packet)
                     log_packet["measurement"] = state_label
                     log_packet["value"] = state_value
-                    results_df = results_df.append(log_packet, ignore_index=True)
+                    results.append(log_packet)
 
                 # Pick out the controls to log
                 for i, control_index in enumerate(self.plot_u_indices):
@@ -173,7 +173,7 @@ class RolloutTimeSeriesExperiment(Experiment):
                     log_packet = copy(base_log_packet)
                     log_packet["measurement"] = control_label
                     log_packet["value"] = u_value
-                    results_df = results_df.append(log_packet, ignore_index=True)
+                    results.append(log_packet)
 
                 # If this controller supports querying the Lyapunov function, save that
                 if hasattr(controller_under_test, "V"):
@@ -182,7 +182,7 @@ class RolloutTimeSeriesExperiment(Experiment):
                     log_packet = copy(base_log_packet)
                     log_packet["measurement"] = "V"
                     log_packet["value"] = V
-                    results_df = results_df.append(log_packet, ignore_index=True)
+                    results.append(log_packet)
 
             # Simulate forward using the dynamics
             for i in range(n_sims):
@@ -193,7 +193,7 @@ class RolloutTimeSeriesExperiment(Experiment):
                 )
                 x_current[i, :] = x_current[i, :] + delta_t * xdot.squeeze()
 
-        return results_df
+        return pd.DataFrame(results)
 
     def plot(
         self,

@@ -77,7 +77,7 @@ def main(args):
     V_contour_experiment = CLFContourExperiment(
         "V_Contour",
         domain=[(-1.0, 1.0), (-1.0, 1.0)],
-        n_grid=50,
+        n_grid=25,
         x_axis_index=STCar.SXE,
         y_axis_index=STCar.SYE,
         x_axis_label="$x - x_{ref}$",
@@ -101,7 +101,7 @@ def main(args):
         clf_lambda=1.0,
         safe_level=1.0,
         controller_period=controller_period,
-        clf_relaxation_penalty=1e3,
+        clf_relaxation_penalty=1e1,
         primal_learning_rate=1e-3,
         penalty_scheduling_rate=0,
         num_init_epochs=11,
@@ -119,7 +119,7 @@ def main(args):
         "logs/stcar/", name=f"commit_{current_git_hash}"
     )
     trainer = pl.Trainer.from_argparse_args(
-        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=26
+        args, logger=tb_logger, reload_dataloaders_every_epoch=True, max_epochs=51
     )
 
     # Train
