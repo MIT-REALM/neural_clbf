@@ -358,9 +358,9 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             )
             Vdot = Vdot.reshape(V.shape)
             violation = F.relu(eps + Vdot + self.clf_lambda * V)
-            violation *= condition_active
-            clbf_descent_term_lin += violation.mean()
-            clbf_descent_acc_lin += (violation <= eps).sum() / (
+            violation = violation * condition_active
+            clbf_descent_term_lin = clbf_descent_term_lin + violation.mean()
+            clbf_descent_acc_lin = clbf_descent_acc_lin + (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )
 
@@ -379,10 +379,10 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             violation = F.relu(
                 eps + (V_next - V) / self.controller_period + self.clf_lambda * V
             )
-            violation *= condition_active
+            violation = violation * condition_active
 
-            clbf_descent_term_sim += violation.mean()
-            clbf_descent_acc_sim += (violation <= eps).sum() / (
+            clbf_descent_term_sim = clbf_descent_term_sim + violation.mean()
+            clbf_descent_acc_sim = clbf_descent_acc_sim + (violation <= eps).sum() / (
                 violation.nelement() * self.n_scenarios
             )
         loss.append(("CLBF descent term (simulated)", clbf_descent_term_sim))
@@ -431,7 +431,8 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
 
         # Compute the losses
         component_losses = {}
-        component_losses.update(self.initial_loss(x))
+        initial_loss = self.initial_loss(x)
+        component_losses.update(initial_loss)
         component_losses.update(
             self.boundary_loss(x, goal_mask, safe_mask, unsafe_mask)
         )
@@ -444,7 +445,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         # For the objectives, we can just sum them
         for _, loss_value in component_losses.items():
             if not torch.isnan(loss_value):
-                total_loss += loss_value
+                total_loss = total_loss + loss_value
 
         batch_dict = {"loss": total_loss, **component_losses}
 
