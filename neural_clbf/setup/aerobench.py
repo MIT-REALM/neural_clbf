@@ -8,6 +8,7 @@ dirs = [
     "/home/cbd/src/mit/AeroBenchVVPython",
     "/home/cbd/src/AeroBenchVVPython",
     "/home/charles/src/AeroBenchVVPython",
+    "/Users/kwesirutledge/Documents/Development/AeroBenchVVPython/code",
 ]
 for dir_name in dirs:
     if os.path.isdir(dir_name):
