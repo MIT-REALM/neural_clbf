@@ -1,4 +1,0 @@
-Algorithm,Metric,Value
-Neural oCBF/oCLF (ours),Goal-reaching rate,0.932
-Neural oCBF/oCLF (ours),Safety rate,1.0
-Neural oCBF/oCLF (ours),Time to goal,2.1838412017167395

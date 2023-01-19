@@ -1,2 +1,0 @@
-static 6 -> saved_models/perception/turtlebot2d/commit_8439378/hw/2021-09-07_11_31_09
-dynamic 5 -> saved_models/perception/turtlebot2d/commit_8439378/hw/2021-09-07_11_46_47

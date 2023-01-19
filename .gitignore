@@ -127,6 +127,7 @@ venv.bak/
 # Project-specific
 logs/
 neural_clbf/systems/aerobench
+saved_models/
 *devel*
 
 # Matlab files
