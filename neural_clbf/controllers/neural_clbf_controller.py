@@ -80,7 +80,10 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
                      effectively trains only a CLF.
             add_nominal: if True, add the nominal V
             normalize_V_nominal: if True, normalize V_nominal so that its average is 1
-            disable_gurobi: if True, gurobi will not be used
+            disable_gurobi: if True, Gurobi will not be used during evaluation. 
+                Default is train with CVXPYLayers, evaluate with Gurobi; 
+                setting this to true will evaluate with CVXPYLayers instead 
+                (to avoid requiring a Gurobi license)
         """
         super(NeuralCLBFController, self).__init__(
             dynamics_model=dynamics_model,

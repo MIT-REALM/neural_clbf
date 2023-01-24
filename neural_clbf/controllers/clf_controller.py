@@ -41,7 +41,10 @@ class CLFController(Controller):
             clf_lambda: convergence rate for the CLF
             clf_relaxation_penalty: the penalty for relaxing CLF conditions.
             controller_period: the timestep to use in simulating forward Vdot
-            disable_gurobi: if True, gurobi will not be used
+            disable_gurobi: if True, Gurobi will not be used during evaluation. 
+                Default is train with CVXPYLayers, evaluate with Gurobi; 
+                setting this to true will evaluate with CVXPYLayers instead 
+                (to avoid requiring a Gurobi license)
         """
         super(CLFController, self).__init__(
             dynamics_model=dynamics_model,
