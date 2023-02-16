@@ -54,6 +54,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
         barrier: bool = True,
         add_nominal: bool = False,
         normalize_V_nominal: bool = False,
+        disable_gurobi: bool = False,
     ):
         """Initialize the controller.
 
@@ -79,6 +80,10 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
                      effectively trains only a CLF.
             add_nominal: if True, add the nominal V
             normalize_V_nominal: if True, normalize V_nominal so that its average is 1
+            disable_gurobi: if True, Gurobi will not be used during evaluation. 
+                Default is train with CVXPYLayers, evaluate with Gurobi; 
+                setting this to true will evaluate with CVXPYLayers instead 
+                (to avoid requiring a Gurobi license)
         """
         super(NeuralCLBFController, self).__init__(
             dynamics_model=dynamics_model,
@@ -87,6 +92,7 @@ class NeuralCLBFController(pl.LightningModule, CLFController):
             clf_lambda=clf_lambda,
             clf_relaxation_penalty=clf_relaxation_penalty,
             controller_period=controller_period,
+            disable_gurobi=disable_gurobi,
         )
         self.save_hyperparameters()
 
