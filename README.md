@@ -16,13 +16,7 @@ Disclaimer: this code is research-grade, and should not be used in any productio
 
 ## How to run
 
-First, install Git LFS if you have not already
-```bash
-sudo apt-get install git-lfs
-git lfs install
-```
-
-Then, clone the repository and install dependencies
+Clone the repository and install dependencies
 ```bash
 # clone project
 git clone https://github.com/dawsonc/neural_clbf
@@ -43,6 +37,10 @@ pytest .
 Training:
 To setup port forwarding for TensorBoard:
 `ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
+
+### A note on QP solvers
+
+The default behavior is to train and evaluate using CVXPy to solve the relevant quadratic programs (QPs). CVXPy is free and enabled backprop through QP solutions via CVXPyLayers (which is why we use it for training), but you can get faster evaluations by using Gurobi instead (requires a license, but free for academics). Setting the `disable_gurobi` flag to `False` will enable Gurobi (this is required if you want to exactly reproduce the behavior we report in our papers, since we used Gurobi for those results, but it's optional if you just want to experiment with our code).
 
 ### Defining new examples
 
@@ -75,6 +73,19 @@ Then go to `neural_clbf/setup/aerobench.py` and modify it to point to the path t
 ### Citation
 
 If you find this code useful in your own research, please cite our relevant papers:
+
+A survey of neural certificate (CLF, CBF, ...) methods:
+```
+@ARTICLE{dawson2022survey,
+  author={Dawson, Charles and Gao, Sicun and Fan, Chuchu},
+  journal={IEEE Transactions on Robotics}, 
+  title={Safe Control With Learned Certificates: A Survey of Neural Lyapunov, Barrier, and Contraction Methods for Robotics and Control}, 
+  year={2023},
+  volume={},
+  number={},
+  pages={1-19},
+  doi={10.1109/TRO.2022.3232542}}
+```
 
 Learning robust control Lyapunov-Barrier functions (rCLBFs) using neural networks:
 ```
