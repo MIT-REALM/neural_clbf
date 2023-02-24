@@ -352,7 +352,7 @@ class CLFController(Controller):
         # We've already created a parameterized QP solver, so we can use that
         result = self.differentiable_qp_solver(
             *params,
-            solver_args={"max_iters": 50000000},
+            solver_args={"max_iters": 1000},
         )
 
         # Extract the results
