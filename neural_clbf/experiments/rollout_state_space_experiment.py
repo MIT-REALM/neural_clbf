@@ -88,6 +88,10 @@ class RolloutStateSpaceExperiment(Experiment):
             scenarios = [controller_under_test.dynamics_model.nominal_params]
         else:
             scenarios = self.scenarios
+        
+        if not hasattr(self, "other_index"):
+            self.other_index = []
+            self.other_label = []
 
         # Set up a dataframe to store the results
         results = []
@@ -266,6 +270,7 @@ class RolloutStateSpaceExperiment(Experiment):
         #     hue="Simulation",
         #     data=results_df,
         # )
+        num_traces = len(results_df["Simulation"].unique())
         for plot_idx, sim_index in enumerate(results_df["Simulation"].unique()):
             sim_mask = results_df["Simulation"] == sim_index
             rollout_ax.plot(
@@ -274,7 +279,7 @@ class RolloutStateSpaceExperiment(Experiment):
                 linestyle="-",
                 # marker="+",
                 markersize=5,
-                color=sns.color_palette()[plot_idx],
+                color=sns.color_palette(n_colors=num_traces)[plot_idx],
             )
             rollout_ax.set_xlabel(self.plot_x_label)
             rollout_ax.set_ylabel(self.plot_y_label)
@@ -297,7 +302,7 @@ class RolloutStateSpaceExperiment(Experiment):
                     linestyle="-",
                     # marker="+",
                     markersize=5,
-                    color=sns.color_palette()[plot_idx],
+                    color=sns.color_palette(n_colors=num_traces)[plot_idx],
                 )
                 h_ax.set_ylabel("$h$")
                 h_ax.set_xlabel("t")
@@ -317,7 +322,7 @@ class RolloutStateSpaceExperiment(Experiment):
                     results_df[sim_mask]["t"][:-1].to_numpy(),
                     h_violation,
                     linestyle=":",
-                    color=sns.color_palette()[plot_idx],
+                    color=sns.color_palette(n_colors=num_traces)[plot_idx],
                 )
                 h_ax.set_ylabel("$h$ violation")
 
@@ -331,7 +336,7 @@ class RolloutStateSpaceExperiment(Experiment):
                     linestyle="-",
                     # marker="+",
                     markersize=5,
-                    color=sns.color_palette()[plot_idx],
+                    color=sns.color_palette(n_colors=num_traces)[plot_idx],
                 )
             # sns.lineplot(
             #     ax=V_ax,

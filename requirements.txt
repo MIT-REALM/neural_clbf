@@ -16,8 +16,8 @@ pytorch-lightning==1.3.4
 torchmetrics==0.5.1
 
 # Optimization
-cvxpy>=1.1.14
-cvxpylayers
+cvxpy==1.2.1
+cvxpylayers==0.1.5
 gurobipy==9.1.2
 osqp
 ecos
