@@ -268,9 +268,35 @@ def do_training_turtlebot():
         0.3,  # validation_split
     )
 
-    n_steps = 502
-    my_trainer.run_training(n_steps, debug=True, sim_every_n_steps=100)
+    n_steps = 2502
+    return my_trainer.run_training(n_steps, debug=True, sim_every_n_steps=100)
+
 
 
 if __name__ == "__main__":
-    do_training_turtlebot()
+    import wandb
+    run = wandb.init(
+        project='SkillVerification',
+        group='NeuralCM',
+        entity='dtch1997',
+        sync_tensorboard=True,
+        name='turtlebot',
+    )
+    
+    (
+        contraction_network_list,
+        policy_network_list,
+        training_losses,
+        test_losses,
+    ) = do_training_turtlebot()
+
+    import pickle 
+    def save(obj, fn):
+        with open(fn, 'wb') as file:
+            pickle.dump(obj, file)
+            wandb.save(fn)
+
+    save(policy_network_list, 'policy_network.pkl')
+    save(contraction_network_list, 'contraction_network.pkl')
+    save(training_losses, 'training_losses.pkl')
+    save(test_losses, 'test_losses.pkl')
