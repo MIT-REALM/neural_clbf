@@ -228,6 +228,7 @@ def do_training_turtlebot():
         "controller_dt": 0.1,
         "sim_dt": 1e-2,
         "demonstration_noise": 0.3,
+        "analytic_dynamics": False,
     }
     state_space = [
         (-5.0, 5.0),  # px

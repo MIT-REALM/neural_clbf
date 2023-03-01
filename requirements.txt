@@ -11,9 +11,10 @@ flake8
 brunette
 
 # Learning libraries
-torch==1.9.1
-pytorch-lightning==1.3.4
-torchmetrics==0.5.1
+torch
+pytorch-lightning
+torchmetrics
+functorch
 
 # Optimization
 cvxpy==1.2.1
