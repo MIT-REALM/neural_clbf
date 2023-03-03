@@ -1,6 +1,6 @@
 <div align="center">
 
-# Nonlinear Control Using Neural Lyapunov-Barrier Functions
+# Nonlinear Control Using Neural Lyapunov-Barrier Functions 
 
 [![Conference](https://img.shields.io/badge/CoRL%20'21-Accepted-success)](https://openreview.net/forum?id=8K5kisAnb_p)
 [![Paper](https://img.shields.io/badge/RAL%20'21-Accepted-success)](https://ieeexplore.ieee.org/abstract/document/9676477)
