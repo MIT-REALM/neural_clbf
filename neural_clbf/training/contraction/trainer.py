@@ -297,7 +297,11 @@ class Trainer(nn.Module):
         # Set up initial dataset with training/validation split
         # =================================================================
         self.validation_split = validation_split
+        self.state_space = state_space 
+        self.control_bounds = control_bounds
+        self.initialize_data()
 
+    def initialize_data(self):
         # Generate data using self.n_trajs trajectories of length batch_size
         T = self.batch_size * self.controller_dt + self.expert_horizon
         print("Constructing initial dataset...")
@@ -309,8 +313,8 @@ class Trainer(nn.Module):
             self.controller_dt,
             self.n_state_dims,
             self.n_control_dims,
-            state_space,
-            control_bounds,
+            self.state_space,
+            self.control_bounds,
             error_bounds_demonstrations,
             self.dynamics,
         )

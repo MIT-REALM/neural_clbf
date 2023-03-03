@@ -38,6 +38,19 @@ Training:
 To setup port forwarding for TensorBoard:
 `ssh -L 16006:127.0.0.1:6006 cbd@realm-01.mit.edu`
 
+### Learning a contraction metric
+
+Reproduce the contraction learning metric results from the paper: 
+```
+python neural_clbf/training/contraction/train_cm.py
+```
+
+An experimental workflow involving pre-training of the contraction metric:
+```
+python neural_clbf/training/contraction/train_cm.py --two-stage 
+```
+Details in TwoStageTrainer. At the moment, it is not clear whether the two-stage workflow is mathematically or empirically justified. 
+
 ### A note on QP solvers
 
 The default behavior is to train and evaluate using CVXPy to solve the relevant quadratic programs (QPs). CVXPy is free and enabled backprop through QP solutions via CVXPyLayers (which is why we use it for training), but you can get faster evaluations by using Gurobi instead (requires a license, but free for academics). Setting the `disable_gurobi` flag to `False` will enable Gurobi (this is required if you want to exactly reproduce the behavior we report in our papers, since we used Gurobi for those results, but it's optional if you just want to experiment with our code).
