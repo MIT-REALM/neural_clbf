@@ -22,6 +22,18 @@ from neural_clbf.training.utils import current_git_hash
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
+def maybe_init_wandb(args):
+    if args.track:
+        import wandb
+        run = wandb.init(
+            project=args.wandb_project,
+            group=args.wandb_group,
+            entity=args.wandb_entity,
+            sync_tensorboard=True,
+            name=args.wandb_run_name,
+        )
+        return run
+
 def main(args):
 
     nominal_params = {}
@@ -110,6 +122,8 @@ def main(args):
         disable_gurobi=True,
         barrier=args.barrier,
     )
+
+    maybe_init_wandb(args)
     
     # Initialize the logger and trainer
     logger = pl_loggers.TensorBoardLogger(
@@ -137,9 +151,17 @@ def add_clbf_argparse_args(parser: ArgumentParser):
     parser.add_argument('--n-epochs', type=int, default=51)
     return parser
 
+def add_wandb_argparse_args(parser: ArgumentParser):
+    parser.add_argument('--wandb-entity', type=str, default='dtch1997')
+    parser.add_argument('--wandb-group', type=str, default="default")
+    parser.add_argument('--wandb-project', type=str, default='NeuralCLBF')
+    parser.add_argument('--wandb-run-name', type=str, default='cartpole')
+    return parser
+
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser = pl.Trainer.add_argparse_args(parser)
     parser = add_clbf_argparse_args(parser)
+    parser = add_wandb_argparse_args(parser)
     args = parser.parse_args()
     main(args)

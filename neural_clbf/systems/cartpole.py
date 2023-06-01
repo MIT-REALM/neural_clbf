@@ -119,8 +119,13 @@ class Cartpole(ControlAffineSystem):
             a tensor of (batch_size,) booleans indicating whether the corresponding
             point is in this region.
         """
-        safe_mask = x.norm(dim=-1) <= 1.0
-
+        cart_pos = x[..., Cartpole.CART_POS]
+        pole_angle = x[..., Cartpole.POLE_ANGLE]
+        safe_mask = torch.logical_and(
+            torch.abs(pole_angle) <= (12 * 2 * math.pi / 360),
+            torch.abs(cart_pos) <= 2.4
+        )
+            
         return safe_mask
 
     def unsafe_mask(self, x):
@@ -132,9 +137,8 @@ class Cartpole(ControlAffineSystem):
             a tensor of (batch_size,) booleans indicating whether the corresponding
             point is in this region.
         """
-        unsafe_mask = x.norm(dim=-1) >= 1.5
-
-        return unsafe_mask
+        safe_mask = self.safe_mask(x)
+        return ~safe_mask
 
     def goal_mask(self, x):
         """Return the mask of x indicating points in the goal set
@@ -145,17 +149,7 @@ class Cartpole(ControlAffineSystem):
             a tensor of (batch_size,) booleans indicating whether the corresponding
             point is in this region.
         """
-        pole_angle = x[..., Cartpole.POLE_ANGLE]
-        pole_angvel = x[..., Cartpole.POLE_ANGVEL]
-        pole_state = torch.stack([pole_angle, pole_angvel], dim=-1)
-        pole_goal = pole_state.norm(dim=-1) <= 0.3
-
-        cart_pos = x[..., Cartpole.CART_POS]
-        cart_vel = x[..., Cartpole.CART_VEL]
-        cart_state = torch.stack([cart_pos, cart_vel], dim=-1)
-        cart_goal = cart_state.norm(dim=-1) <= 0.3
-
-        goal_mask = torch.logical_or(pole_goal, cart_goal)
+        goal_mask = torch.ones_like(x.sum(dim=-1), dtype=torch.bool)
         return goal_mask
 
     def _f(self, x: torch.Tensor, params: Scenario) -> torch.Tensor:
