@@ -89,9 +89,9 @@ class Cartpole(ControlAffineSystem):
         """
         # define upper and lower limits based around the nominal equilibrium input
         upper_limit = torch.ones(self.n_dims)
-        upper_limit[Cartpole.CART_POS] = 1.0
+        upper_limit[Cartpole.CART_POS] = 4.8
         upper_limit[Cartpole.CART_VEL] = 2.0
-        upper_limit[Cartpole.POLE_ANGLE] = 1.0
+        upper_limit[Cartpole.POLE_ANGLE] = 24 * 2 * math.pi / 360
         upper_limit[Cartpole.POLE_ANGVEL] =  2.0
 
         lower_limit = -1.0 * upper_limit
